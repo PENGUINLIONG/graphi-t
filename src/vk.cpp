@@ -3,6 +3,9 @@
 #include "assert.hpp"
 #include "util.hpp"
 #include "log.hpp"
+#define HAL_IMPL_NAMESPACE vk
+#include "scoped-hal-impl.hpp"
+#undef HAL_IMPL_NAMESPACE
 
 namespace liong {
 
@@ -280,6 +283,9 @@ void destroy_buf(Buffer& buf) {
   liong::log::info("destroyed buffer '", buf.buf_cfg.label, "'");
   buf = {};
 }
+const BufferConfig& get_buf_cfg(const Buffer& buf) {
+  return buf.buf_cfg;
+}
 
 
 
@@ -508,11 +514,10 @@ Task create_comp_task(
   VK_ASSERT << vkCreateShaderModule(ctxt.dev, &smci, nullptr, &shader_mod);
 
   VkSpecializationMapEntry spec_map_entries[] = {
-    VkSpecializationMapEntry { 0, 0, 4 },
-    VkSpecializationMapEntry { 1, 4, 4 },
-    VkSpecializationMapEntry { 2, 8, 4 },
+    VkSpecializationMapEntry { 0, 0 * sizeof(int32_t), sizeof(int32_t) },
+    VkSpecializationMapEntry { 1, 1 * sizeof(int32_t), sizeof(int32_t) },
+    VkSpecializationMapEntry { 2, 2 * sizeof(int32_t), sizeof(int32_t) },
   };
-
   VkSpecializationInfo spec_info {};
   spec_info.pData = &cfg.workgrp_size;
   spec_info.dataSize = sizeof(cfg.workgrp_size);

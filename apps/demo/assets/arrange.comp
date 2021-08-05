@@ -10,7 +10,5 @@ void main() {
     uvec3 size = gl_NumWorkGroups;
     uvec3 id = gl_WorkGroupID;
     uint idx = id.x + size.x * (id.y + size.y * id.z);
-    if (gl_LocalInvocationID.x == 3) {
-        data[idx] = float(idx);
-    }
+    data[idx] = float(idx);
 }

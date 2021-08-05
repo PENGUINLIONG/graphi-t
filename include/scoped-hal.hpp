@@ -18,6 +18,13 @@ public:
   Context(const ContextConfig& cfg);
   inline ~Context() { destroy_ctxt(*inner); }
 
+  inline operator HAL_IMPL_NAMESPACE::Context&() {
+    return *inner;
+  }
+  inline operator const HAL_IMPL_NAMESPACE::Context&() const {
+    return *inner;
+  }
+
   inline const ContextConfig& cfg() const {
     return get_ctxt_cfg(*inner);
   }
@@ -29,7 +36,10 @@ struct MappedBuffer {
   void* mapped;
   BufferView view;
 
-  inline MappedBuffer(const BufferView& view, MemoryAccess map_access) {
+  inline MappedBuffer(const BufferView& view, MemoryAccess map_access) :
+    mapped(nullptr),
+    view(view)
+  {
     map_mem(view, mapped, map_access);
   }
   inline ~MappedBuffer() {
@@ -46,6 +56,14 @@ struct Buffer {
 
   Buffer(const Context& ctxt, const BufferConfig& cfg);
   inline ~Buffer() { destroy_buf(*inner); }
+
+  
+  inline operator HAL_IMPL_NAMESPACE::Buffer&() {
+    return *inner;
+  }
+  inline operator const HAL_IMPL_NAMESPACE::Buffer&() const {
+    return *inner;
+  }
 
   inline const BufferConfig& cfg() const {
     return get_buf_cfg(*inner);
@@ -79,6 +97,13 @@ struct Image {
   Image(const Context& ctxt, const ImageConfig& cfg);
   inline ~Image() { destroy_img(*inner); }
 
+  inline operator HAL_IMPL_NAMESPACE::Image& () {
+    return *inner;
+  }
+  inline operator const HAL_IMPL_NAMESPACE::Image& () const {
+    return *inner;
+  }
+
   inline const ImageConfig& cfg() const {
     return get_img_cfg(*inner);
   }
@@ -104,6 +129,13 @@ struct Task {
 
   Task(const Context& ctxt, const ComputeTaskConfig& cfg);
   inline ~Task() { destroy_task(*inner); }
+
+  inline operator HAL_IMPL_NAMESPACE::Task& () {
+    return *inner;
+  }
+  inline operator const HAL_IMPL_NAMESPACE::Task& () const {
+    return *inner;
+  }
 };
 
 
@@ -113,6 +145,13 @@ struct ResourcePool {
 
   ResourcePool(const Context& ctxt, const Task& task);
   inline ~ResourcePool() { destroy_rsc_pool(*inner); }
+
+  inline operator HAL_IMPL_NAMESPACE::ResourcePool& () {
+    return *inner;
+  }
+  inline operator const HAL_IMPL_NAMESPACE::ResourcePool& () const {
+    return *inner;
+  }
 
   inline void bind(uint32_t idx, const BufferView& buf_view) {
     bind_pool_rsc(*inner, idx, buf_view);
@@ -134,6 +173,13 @@ struct Transaction {
   Transaction(const Context& ctxt, const std::array<Command, N>& cmds) :
     Transaction(ctxt, cmds.data(), N) {}
   inline ~Transaction() { destroy_transact(*inner); }
+
+  inline operator HAL_IMPL_NAMESPACE::Transaction& () {
+    return *inner;
+  }
+  inline operator const HAL_IMPL_NAMESPACE::Transaction& () const {
+    return *inner;
+  }
 };
 
 
@@ -143,6 +189,13 @@ struct CommandDrain {
 
   CommandDrain(const Context& ctxt);
   inline ~CommandDrain() { destroy_cmd_drain(*inner); }
+
+  inline operator HAL_IMPL_NAMESPACE::CommandDrain& () {
+    return *inner;
+  }
+  inline operator const HAL_IMPL_NAMESPACE::CommandDrain& () const {
+    return *inner;
+  }
 
   inline void submit(const Command* cmds, size_t ncmd) {
     submit_cmds(*inner, cmds, ncmd);
@@ -159,6 +212,8 @@ struct CommandDrain {
     wait_cmd_drain(*inner);
   }
 };
+
+
 
 } // namespace scoped
 

@@ -5,7 +5,6 @@
 #include <chrono>
 #include <vulkan/vulkan.h>
 #define HAL_IMPL_NAMESPACE vk
-#include "hal.hpp"
 #include "scoped-hal.hpp"
 #undef HAL_IMPL_NAMESPACE
 

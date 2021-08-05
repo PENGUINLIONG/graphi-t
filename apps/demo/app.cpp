@@ -37,15 +37,15 @@ void guarded_main() {
   ContextConfig ctxt_cfg {};
   ctxt_cfg.label = "ctxt";
   ctxt_cfg.dev_idx = 0;
-  Context ctxt = create_ctxt(ctxt_cfg);
+  scoped::Context ctxt(ctxt_cfg);
 
   ComputeTaskConfig comp_task_cfg {};
   comp_task_cfg.label = "comp_task";
-  comp_task_cfg.entry_name = "arrange";
+  comp_task_cfg.entry_name = "main";
   comp_task_cfg.code = ext::load_code("../assets/arrange");
   comp_task_cfg.rsc_cfgs.push_back({ L_RESOURCE_TYPE_BUFFER, false });
   comp_task_cfg.workgrp_size = { 1, 1, 1 };
-  Task task = create_comp_task(ctxt, comp_task_cfg);
+  scoped::Task task(ctxt, comp_task_cfg);
 
   BufferConfig buf_cfg {};
   buf_cfg.label = "buffer";
@@ -54,50 +54,37 @@ void guarded_main() {
   buf_cfg.host_access = L_MEMORY_ACCESS_READ_WRITE;
   buf_cfg.dev_access = L_MEMORY_ACCESS_WRITE_ONLY;
   buf_cfg.is_const = false;
-  Buffer buf = create_buf(ctxt, buf_cfg);
+  scoped::Buffer buf(ctxt, buf_cfg);
 
-  BufferView buf_view { &buf, 0, buf.buf_cfg.size };
+  scoped::ResourcePool rsc_pool(ctxt, task);
+  rsc_pool.bind(0, buf.view());
 
-  ResourcePool rsc_pool = create_rsc_pool(ctxt, task);
-  bind_pool_rsc(rsc_pool, 0, buf_view);
-
-  Command secondary_cmds[] = {
+  std::vector<Command> secondary_cmds {
     cmd_dispatch(task, rsc_pool, { 4, 4, 4 }),
   };
+  scoped::Transaction transact(ctxt, secondary_cmds);
 
-  Transaction transact = create_transact(ctxt, secondary_cmds,
-    sizeof(secondary_cmds) / sizeof(Command));
-
-  Command cmds[] = {
+  std::vector<Command> cmds {
     cmd_inline_transact(transact),
   };
 
-  CommandDrain cmd_drain = create_cmd_drain(ctxt);
-  submit_cmds(cmd_drain, cmds, sizeof(cmds) / sizeof(Command));
-  wait_cmd_drain(cmd_drain);
+  scoped::CommandDrain cmd_drain(ctxt);
+  cmd_drain.submit(cmds);
+  cmd_drain.wait();
 
-  submit_cmds(cmd_drain, cmds, sizeof(cmds) / sizeof(Command));
-  wait_cmd_drain(cmd_drain);
+  cmd_drain.submit(cmds);
+  cmd_drain.wait();
 
-  void* mapped;
   std::vector<float> dbuf;
   dbuf.resize(16);
-  map_mem(buf_view, mapped, L_MEMORY_ACCESS_READ_ONLY);
-
-  std::memcpy(dbuf.data(), mapped, dbuf.size() * sizeof(float));
-
-  unmap_mem(buf_view, mapped);
+  {
+    scoped::MappedBuffer mapped(buf.view(), L_MEMORY_ACCESS_READ_ONLY);
+    std::memcpy(dbuf.data(), (const void*)mapped, dbuf.size() * sizeof(float));
+  }
 
   for (auto i = 0; i < dbuf.size(); ++i) {
     liong::log::info("dbuf[", i, "] = ", dbuf[i]);
   }
-
-  destroy_cmd_drain(cmd_drain);
-  destroy_transact(transact);
-  destroy_rsc_pool(rsc_pool);
-  destroy_buf(buf);
-  destroy_task(task);
-  destroy_ctxt(ctxt);
 }
 
 int main(int argc, char** argv) {
