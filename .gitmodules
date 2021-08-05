@@ -1,0 +1,3 @@
+[submodule "third/OpenCL-SDK"]
+	path = third/OpenCL-SDK
+	url = https://github.com/KhronosGroup/OpenCL-SDK
