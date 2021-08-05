@@ -8,7 +8,10 @@
 // your header.
 
 // Don't use `#pragma once` here.
+#pragma once
 #include <cmath>
+#include <array>
+#include <memory>
 #include <vector>
 #include <string>
 #include <cstdint>
@@ -202,9 +205,10 @@ struct BufferConfig {
   MemoryAccess host_access;
   MemoryAccess dev_access;
   // Size of buffer allocation, or minimal size of buffer allocation if the
-  // buffer has variable size.
+  // buffer has variable size. MUST NOT be zero.
   size_t size;
-  // Buffer base address alignment requirement.
+  // Buffer base address alignment requirement. Zero is treated as one in this
+  // field.
   size_t align;
   // If true, the buffer is used as a uniform buffer or constant buffer.
   // Otherwise, the buffer is bound as a storage buffer and can have variable
@@ -216,14 +220,12 @@ L_IMPL_FN Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg);
 L_IMPL_FN void destroy_buf(Buffer& buf);
 L_IMPL_FN const BufferConfig& get_buf_cfg(const Buffer& buf);
 
+struct BufferView {
+  const Buffer* buf; // Lifetime bound.
+  size_t offset;
+  size_t size;
+};
 
-
-L_IMPL_STRUCT struct BufferView;
-L_IMPL_FN BufferView make_buf_view(
-  const Buffer& buf,
-  size_t offset,
-  size_t size
-);
 L_IMPL_FN void map_mem(
   const BufferView& dst,
   void*& mapped,
@@ -259,18 +261,13 @@ L_IMPL_FN Image create_img(const Context& ctxt, const ImageConfig& img_cfg);
 L_IMPL_FN void destroy_img(Image& img);
 L_IMPL_FN const ImageConfig& get_img_cfg(const Image& img);
 
-
-
-L_IMPL_STRUCT struct ImageView;
-L_IMPL_FN ImageView make_img_vew(
-  const Image& img,
-  uint32_t nrow_offset,
-  uint32_t ncol_offset,
-  uint32_t nrow,
-  uint32_t ncol
-);
-
-
+struct ImageView {
+  const Image* img; // Lifetime bound.
+  uint32_t row_offset;
+  uint32_t col_offset;
+  uint32_t nrow;
+  uint32_t ncol;
+};
 
 struct DispatchSize {
   uint32_t x, y, z;
@@ -287,7 +284,7 @@ struct ResourceConfig {
   bool is_const;
 };
 // A device program to be feeded in a `Transaction`.
-struct TaskConfig {
+struct ComputeTaskConfig {
   // Human-readable label of the task.
   std::string label;
   // Name of the entry point. Ignored if the platform does not require to
@@ -304,7 +301,7 @@ struct TaskConfig {
 L_IMPL_STRUCT struct Task;
 L_IMPL_FN Task create_comp_task(
   const Context& ctxt,
-  const TaskConfig& cfg
+  const ComputeTaskConfig& cfg
 );
 L_IMPL_FN void destroy_task(Task& task);
 
@@ -447,7 +444,7 @@ L_IMPL_FN void submit_cmds(
 );
 // Wait until the command drain consumed all the commands and finished
 // execution.
-L_IMPL_FN void wait(CommandDrain& cmd_drain);
+L_IMPL_FN void wait_cmd_drain(CommandDrain& cmd_drain);
 
 namespace ext {
 

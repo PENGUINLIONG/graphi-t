@@ -39,13 +39,13 @@ void guarded_main() {
   ctxt_cfg.dev_idx = 0;
   Context ctxt = create_ctxt(ctxt_cfg);
 
-  TaskConfig task_cfg {};
-  task_cfg.label = "task";
-  task_cfg.entry_name = "arrange";
-  task_cfg.code = ext::load_code("../assets/arrange");
-  task_cfg.rsc_cfgs.push_back({ L_RESOURCE_TYPE_BUFFER, false });
-  task_cfg.workgrp_size = { 1, 1, 1 };
-  Task task = create_comp_task(ctxt, task_cfg);
+  ComputeTaskConfig comp_task_cfg {};
+  comp_task_cfg.label = "comp_task";
+  comp_task_cfg.entry_name = "arrange";
+  comp_task_cfg.code = ext::load_code("../assets/arrange");
+  comp_task_cfg.rsc_cfgs.push_back({ L_RESOURCE_TYPE_BUFFER, false });
+  comp_task_cfg.workgrp_size = { 1, 1, 1 };
+  Task task = create_comp_task(ctxt, comp_task_cfg);
 
   BufferConfig buf_cfg {};
   buf_cfg.label = "buffer";
@@ -56,7 +56,7 @@ void guarded_main() {
   buf_cfg.is_const = false;
   Buffer buf = create_buf(ctxt, buf_cfg);
 
-  BufferView buf_view = make_buf_view(buf, 0, buf.buf_cfg.size);
+  BufferView buf_view { &buf, 0, buf.buf_cfg.size };
 
   ResourcePool rsc_pool = create_rsc_pool(ctxt, task);
   bind_pool_rsc(rsc_pool, 0, buf_view);
@@ -74,10 +74,10 @@ void guarded_main() {
 
   CommandDrain cmd_drain = create_cmd_drain(ctxt);
   submit_cmds(cmd_drain, cmds, sizeof(cmds) / sizeof(Command));
-  wait(cmd_drain);
+  wait_cmd_drain(cmd_drain);
 
   submit_cmds(cmd_drain, cmds, sizeof(cmds) / sizeof(Command));
-  wait(cmd_drain);
+  wait_cmd_drain(cmd_drain);
 
   void* mapped;
   std::vector<float> dbuf;

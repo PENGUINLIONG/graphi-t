@@ -6,6 +6,7 @@
 #include <vulkan/vulkan.h>
 #define HAL_IMPL_NAMESPACE vk
 #include "hal.hpp"
+#include "scoped-hal.hpp"
 #undef HAL_IMPL_NAMESPACE
 
 namespace liong {
@@ -80,26 +81,12 @@ struct Buffer {
   BufferConfig buf_cfg;
 };
 
-struct BufferView {
-  const Buffer* buf; // Lifetime bound.
-  size_t offset;
-  size_t size;
-};
-
 struct Image {
   const Context* ctxt; // Lifetime bound.
   VkDeviceMemory devmem;
   VkImage img;
   VkImageView img_view;
   ImageConfig img_cfg;
-};
-
-struct ImageView {
-  const Image* img; // Lifetime bound.
-  uint32_t row_offset;
-  uint32_t col_offset;
-  uint32_t nrow;
-  uint32_t ncol;
 };
 
 struct WorkgroupSizeSpecializationDetail {

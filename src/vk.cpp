@@ -283,13 +283,6 @@ void destroy_buf(Buffer& buf) {
 
 
 
-BufferView make_buf_view(
-  const Buffer& buf,
-  size_t offset,
-  size_t size
-) {
-  return BufferView { &buf, offset, size };
-}
 void map_mem(
   const BufferView& buf,
   void*& mapped,
@@ -445,19 +438,10 @@ const ImageConfig& get_img_cfg(const Image& img) {
 
 
 
-ImageView make_img_vew(
-  const Image& img,
-  uint32_t row_offset,
-  uint32_t col_offset,
-  uint32_t nrow,
-  uint32_t ncol
-) {
-  return ImageView { &img, row_offset, col_offset, nrow, ncol };
-}
 
 Task create_comp_task(
   const Context& ctxt,
-  const TaskConfig& cfg
+  const ComputeTaskConfig& cfg
 ) {
   std::vector<VkDescriptorSetLayoutBinding> dslbs;
   std::map<VkDescriptorType, uint32_t> desc_counter;
@@ -1008,7 +992,7 @@ void _reset_cmd_drain(CommandDrain& cmd_drain) {
   }
   VK_ASSERT << vkResetFences(cmd_drain.ctxt->dev, 1, &cmd_drain.fence);
 }
-void wait(CommandDrain& cmd_drain) {
+void wait_cmd_drain(CommandDrain& cmd_drain) {
   const uint32_t SPIN_INTERVAL = 3000;
   auto tic = std::chrono::high_resolution_clock::now();
   for (VkResult err;;) {
