@@ -508,7 +508,8 @@ Task create_comp_task(
   VkShaderModuleCreateInfo smci {};
   smci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
   smci.pCode = (const uint32_t*)cfg.code.data();
-  smci.codeSize = cfg.code.size();
+  smci.codeSize = cfg.code.size() *
+    sizeof(typename decltype(cfg.code)::value_type);
 
   VkShaderModule shader_mod;
   VK_ASSERT << vkCreateShaderModule(ctxt.dev, &smci, nullptr, &shader_mod);

@@ -30,8 +30,12 @@ set(LINK_LIBS
 )
 set(INC_DIRS
     "${PROJECT_SOURCE_DIR}/include"
+    "${PROJECT_SOURCE_DIR}/third"
     ${Vulkan_INCLUDE_DIRS}
 )
+
+# Runtime compilation support.
+add_subdirectory(third/glslang)
 
 # Used to inline kernel/shaders.
 add_executable(bin2c
@@ -46,7 +50,7 @@ include_directories(${INC_DIRS})
 file(GLOB SRCS "${PROJECT_SOURCE_DIR}/src/*")
 file(GLOB INCS "${PROJECT_SOURCE_DIR}/include/*")
 add_library(GraphiT STATIC ${SRCS} ${INCS})
-target_link_libraries(GraphiT ${LINK_LIBS})
+target_link_libraries(GraphiT glslang SPIRV ${LINK_LIBS})
 add_dependencies(GraphiT bin2c)
 
 # Testbench apps.

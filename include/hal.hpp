@@ -291,8 +291,8 @@ struct ComputeTaskConfig {
   // the entry point name.
   std::string entry_name;
   // Code of the task program; will not be copied to the created `Task`.
-  // Accepting SPIR-V for Vulkan and OpenCL C for OpenCL.
-  std::vector<uint8_t> code;
+  // Accepting SPIR-V for Vulkan.
+  std::vector<uint32_t> code;
   // The resources to be allocated.
   std::vector<ResourceConfig> rsc_cfgs;
   // Local group size; number of threads in a workgroup.

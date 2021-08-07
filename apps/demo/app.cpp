@@ -1,5 +1,6 @@
 #include "log.hpp"
 #include "vk.hpp"
+#include "glslang.hpp"
 
 using namespace liong;
 using namespace vk;
@@ -24,7 +25,29 @@ void log_cb(liong::log::LogLevel lv, const std::string& msg) {
 } // namespace
 
 void guarded_main() {
-  initialize();
+  vk::initialize();
+  glslang::initialize();
+
+  std::string glsl = R"(
+    #version 450 core
+    layout(local_size_x_id=0, local_size_y_id=1, local_size_z_id=2) in;
+    layout(binding=0) writeonly buffer Buffer {
+      float data[];
+    };
+
+    void main() {
+      uvec3 size = gl_NumWorkGroups;
+      uvec3 id = gl_WorkGroupID;
+      uint idx = id.x + size.x * (id.y + size.y * id.z);
+      data[idx] = float(idx);
+    }
+  )";
+  glslang::ComputeSpirvArtifact art =
+    glslang::compile_comp(glsl.c_str(), "main");
+  liong::util::save_file(
+    "./out.comp.spv",
+    art.comp_spv.data(),
+    art.comp_spv.size() * sizeof(uint32_t));
 
   uint32_t ndev = 0;
   for (;;) {
@@ -42,7 +65,7 @@ void guarded_main() {
   ComputeTaskConfig comp_task_cfg {};
   comp_task_cfg.label = "comp_task";
   comp_task_cfg.entry_name = "main";
-  comp_task_cfg.code = ext::load_code("../assets/arrange");
+  comp_task_cfg.code = art.comp_spv;
   comp_task_cfg.rsc_cfgs.push_back({ L_RESOURCE_TYPE_BUFFER, false });
   comp_task_cfg.workgrp_size = { 1, 1, 1 };
   scoped::Task task(ctxt, comp_task_cfg);
