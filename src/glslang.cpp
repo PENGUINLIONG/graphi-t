@@ -160,7 +160,7 @@ public:
     auto target_lang       = ::glslang::EShTargetSpv;
     auto target_lang_ver   = ::glslang::EShTargetSpv_1_0;
     shader->setStrings(&src_c_str, 1);
-    shader->setEntryPoint(entry_point.c_str());
+    shader->setEntryPoint("main");
     shader->setSourceEntryPoint(entry_point.c_str());
     shader->setEnvInput(src_lang, stage, target_client, ver);
     shader->setEnvClient(target_client, target_client_ver);

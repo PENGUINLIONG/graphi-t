@@ -24,9 +24,67 @@ void log_cb(liong::log::LogLevel lv, const std::string& msg) {
 
 } // namespace
 
+
+
+void copy_buf2host(
+  const BufferView& src,
+  void* dst,
+  size_t size
+) {
+  if (size == 0) {
+    liong::log::warn("zero-sized copy is ignored");
+    return;
+  }
+  liong::assert(src.size >= size, "src buffer size is too small");
+  scoped::MappedBuffer mapped(src, L_MEMORY_ACCESS_READ_ONLY);
+  std::memcpy(dst, (const void*)mapped, size);
+}
+void copy_host2buf(
+  const void* src,
+  const BufferView& dst,
+  size_t size
+) {
+  if (size == 0) {
+    liong::log::warn("zero-sized copy is ignored");
+    return;
+  }
+  liong::assert(dst.size >= size, "dst buffser size is too small");
+  scoped::MappedBuffer mapped(dst, L_MEMORY_ACCESS_WRITE_ONLY);
+  std::memcpy((void*)mapped, mapped, size);
+}
+
+
+
+void dbg_enum_dev_descs() {
+  uint32_t ndev = 0;
+  for (;;) {
+    auto desc = desc_dev(ndev);
+    if (desc.empty()) { break; }
+    liong::log::info("device #", ndev, ": ", desc);
+    ++ndev;
+  }
+}
+void dbg_dump_spv_art(
+  const std::string& prefix,
+  glslang::ComputeSpirvArtifact art
+) {
+  liong::util::save_file(
+    (prefix + ".comp.spv").c_str(),
+    art.comp_spv.data(),
+    art.comp_spv.size() * sizeof(uint32_t));
+}
+
+
+
+
+
+
+
 void guarded_main() {
   vk::initialize();
   glslang::initialize();
+
+  dbg_enum_dev_descs();
 
   std::string glsl = R"(
     #version 450 core
@@ -35,7 +93,7 @@ void guarded_main() {
       float data[];
     };
 
-    void main() {
+    void comp() {
       uvec3 size = gl_NumWorkGroups;
       uvec3 id = gl_WorkGroupID;
       uint idx = id.x + size.x * (id.y + size.y * id.z);
@@ -43,19 +101,8 @@ void guarded_main() {
     }
   )";
   glslang::ComputeSpirvArtifact art =
-    glslang::compile_comp(glsl.c_str(), "main");
-  liong::util::save_file(
-    "./out.comp.spv",
-    art.comp_spv.data(),
-    art.comp_spv.size() * sizeof(uint32_t));
-
-  uint32_t ndev = 0;
-  for (;;) {
-    auto desc = desc_dev(ndev);
-    if (desc.empty()) { break; }
-    liong::log::info("device #", ndev, ": ", desc);
-    ++ndev;
-  }
+    glslang::compile_comp(glsl.c_str(), "comp");
+  dbg_dump_spv_art("out", art);
 
   ContextConfig ctxt_cfg {};
   ctxt_cfg.label = "ctxt";
@@ -100,10 +147,7 @@ void guarded_main() {
 
   std::vector<float> dbuf;
   dbuf.resize(16);
-  {
-    scoped::MappedBuffer mapped(buf.view(), L_MEMORY_ACCESS_READ_ONLY);
-    std::memcpy(dbuf.data(), (const void*)mapped, dbuf.size() * sizeof(float));
-  }
+  copy_buf2host(buf.view(), dbuf.data(), dbuf.size() * sizeof(float));
 
   for (auto i = 0; i < dbuf.size(); ++i) {
     liong::log::info("dbuf[", i, "] = ", dbuf[i]);
