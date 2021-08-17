@@ -54,6 +54,7 @@ struct ContextSubmitDetail {
 };
 struct Context {
   VkDevice dev;
+  VkPhysicalDeviceProperties physdev_prop;
   std::vector<ContextSubmitDetail> submit_details;
   std::array<size_t, 2> submit_detail_idx_by_submit_ty;
   std::array<uint32_t, 4> mem_ty_idx_by_host_access;

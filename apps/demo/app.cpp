@@ -10,6 +10,9 @@ namespace {
 void log_cb(liong::log::LogLevel lv, const std::string& msg) {
   using liong::log::LogLevel;
   switch (lv) {
+  case LogLevel::L_LOG_LEVEL_DEBUG:
+    printf("[DEBUG] %s\n", msg.c_str());
+    break;
   case LogLevel::L_LOG_LEVEL_INFO:
     printf("[\x1B[32mINFO\x1B[0m] %s\n", msg.c_str());
     break;
@@ -104,45 +107,39 @@ void guarded_main() {
     glslang::compile_comp(glsl.c_str(), "comp");
   dbg_dump_spv_art("out", art);
 
-  ContextConfig ctxt_cfg {};
-  ctxt_cfg.label = "ctxt";
-  ctxt_cfg.dev_idx = 0;
-  scoped::Context ctxt(ctxt_cfg);
+  scoped::Context ctxt("ctxt", 0);
 
-  ComputeTaskConfig comp_task_cfg {};
-  comp_task_cfg.label = "comp_task";
-  comp_task_cfg.entry_name = "main";
-  comp_task_cfg.code = art.comp_spv;
-  comp_task_cfg.rsc_cfgs.push_back({ L_RESOURCE_TYPE_BUFFER, false });
-  comp_task_cfg.workgrp_size = { 1, 1, 1 };
-  scoped::Task task(ctxt, comp_task_cfg);
+  std::vector<ResourceConfig> rsc_cfgs {
+    { L_RESOURCE_TYPE_BUFFER, false },
+  };
+  DispatchSize local_size { 1, 1, 1 };
+  scoped::Task task = ctxt.create_comp_task("comp_task",
+    "main",
+    art.comp_spv,
+    rsc_cfgs,
+    local_size);
 
-  BufferConfig buf_cfg {};
-  buf_cfg.label = "buffer";
-  buf_cfg.size = 16 * sizeof(float);
-  buf_cfg.align = 1;
-  buf_cfg.host_access = L_MEMORY_ACCESS_READ_WRITE;
-  buf_cfg.dev_access = L_MEMORY_ACCESS_WRITE_ONLY;
-  buf_cfg.is_const = false;
-  scoped::Buffer buf(ctxt, buf_cfg);
+  scoped::Buffer buf = ctxt.create_storage_buf("buf",
+    L_MEMORY_ACCESS_READ_WRITE,
+    L_MEMORY_ACCESS_WRITE_ONLY,
+    16 * sizeof(float));
 
-  scoped::ResourcePool rsc_pool(ctxt, task);
+  scoped::ResourcePool rsc_pool = task.create_rsc_pool();
   rsc_pool.bind(0, buf.view());
 
-  std::vector<Command> secondary_cmds {
+  scoped::Transaction transact = ctxt.create_transact({
     cmd_dispatch(task, rsc_pool, { 4, 4, 4 }),
-  };
-  scoped::Transaction transact(ctxt, secondary_cmds);
-
-  std::vector<Command> cmds {
-    cmd_inline_transact(transact),
-  };
+  });
 
   scoped::CommandDrain cmd_drain(ctxt);
-  cmd_drain.submit(cmds);
+  cmd_drain.submit({
+    cmd_inline_transact(transact),
+  });
   cmd_drain.wait();
 
-  cmd_drain.submit(cmds);
+  cmd_drain.submit({
+    cmd_inline_transact(transact),
+  });
   cmd_drain.wait();
 
   std::vector<float> dbuf;

@@ -88,6 +88,9 @@ Context create_ctxt(const ContextConfig& cfg) {
   VkPhysicalDeviceFeatures feat;
   vkGetPhysicalDeviceFeatures(physdev, &feat);
 
+  VkPhysicalDeviceProperties physdev_prop;
+  vkGetPhysicalDeviceProperties(physdev, &physdev_prop);
+
   // Collect queue families and use as few queues as possible (for less sync).
   uint32_t nqfam_prop;
   vkGetPhysicalDeviceQueueFamilyProperties(physdev, &nqfam_prop, nullptr);
@@ -229,8 +232,9 @@ Context create_ctxt(const ContextConfig& cfg) {
   liong::log::info("created vulkan context '", cfg.label, "' on device #",
     cfg.dev_idx, ": ", physdev_descs[cfg.dev_idx]);
   return Context {
-    dev, std::move(submit_details), std::move(dqci_idx_by_submit_ty),
-    std::move(mem_ty_idx_by_host_access), fast_samp, cfg
+    dev, std::move(physdev_prop), std::move(submit_details),
+    std::move(dqci_idx_by_submit_ty), std::move(mem_ty_idx_by_host_access),
+    fast_samp, cfg
   };
 }
 void destroy_ctxt(Context& ctxt) {
@@ -451,7 +455,7 @@ Task create_comp_task(
 ) {
   std::vector<VkDescriptorSetLayoutBinding> dslbs;
   std::map<VkDescriptorType, uint32_t> desc_counter;
-  for (auto i = 0; i < cfg.rsc_cfgs.size(); ++i) {
+  for (auto i = 0; i < cfg.nrsc_cfg; ++i) {
     const auto& rsc_cfg = cfg.rsc_cfgs[i];
 
     VkDescriptorSetLayoutBinding dslb {};
@@ -507,9 +511,8 @@ Task create_comp_task(
 
   VkShaderModuleCreateInfo smci {};
   smci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-  smci.pCode = (const uint32_t*)cfg.code.data();
-  smci.codeSize = cfg.code.size() *
-    sizeof(typename decltype(cfg.code)::value_type);
+  smci.pCode = (const uint32_t*)cfg.code;
+  smci.codeSize = cfg.code_size;
 
   VkShaderModule shader_mod;
   VK_ASSERT << vkCreateShaderModule(ctxt.dev, &smci, nullptr, &shader_mod);

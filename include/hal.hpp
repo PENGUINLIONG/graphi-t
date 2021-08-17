@@ -292,9 +292,13 @@ struct ComputeTaskConfig {
   std::string entry_name;
   // Code of the task program; will not be copied to the created `Task`.
   // Accepting SPIR-V for Vulkan.
-  std::vector<uint32_t> code;
+  const void* code;
+  // Size of code of the task program in bytes.
+  size_t code_size;
   // The resources to be allocated.
-  std::vector<ResourceConfig> rsc_cfgs;
+  const ResourceConfig* rsc_cfgs;
+  // Number of resources to be allocated.
+  size_t nrsc_cfg;
   // Local group size; number of threads in a workgroup.
   DispatchSize workgrp_size;
 };
