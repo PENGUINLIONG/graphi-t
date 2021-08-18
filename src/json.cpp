@@ -14,6 +14,21 @@ const char* JsonException::what() const noexcept {
 
 
 
+JsonArray::JsonArray(
+  std::initializer_list<JsonValue>&& elems
+) : inner(elems) {}
+JsonObject::JsonObject(
+  std::initializer_list<std::pair<const std::string, JsonValue>>&& entries
+) : inner(std::forward<std::initializer_list<std::pair<const std::string, JsonValue>>>(entries)) {}
+JsonValue::JsonValue(JsonObject&& obj) :
+  ty(L_JSON_OBJECT),
+  obj(std::forward<std::map<std::string, JsonValue>>(obj.inner)) {}
+JsonValue::JsonValue(JsonArray&& arr) :
+  ty(L_JSON_ARRAY),
+  arr(std::forward<std::vector<JsonValue>>(arr.inner)) {}
+
+
+
 enum JsonTokenType {
   L_JSON_TOKEN_UNDEFINED,
   L_JSON_TOKEN_NULL,
@@ -305,7 +320,58 @@ bool try_parse(const std::string& json_lit, JsonValue& out) {
   return false;
 }
 
-
+void print_impl(const JsonValue& json, std::stringstream& out) {
+  switch (json.ty) {
+  case L_JSON_NULL:
+    out << "null";
+    return;
+  case L_JSON_BOOLEAN:
+    out << (json.b ? "true" : "false");
+    return;
+  case L_JSON_NUMBER:
+    out << json.num;
+    return;
+  case L_JSON_STRING:
+    out << "\"" << json.str << "\"";
+    return;
+  case L_JSON_OBJECT:
+    out << "{";
+    {
+      bool is_first_iter = true;
+      for (const auto& pair : json.obj) {
+        if (is_first_iter) {
+          is_first_iter = false;
+        } else {
+          out << ",";
+        }
+        out << "\"" << pair.first << "\":";
+        print_impl(pair.second, out);
+      }
+    }
+    out << "}";
+    return;
+  case L_JSON_ARRAY:
+    out << "[";
+    {
+      bool is_first_iter = true;
+      for (const auto& elem : json.arr) {
+        if (is_first_iter) {
+          is_first_iter = false;
+        } else {
+          out << ",";
+        }
+        print_impl(elem, out);
+      }
+    }
+    out << "]";
+    return;
+  }
+}
+std::string print(const JsonValue& json) {
+  std::stringstream ss;
+  print_impl(json, ss);
+  return ss.str();
+}
 
 } // namespace json
 } // namespace liong

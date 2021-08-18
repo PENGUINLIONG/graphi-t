@@ -4,6 +4,7 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <sstream>
 
 namespace liong {
 namespace json {
@@ -57,6 +58,23 @@ public:
   }
 };
 
+// JSON array builder.
+struct JsonArray {
+  std::vector<JsonValue> inner;
+
+  inline JsonArray() : inner() {}
+  JsonArray(std::initializer_list<JsonValue>&& elems);
+};
+// JSON object builder.
+struct JsonObject {
+  std::map<std::string, JsonValue> inner;
+
+  inline JsonObject() : inner() {}
+  JsonObject(
+    std::initializer_list<std::pair<const std::string, JsonValue>>&& entries
+  );
+};
+
 // Represent a abstract value in JSON representation.
 struct JsonValue {
   JsonType ty;
@@ -65,6 +83,23 @@ struct JsonValue {
   std::string str;
   std::map<std::string, JsonValue> obj;
   std::vector<JsonValue> arr;
+
+  inline JsonValue() : ty(L_JSON_NULL) {}
+  inline JsonValue(nullptr_t) : ty(L_JSON_NULL) {}
+  inline JsonValue(bool b) : ty(L_JSON_BOOLEAN), b(b) {}
+  inline JsonValue(double num) : ty(L_JSON_NUMBER), num(num) {}
+  inline JsonValue(float num) : ty(L_JSON_NUMBER), num(num) {}
+  inline JsonValue(int num) : ty(L_JSON_NUMBER), num(num) {}
+  inline JsonValue(unsigned int num) : ty(L_JSON_NUMBER), num(num) {}
+  inline JsonValue(long num) : ty(L_JSON_NUMBER), num(num) {}
+  inline JsonValue(unsigned long num) : ty(L_JSON_NUMBER), num(num) {}
+  inline JsonValue(const char* str) : ty(L_JSON_STRING), str(str) {}
+  inline JsonValue(const std::string& str) : ty(L_JSON_STRING), str(str) {}
+  inline JsonValue(std::string&& str) :
+    ty(L_JSON_STRING),
+    str(std::forward<std::string>(str)) {}
+  JsonValue(JsonObject&& obj);
+  JsonValue(JsonArray&& arr);
 
   inline JsonValue& operator[](const std::string& key) {
     if (!is_obj()) { throw JsonException("value is not an object"); }
@@ -146,6 +181,8 @@ JsonValue parse(const std::string& json_lit);
 // returned via `out`. Otherwise, false is returned and out contains incomplete
 // result.
 bool try_parse(const std::string& json_lit, JsonValue& out);
+
+std::string print(const JsonValue& json);
 
 } // namespace json
 } // namespace liong
