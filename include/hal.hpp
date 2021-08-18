@@ -325,10 +325,6 @@ struct GraphicsTaskConfig {
   const ResourceConfig* rsc_cfgs;
   // Number of resources allocated.
   size_t nrsc_cfg;
-  // Number of vertice works dispatched.
-  uint32_t nvert;
-  // Number of instance works dispatched.
-  uint32_t ninst;
 };
 L_IMPL_STRUCT struct Task;
 L_IMPL_FN Task create_comp_task(
@@ -393,6 +389,8 @@ enum CommandType {
   L_COMMAND_TYPE_COPY_BUFFER,
   L_COMMAND_TYPE_COPY_IMAGE,
   L_COMMAND_TYPE_DISPATCH,
+  L_COMMAND_TYPE_DRAW,
+  L_COMMAND_TYPE_DRAW_INDEXED,
 };
 struct Command {
   CommandType cmd_ty;
@@ -401,7 +399,7 @@ struct Command {
       const Transaction* transact;
     } cmd_inline_transact;
     struct {
-      const BufferView * src;
+      const BufferView* src;
       const ImageView* dst;
     } cmd_copy_buf2img;
     struct {
@@ -421,6 +419,23 @@ struct Command {
       const ResourcePool* rsc_pool;
       DispatchSize nworkgrp;
     } cmd_dispatch;
+    struct {
+      const Task* task;
+      const ResourcePool* rsc_pool;
+      const Framebuffer* framebuf;
+      const BufferView* verts;
+      uint32_t nvert;
+      uint32_t ninst;
+    } cmd_draw;
+    struct {
+      const Task* task;
+      const ResourcePool* rsc_pool;
+      const Framebuffer* framebuf;
+      const BufferView* verts;
+      const BufferView* idxs;
+      uint32_t nvert;
+      uint32_t ninst;
+    } cmd_draw_indexed;
   };
 };
 
@@ -468,12 +483,54 @@ inline Command cmd_copy_img(const ImageView& src, const ImageView& dst) {
 inline Command cmd_dispatch(
   const Task& task,
   const ResourcePool& rsc_pool,
-  DispatchSize nworkgrp) {
+  DispatchSize nworkgrp
+) {
   Command cmd;
   cmd.cmd_ty = L_COMMAND_TYPE_DISPATCH;
   cmd.cmd_dispatch.task = &task;
   cmd.cmd_dispatch.rsc_pool = &rsc_pool;
   cmd.cmd_dispatch.nworkgrp = nworkgrp;
+  return cmd;
+}
+
+// Draw triangle lists, vertex by vertex.
+inline Command cmd_draw(
+  const Task& task,
+  const ResourcePool& rsc_pool,
+  const BufferView& verts,
+  uint32_t nvert,
+  uint32_t ninst,
+  const Framebuffer& framebuf
+) {
+  Command cmd;
+  cmd.cmd_ty = L_COMMAND_TYPE_DRAW;
+  cmd.cmd_draw.task = &task;
+  cmd.cmd_draw.rsc_pool = &rsc_pool;
+  cmd.cmd_draw.framebuf = &framebuf;
+  cmd.cmd_draw.verts = &verts;
+  cmd.cmd_draw.nvert = nvert;
+  cmd.cmd_draw.ninst = ninst;
+  return cmd;
+}
+// Draw triangle lists, index by index, where each index points to a vertex. 
+inline Command cmd_draw_indexed(
+  const Task& task,
+  const ResourcePool& rsc_pool,
+  const BufferView& idxs,
+  const BufferView& verts,
+  uint32_t nvert,
+  uint32_t ninst,
+  const Framebuffer& framebuf
+) {
+  Command cmd;
+  cmd.cmd_ty = L_COMMAND_TYPE_DRAW_INDEXED;
+  cmd.cmd_draw_indexed.task = &task;
+  cmd.cmd_draw_indexed.rsc_pool = &rsc_pool;
+  cmd.cmd_draw_indexed.framebuf = &framebuf;
+  cmd.cmd_draw_indexed.verts = &verts;
+  cmd.cmd_draw_indexed.idxs = &idxs;
+  cmd.cmd_draw_indexed.nvert = nvert;
+  cmd.cmd_draw_indexed.ninst = ninst;
   return cmd;
 }
 

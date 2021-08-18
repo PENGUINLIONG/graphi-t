@@ -100,7 +100,10 @@ Context create_ctxt(const ContextConfig& cfg) {
     &nqfam_prop, qfam_props.data());
 
   // Sort the queue families by wanted capability.
-  const VkQueueFlags queue_flag_mask = VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT;
+  const VkQueueFlags queue_flag_mask =
+    VK_QUEUE_COMPUTE_BIT |
+    VK_QUEUE_GRAPHICS_BIT |
+    VK_QUEUE_TRANSFER_BIT;
   std::map<VkQueueFlags, uint32_t> qfam_map;
   for (auto i = 0; i < qfam_props.size(); ++i) {
     const auto& qfam_prop = qfam_props[i];
@@ -112,7 +115,7 @@ Context create_ctxt(const ContextConfig& cfg) {
   const float trans_queue_prior = 0.5f;
 
   std::vector<VkDeviceQueueCreateInfo> dqcis;
-  std::array<size_t, 2> dqci_idx_by_submit_ty;
+  std::array<size_t, L_SUBMIT_TYPE_RANGE_SIZE> dqci_idx_by_submit_ty;
   auto it = qfam_map.find(queue_flag_mask);
   if (it != qfam_map.end()) {
     // It would be great if there exists a single queue family that can serve
@@ -126,6 +129,7 @@ Context create_ctxt(const ContextConfig& cfg) {
     dqcis.emplace_back(std::move(dqci));
 
     dqci_idx_by_submit_ty[L_SUBMIT_TYPE_COMPUTE] = dqcis.size() - 1;
+    dqci_idx_by_submit_ty[L_SUBMIT_TYPE_GRAPHICS] = dqcis.size() - 1;
     dqci_idx_by_submit_ty[L_SUBMIT_TYPE_TRANSFER] = dqcis.size() - 1;
   } else {
     auto comp_it = qfam_map.find(VK_QUEUE_COMPUTE_BIT);
@@ -138,6 +142,18 @@ Context create_ctxt(const ContextConfig& cfg) {
 
       dqcis.emplace_back(std::move(dqci));
       dqci_idx_by_submit_ty[L_SUBMIT_TYPE_COMPUTE] = dqcis.size() - 1;
+    }
+
+    auto graph_it = qfam_map.find(VK_QUEUE_GRAPHICS_BIT);
+    if (graph_it != qfam_map.end()) {
+      VkDeviceQueueCreateInfo dqci {};
+      dqci.pQueuePriorities = &comp_queue_prior;
+      dqci.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+      dqci.queueCount = 1;
+      dqci.queueFamilyIndex = graph_it->second;
+
+      dqcis.emplace_back(std::move(dqci));
+      dqci_idx_by_submit_ty[L_SUBMIT_TYPE_GRAPHICS] = dqcis.size() - 1;
     }
 
     auto trans_it = qfam_map.find(VK_QUEUE_TRANSFER_BIT);
@@ -928,8 +944,10 @@ VkCommandPool _create_cmd_pool(const Context& ctxt, uint32_t qfam_idx) {
 
   return cmd_pool;
 }
-std::array<VkCommandPool, 2> _collect_cmd_pools(const Context& ctxt) {
-  std::array<VkCommandPool, 2> cmd_pools {};
+std::array<VkCommandPool, L_SUBMIT_TYPE_RANGE_SIZE> _collect_cmd_pools(
+  const Context& ctxt
+) {
+  std::array<VkCommandPool, L_SUBMIT_TYPE_RANGE_SIZE> cmd_pools {};
   for (auto i = 0; i < ctxt.submit_details.size(); ++i) {
     const auto& submit_detail = ctxt.submit_details[i];
     cmd_pools[i] = _create_cmd_pool(ctxt, submit_detail.qfam_idx);
@@ -958,7 +976,7 @@ VkCommandBuffer _alloc_cmdbuf(
 
 struct TransactionLike {
   const Context* ctxt;
-  std::array<VkCommandPool, 2> cmd_pools;
+  std::array<VkCommandPool, L_SUBMIT_TYPE_RANGE_SIZE> cmd_pools;
   std::vector<TransactionSubmitDetail> submit_details;
   std::vector<VkSemaphore> semas;
   VkFence fence;
@@ -977,7 +995,7 @@ VkCommandBuffer _get_cmdbuf(
     } else {
       VK_ASSERT << vkEndCommandBuffer(last_submit.cmdbuf);
       if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-        VkPipelineStageFlags stage_mask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+        VkPipelineStageFlags stage_mask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
         VkSubmitInfo submit_info {};
         submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
@@ -1011,6 +1029,9 @@ VkCommandBuffer _get_cmdbuf(
 
   VkCommandBufferBeginInfo cbbi {};
   cbbi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  if (submit_ty == L_SUBMIT_TYPE_GRAPHICS) {
+    cbbi.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
+  }
   cbbi.pInheritanceInfo = &cbii;
   VK_ASSERT << vkBeginCommandBuffer(cmdbuf, &cbbi);
 
@@ -1018,6 +1039,8 @@ VkCommandBuffer _get_cmdbuf(
   submit_detail.submit_ty = submit_ty;
   submit_detail.cmdbuf = cmdbuf;
   submit_detail.queue = queue;
+  submit_detail.pass = VK_NULL_HANDLE;
+  submit_detail.framebuf = VK_NULL_HANDLE;
 
   transact.submit_details.emplace_back(std::move(submit_detail));
   return cmdbuf;
@@ -1050,6 +1073,7 @@ void _record_cmd_inline_transact(
   TransactionLike& transact,
   const Command& cmd
 ) {
+  liong::assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
   const auto& in = cmd.cmd_inline_transact;
   const auto& subtransact = *in.transact;
 
@@ -1057,7 +1081,21 @@ void _record_cmd_inline_transact(
     const auto& submit_detail = subtransact.submit_details[i];
     auto cmdbuf = _get_cmdbuf(transact, submit_detail.submit_ty);
 
+    if (submit_detail.submit_ty == L_SUBMIT_TYPE_GRAPHICS) {
+      VkRenderPassBeginInfo rpbi {};
+      rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+      rpbi.renderPass = submit_detail.pass;
+      rpbi.framebuffer = submit_detail.framebuf;
+      rpbi.renderArea.extent = submit_detail.render_area;
+      rpbi.clearValueCount = 1;
+      rpbi.pClearValues = &submit_detail.clear_value;
+      vkCmdBeginRenderPass(cmdbuf, &rpbi,
+        VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
+    }
     vkCmdExecuteCommands(cmdbuf, 1, &submit_detail.cmdbuf);
+    if (submit_detail.submit_ty == L_SUBMIT_TYPE_GRAPHICS) {
+      vkCmdEndRenderPass(cmdbuf);
+    }
   }
 }
 
@@ -1166,6 +1204,46 @@ void _record_cmd_dispatch(TransactionLike& transact, const Command& cmd) {
   //liong::log::info("scheduled task '", task.label, "' for execution");
 }
 
+void _record_cmd_draw(TransactionLike& transact, const Command& cmd) {
+  const auto& in = cmd.cmd_draw;
+  const auto& task = *in.task;
+  const auto& rsc_pool = *in.rsc_pool;
+  const auto& framebuf = *in.framebuf;
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
+
+  // TODO: (penguinliong) Move this to a specialized command.
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    VkRenderPassBeginInfo rpbi {};
+    rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    rpbi.renderPass = task.pass;
+    rpbi.framebuffer = framebuf.framebuf;
+    rpbi.renderArea.extent = framebuf.viewport.extent;
+    rpbi.clearValueCount = 1;
+    rpbi.pClearValues = &framebuf.clear_value;
+    vkCmdBeginRenderPass(cmdbuf, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
+  } else {
+    auto& last_submit = transact.submit_details.back();
+    liong::assert(last_submit.pass != VK_NULL_HANDLE,
+      "secondary command buffer can only contain one render pass");
+    last_submit.pass = task.pass;
+    last_submit.framebuf = framebuf.framebuf;
+    last_submit.render_area = framebuf.viewport.extent;
+    last_submit.clear_value = framebuf.clear_value;
+  }
+  vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, task.pipe);
+  vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+    task.pipe_layout, 0, 1, &rsc_pool.desc_set, 0, nullptr);
+  vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts->buf->buf, &in.verts->offset);
+  vkCmdDraw(cmdbuf, in.nvert, in.ninst, 0, 0);
+  // TODO: (penguinliong) Move this to a specialized command.
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    vkCmdEndRenderPass(cmdbuf);
+  }
+}
+void _record_cmd_draw_indexed(TransactionLike& transact, const Command& cmd) {
+  liong::unreachable();
+}
+
 // Returns whether the submit queue to submit has changed.
 void _record_cmd(TransactionLike& transact, const Command& cmd) {
   switch (cmd.cmd_ty) {
@@ -1188,6 +1266,12 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
     break;
   case L_COMMAND_TYPE_DISPATCH:
     _record_cmd_dispatch(transact, cmd);
+    break;
+  case L_COMMAND_TYPE_DRAW:
+    _record_cmd_draw(transact, cmd);
+    break;
+  case L_COMMAND_TYPE_DRAW_INDEXED:
+    _record_cmd_draw_indexed(transact, cmd);
     break;
   default:
     liong::log::warn("ignored unknown command: ", cmd.cmd_ty);
