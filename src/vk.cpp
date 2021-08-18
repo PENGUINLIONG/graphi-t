@@ -1,4 +1,5 @@
 #include <map>
+#include <set>
 #include "vk.hpp"
 #include "assert.hpp"
 #include "util.hpp"
@@ -42,7 +43,7 @@ std::vector<std::string> physdev_descs;
 void initialize() {
   VkApplicationInfo app_info {};
   app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-  app_info.apiVersion = VK_VERSION_1_0;
+  app_info.apiVersion = VK_API_VERSION_1_0;
   app_info.pApplicationName = "TestbenchApp";
   app_info.applicationVersion = VK_MAKE_VERSION(0, 1, 0);
   app_info.pEngineName = "GraphiT";
@@ -192,7 +193,7 @@ Context create_ctxt(const ContextConfig& cfg) {
   VkPhysicalDeviceMemoryProperties mem_prop;
   vkGetPhysicalDeviceMemoryProperties(physdev, &mem_prop);
   // Host access -> memory type.
-  std::array<uint32_t, 4> mem_ty_idx_by_host_access;
+  std::array<std::set<uint32_t>, 4> mem_ty_idx_set_by_host_access {};
   for (uint32_t i = 0; i < mem_prop.memoryTypeCount; ++i) {
     const auto& mem_ty = mem_prop.memoryTypes[i];
     MemoryAccess host_access {};
@@ -211,23 +212,33 @@ Context create_ctxt(const ContextConfig& cfg) {
       // The host cannot access to this type of memory.
       host_access = L_MEMORY_ACCESS_NONE;
     }
-    mem_ty_idx_by_host_access[host_access] = i;
-  }
-
-  uint32_t any_host_visible_mem_ty_idx = 0xFF;
-  // Find a fallback host-visible memory type. We get at least one otherwise
-  // there will be no host-visible memory available.
-  for (auto i = 1; i < 4; ++i) {
-    if (mem_ty_idx_by_host_access[i] != 0xFF) {
-      any_host_visible_mem_ty_idx = mem_ty_idx_by_host_access[i];
+    for (uint32_t j = 0; j < 4; ++j) {
+      if (j == (j & host_access)) {
+        mem_ty_idx_set_by_host_access[j].insert(i);
+      }
     }
   }
-  assert(any_host_visible_mem_ty_idx != 0xFF,
-    "found no host-visible memory type ");
-
-  // Fallback if a host access pattern is not assigned with a memory type.
-  for (auto i = 0; i < 4; ++i) {
-    mem_ty_idx_by_host_access[i];
+  // Fallback memory types.
+  mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_NONE].insert(
+    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_READ_ONLY].begin(),
+    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_READ_ONLY].end());
+  mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_NONE].insert(
+    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_WRITE_ONLY].begin(),
+    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_WRITE_ONLY].end());
+  mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_NONE].insert(
+    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_READ_WRITE].begin(),
+    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_READ_WRITE].end());
+  mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_READ_ONLY].insert(
+    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_READ_WRITE].begin(),
+    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_READ_WRITE].end());
+  mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_WRITE_ONLY].insert(
+    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_READ_WRITE].begin(),
+    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_READ_WRITE].end());
+  std::array<std::vector<uint32_t>, 4> mem_ty_idxs_by_host_access {};
+  for (uint32_t i = 0; i < 4; ++i) {
+    mem_ty_idxs_by_host_access[i] = std::vector<uint32_t>(
+      mem_ty_idx_set_by_host_access[i].begin(),
+      mem_ty_idx_set_by_host_access[i].end());
   }
 
   // DO NOT CHANGE THE ABOVE.
@@ -249,7 +260,7 @@ Context create_ctxt(const ContextConfig& cfg) {
     cfg.dev_idx, ": ", physdev_descs[cfg.dev_idx]);
   return Context {
     dev, std::move(physdev_prop), std::move(submit_details),
-    std::move(dqci_idx_by_submit_ty), std::move(mem_ty_idx_by_host_access),
+    std::move(dqci_idx_by_submit_ty), std::move(mem_ty_idxs_by_host_access),
     fast_samp, cfg
   };
 }
@@ -269,10 +280,36 @@ Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg) {
   VkBufferCreateInfo bci {};
   bci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
   bci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  bci.usage = buf_cfg.is_const ?
-    VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT : VK_BUFFER_USAGE_STORAGE_BUFFER_BIT;
-  bci.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
-  bci.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+  switch (buf_cfg.usage) {
+  case L_BUFFER_USAGE_STAGING:
+    bci.usage =
+      VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    break;
+  case L_BUFFER_USAGE_UNIFORM:
+    bci.usage =
+      VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    break;
+  case L_BUFFER_USAGE_STORAGE:
+    bci.usage =
+      VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
+      VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    break;
+  case L_BUFFER_USAGE_VERTEX:
+    bci.usage =
+      VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    break;
+  case L_BUFFER_USAGE_INDEX:
+    bci.usage =
+      VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
+      VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    break;
+  default:
+    liong::unreachable();
+  }
   bci.size = buf_cfg.size;
 
   VkBuffer buf;
@@ -284,8 +321,14 @@ Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg) {
   VkMemoryAllocateInfo mai {};
   mai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
   mai.allocationSize = mr.size;
-  mai.memoryTypeIndex = ctxt.mem_ty_idx_by_host_access[buf_cfg.host_access];
-  if (((1 << mai.memoryTypeIndex) & mr.memoryTypeBits) == 0) {
+  mai.memoryTypeIndex = 0xFF;
+  for (auto mem_ty_idx : ctxt.mem_ty_idxs_by_host_access[buf_cfg.host_access]) {
+    if (((1 << mem_ty_idx) & mr.memoryTypeBits) != 0) {
+      mai.memoryTypeIndex = mem_ty_idx;
+      break;
+    }
+  }
+  if (mai.memoryTypeIndex == 0xFF) {
     panic("host access pattern cannot be satisfied");
   }
 
@@ -405,15 +448,58 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   ici.arrayLayers = 1;
   ici.samples = VK_SAMPLE_COUNT_1_BIT;
   ici.tiling = VK_IMAGE_TILING_OPTIMAL;
-  ici.usage = img_cfg.is_const ?
-    VK_IMAGE_USAGE_SAMPLED_BIT : VK_IMAGE_USAGE_STORAGE_BIT;
+  switch (img_cfg.usage) {
+  case L_IMAGE_USAGE_SAMPLED:
+    ici.usage =
+      VK_IMAGE_USAGE_SAMPLED_BIT |
+      VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    break;
+  case L_IMAGE_USAGE_STORAGE:
+    ici.usage =
+      VK_IMAGE_USAGE_STORAGE_BIT |
+      VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+      VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    break;
+  case L_IMAGE_USAGE_ATTACHMENT:
+    ici.usage =
+      VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+      VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+      VK_IMAGE_USAGE_SAMPLED_BIT |
+      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+      VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+    break;
+  default:
+    liong::unreachable();
+  }
   ici.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
   ici.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
   ici.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  ici.initialLayout = VK_IMAGE_LAYOUT_GENERAL;
+  ici.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
 
   VkImage img;
   VK_ASSERT << vkCreateImage(ctxt.dev, &ici, nullptr, &img);
+
+  VkMemoryRequirements mr {};
+  vkGetImageMemoryRequirements(ctxt.dev, img, &mr);
+
+  VkMemoryAllocateInfo mai {};
+  mai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  mai.allocationSize = mr.size;
+  mai.memoryTypeIndex = 0xFF;
+  for (auto mem_ty_idx : ctxt.mem_ty_idxs_by_host_access[img_cfg.host_access]) {
+    if (((1 << mem_ty_idx) & mr.memoryTypeBits) != 0) {
+      mai.memoryTypeIndex = mem_ty_idx;
+      break;
+    }
+  }
+  if (mai.memoryTypeIndex == 0xFF) {
+    panic("host access pattern cannot be satisfied");
+  }
+
+  VkDeviceMemory devmem;
+  VK_ASSERT << vkAllocateMemory(ctxt.dev, &mai, nullptr, &devmem);
+
+  VK_ASSERT << vkBindImageMemory(ctxt.dev, img, devmem, 0);
 
   VkImageViewCreateInfo ivci {};
   ivci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -432,20 +518,6 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
 
   VkImageView img_view;
   VK_ASSERT << vkCreateImageView(ctxt.dev, &ivci, nullptr, &img_view);
-
-  VkMemoryRequirements mr {};
-  vkGetImageMemoryRequirements(ctxt.dev, img, &mr);
-
-  VkMemoryAllocateInfo mai {};
-  mai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  mai.allocationSize = mr.size;
-  mai.memoryTypeIndex = ctxt.mem_ty_idx_by_host_access[img_cfg.host_access];
-  if (((1 << mai.memoryTypeIndex) & mr.memoryTypeBits) == 0) {
-    panic("host access pattern cannot be satisfied");
-  }
-
-  VkDeviceMemory devmem;
-  VK_ASSERT << vkAllocateMemory(ctxt.dev, &mai, nullptr, &devmem);
 
   liong::log::info("created image '", img_cfg.label, "'");
   return Image { &ctxt, devmem, img, img_view, img_cfg };
@@ -603,7 +675,7 @@ VkRenderPass _create_pass(
   std::array<VkAttachmentDescription, 1> ads {};
   {
     VkAttachmentDescription& ad = ads[0];
-    ad.format = VK_FORMAT_R8G8B8A8_UNORM;
+    ad.format = VK_FORMAT_R32G32B32A32_SFLOAT;
     ad.samples = VK_SAMPLE_COUNT_1_BIT;
     ad.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     ad.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -673,7 +745,7 @@ Task create_graph_task(
 
   std::array<VkVertexInputBindingDescription, 1> vibds {
     VkVertexInputBindingDescription {
-      0, 8 * sizeof(float), VK_VERTEX_INPUT_RATE_VERTEX
+      0, 4 * sizeof(float), VK_VERTEX_INPUT_RATE_VERTEX
     },
   };
   std::array<VkVertexInputAttributeDescription, 1> viads = {
@@ -689,20 +761,22 @@ Task create_graph_task(
   pvisci.pVertexAttributeDescriptions = viads.data();
 
   VkPipelineInputAssemblyStateCreateInfo piasci {};
-  piasci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+  piasci.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
   piasci.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
   piasci.primitiveRestartEnable = VK_FALSE;
 
+  VkViewport viewport {};
+  VkRect2D scissor {};
   VkPipelineViewportStateCreateInfo pvsci {};
   pvsci.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-  pvsci.viewportCount = 0;
-  pvsci.pViewports = nullptr; // Dynamically specified.
-  pvsci.scissorCount = 0;
-  pvsci.pScissors = nullptr; // Dynamically specified.
+  pvsci.viewportCount = 1;
+  pvsci.pViewports = &viewport; // Dynamically specified.
+  pvsci.scissorCount = 1;
+  pvsci.pScissors = &scissor; // Dynamically specified.
 
   VkPipelineRasterizationStateCreateInfo prsci {};
   prsci.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-  prsci.cullMode = VK_CULL_MODE_BACK_BIT;
+  prsci.cullMode = VK_CULL_MODE_NONE;
   prsci.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
   prsci.polygonMode = VK_POLYGON_MODE_FILL;
 
@@ -791,28 +865,26 @@ void destroy_task(Task& task) {
 Framebuffer create_framebuf(
   const Context& ctxt,
   const Task& task,
-  const ImageView& img_view
+  const Image& attm
 ) {
   VkFramebufferCreateInfo fci {};
   fci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
   fci.renderPass = task.pass;
   fci.attachmentCount = 1;
-  fci.pAttachments = &img_view.img->img_view;
-  fci.width = img_view.ncol;
-  fci.height = img_view.nrow;
+  fci.pAttachments = &attm.img_view;
+  fci.width = attm.img_cfg.ncol;
+  fci.height = attm.img_cfg.nrow;
   fci.layers = 1;
 
   VkFramebuffer framebuf;
   VK_ASSERT << vkCreateFramebuffer(ctxt.dev, &fci, nullptr, &framebuf);
 
-  VkRect2D viewport;
-  viewport.extent.width = img_view.ncol;
-  viewport.extent.height = img_view.nrow;
-  viewport.offset.x = img_view.col_offset;
-  viewport.offset.y = img_view.row_offset;
+  VkRect2D viewport {};
+  viewport.extent.width = attm.img_cfg.ncol;
+  viewport.extent.height = attm.img_cfg.nrow;
 
   liong::log::info("created framebuffer");
-  return { &ctxt, &task, img_view.img, std::move(viewport), framebuf };
+  return { &ctxt, &task, &attm, std::move(viewport), framebuf };
 }
 void destroy_framebuf(Framebuffer& framebuf) {
   vkDestroyFramebuffer(framebuf.ctxt->dev, framebuf.framebuf, nullptr);
@@ -826,6 +898,11 @@ ResourcePool create_rsc_pool(
   const Context& ctxt,
   const Task& task
 ) {
+  if (task.desc_pool_sizes.size() == 0) {
+    liong::log::info("created resource pool with no entry");
+    return ResourcePool { &ctxt, VK_NULL_HANDLE, VK_NULL_HANDLE };
+  }
+
   VkDescriptorPoolCreateInfo dpci {};
   dpci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
   dpci.poolSizeCount = static_cast<uint32_t>(task.desc_pool_sizes.size());
@@ -848,7 +925,9 @@ ResourcePool create_rsc_pool(
   return ResourcePool { &ctxt, desc_pool, desc_set };
 }
 void destroy_rsc_pool(ResourcePool& rsc_pool) {
-  vkDestroyDescriptorPool(rsc_pool.ctxt->dev, rsc_pool.desc_pool, nullptr);
+  if (rsc_pool.desc_pool != VK_NULL_HANDLE) {
+    vkDestroyDescriptorPool(rsc_pool.ctxt->dev, rsc_pool.desc_pool, nullptr);
+  }
   liong::log::info("destroyed resource pool");
 }
 void bind_pool_rsc(
@@ -867,8 +946,16 @@ void bind_pool_rsc(
   write_desc_set.dstBinding = idx;
   write_desc_set.dstArrayElement = 0;
   write_desc_set.descriptorCount = 1;
-  write_desc_set.descriptorType = buf_view.buf->buf_cfg.is_const ?
-    VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER : VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+  switch (buf_view.buf->buf_cfg.usage) {
+  case L_BUFFER_USAGE_UNIFORM:
+    write_desc_set.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    break;
+  case L_BUFFER_USAGE_STORAGE:
+    write_desc_set.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    break;
+  default:
+    liong::panic("buffer usage doesn't allow binding as descriptor");
+  }
   write_desc_set.pBufferInfo = &dbi;
 
   vkUpdateDescriptorSets(rsc_pool.ctxt->dev, 1, &write_desc_set, 0, nullptr);
@@ -890,9 +977,19 @@ void bind_pool_rsc(
   write_desc_set.dstBinding = idx;
   write_desc_set.dstArrayElement = 0;
   write_desc_set.descriptorCount = 1;
-  write_desc_set.descriptorType = img_view.img->img_cfg.is_const ?
-    VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER :
-    VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+  switch (img_view.img->img_cfg.usage) {
+  case L_IMAGE_USAGE_SAMPLED:
+    write_desc_set.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    break;
+  case L_IMAGE_USAGE_STORAGE:
+    write_desc_set.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    break;
+  case L_IMAGE_USAGE_ATTACHMENT:
+    liong::panic("input attachment is not yet unsupported");
+    break;
+  default:
+    liong::panic("unexpected image usage");
+  }
   write_desc_set.pImageInfo = &dii;
 
   vkUpdateDescriptorSets(rsc_pool.ctxt->dev, 1, &write_desc_set, 0, nullptr);
@@ -1107,6 +1204,10 @@ void _record_cmd_copy_buf2img(TransactionLike& transact, const Command& cmd) {
   bic.bufferOffset = src.offset;
   bic.bufferRowLength = static_cast<uint32_t>(dst.img->img_cfg.pitch);
   bic.bufferImageHeight = dst.img->img_cfg.nrow;
+  bic.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  bic.imageSubresource.mipLevel = 0;
+  bic.imageSubresource.baseArrayLayer = 0;
+  bic.imageSubresource.layerCount = 1;
   bic.imageOffset.x = dst.col_offset;
   bic.imageOffset.y = dst.row_offset;
   bic.imageExtent.width = dst.ncol;
@@ -1128,6 +1229,10 @@ void _record_cmd_copy_img2buf(TransactionLike& transact, const Command& cmd) {
   bic.bufferOffset = dst.offset;
   bic.bufferRowLength = static_cast<uint32_t>(src.img->img_cfg.pitch);
   bic.bufferImageHeight = static_cast<uint32_t>(src.img->img_cfg.nrow);
+  bic.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  bic.imageSubresource.mipLevel = 0;
+  bic.imageSubresource.baseArrayLayer = 0;
+  bic.imageSubresource.layerCount = 1;
   bic.imageOffset.x = src.col_offset;
   bic.imageOffset.y = src.row_offset;
   bic.imageExtent.width = src.ncol;
@@ -1196,8 +1301,10 @@ void _record_cmd_dispatch(TransactionLike& transact, const Command& cmd) {
   //liong::log::warn("workgroup size is ignored; actual workgroup size is "
   //  "specified in shader");
   vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_COMPUTE, task.pipe);
-  vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_COMPUTE,
-    task.pipe_layout, 0, 1, &rsc_pool.desc_set, 0, nullptr);
+  if (rsc_pool.desc_set != VK_NULL_HANDLE) {
+    vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_COMPUTE,
+      task.pipe_layout, 0, 1, &rsc_pool.desc_set, 0, nullptr);
+  }
   vkCmdDispatch(cmdbuf, nworkgrp.x, nworkgrp.y, nworkgrp.z);
   //liong::log::info("scheduled task '", task.label, "' for execution");
 }
@@ -1229,8 +1336,10 @@ void _record_cmd_draw(TransactionLike& transact, const Command& cmd) {
     last_submit.clear_value = framebuf.clear_value;
   }
   vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, task.pipe);
-  vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-    task.pipe_layout, 0, 1, &rsc_pool.desc_set, 0, nullptr);
+  if (rsc_pool.desc_set != VK_NULL_HANDLE) {
+    vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+      task.pipe_layout, 0, 1, &rsc_pool.desc_set, 0, nullptr);
+  }
   vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts->buf->buf, &in.verts->offset);
   VkRect2D scissor {};
   scissor.extent = framebuf.viewport.extent;

@@ -64,7 +64,7 @@ Buffer Context::create_buf(
   MemoryAccess dev_access,
   size_t size,
   size_t align,
-  bool is_const
+  BufferUsage usage
 ) const {
   BufferConfig buf_cfg {};
   buf_cfg.label = label;
@@ -72,17 +72,28 @@ Buffer Context::create_buf(
   buf_cfg.align = align;
   buf_cfg.host_access = host_access;
   buf_cfg.dev_access = dev_access;
-  buf_cfg.is_const = is_const;
+  buf_cfg.usage = usage;
   return HAL_IMPL_NAMESPACE::create_buf(*inner, buf_cfg);
 }
-Buffer Context::create_const_buf(
+Buffer Context::create_staging_buf(
   const std::string& label,
   MemoryAccess host_access,
   MemoryAccess dev_access,
   size_t size,
   size_t align
 ) const {
-  return create_buf(label, host_access, dev_access, size, align, true);
+  return create_buf(label, host_access, dev_access, size, align,
+    L_BUFFER_USAGE_STAGING);
+}
+Buffer Context::create_uniform_buf(
+  const std::string& label,
+  MemoryAccess host_access,
+  MemoryAccess dev_access,
+  size_t size,
+  size_t align
+) const {
+  return create_buf(label, host_access, dev_access, size, align,
+    L_BUFFER_USAGE_UNIFORM);
 }
 Buffer Context::create_storage_buf(
   const std::string& label,
@@ -91,7 +102,28 @@ Buffer Context::create_storage_buf(
   size_t size,
   size_t align
 ) const {
-  return create_buf(label, host_access, dev_access, size, align, false);
+  return create_buf(label, host_access, dev_access, size, align,
+    L_BUFFER_USAGE_STORAGE);
+}
+Buffer Context::create_vert_buf(
+  const std::string& label,
+  MemoryAccess host_access,
+  MemoryAccess dev_access,
+  size_t size,
+  size_t align
+) const {
+  return create_buf(label, host_access, dev_access, size, align,
+    L_BUFFER_USAGE_VERTEX);
+}
+Buffer Context::create_idx_buf(
+  const std::string& label,
+  MemoryAccess host_access,
+  MemoryAccess dev_access,
+  size_t size,
+  size_t align
+) const {
+  return create_buf(label, host_access, dev_access, size, align,
+    L_BUFFER_USAGE_INDEX);
 }
 
 Image Context::create_img(
@@ -101,7 +133,7 @@ Image Context::create_img(
   size_t nrow,
   size_t ncol,
   PixelFormat fmt,
-  bool is_const
+  ImageUsage usage
 ) const {
   size_t align =
     inner->physdev_prop.limits.optimalBufferCopyRowPitchAlignment;
@@ -115,7 +147,7 @@ Image Context::create_img(
   img_cfg.ncol = ncol;
   img_cfg.pitch = pitch;
   img_cfg.fmt = fmt;
-  img_cfg.is_const = is_const;
+  img_cfg.usage = usage;
   return HAL_IMPL_NAMESPACE::create_img(*inner, img_cfg);
 }
 Image Context::create_sampled_img(
@@ -126,7 +158,8 @@ Image Context::create_sampled_img(
   size_t ncol,
   PixelFormat fmt
 ) const {
-  return create_img(label, host_access, dev_access, nrow, ncol, fmt, true);
+  return create_img(label, host_access, dev_access, nrow, ncol, fmt,
+    L_IMAGE_USAGE_SAMPLED);
 }
 Image Context::create_storage_img(
   const std::string& label,
@@ -134,10 +167,21 @@ Image Context::create_storage_img(
   MemoryAccess dev_access,
   size_t nrow,
   size_t ncol,
-  size_t pitch,
   PixelFormat fmt
 ) const {
-  return create_img(label, host_access, dev_access, nrow, ncol, fmt, false);
+  return create_img(label, host_access, dev_access, nrow, ncol, fmt,
+    L_IMAGE_USAGE_STORAGE);
+}
+Image Context::create_attm_img(
+  const std::string& label,
+  MemoryAccess host_access,
+  MemoryAccess dev_access,
+  size_t nrow,
+  size_t ncol,
+  PixelFormat fmt
+) const {
+  return create_img(label, host_access, dev_access, nrow, ncol, fmt,
+    L_IMAGE_USAGE_ATTACHMENT);
 }
 
 Transaction Context::create_transact(
@@ -180,8 +224,8 @@ Task::~Task() { destroy_task(*inner); }
 ResourcePool Task::create_rsc_pool() const {
   return HAL_IMPL_NAMESPACE::create_rsc_pool(*inner->ctxt, *inner);
 }
-Framebuffer Task::create_framebuf(const ImageView& img_view) const {
-  return HAL_IMPL_NAMESPACE::create_framebuf(*inner->ctxt, *inner, img_view);
+Framebuffer Task::create_framebuf(const Image& attm) const {
+  return HAL_IMPL_NAMESPACE::create_framebuf(*inner->ctxt, *inner, *attm.inner);
 }
 
 
@@ -189,10 +233,11 @@ Framebuffer Task::create_framebuf(const ImageView& img_view) const {
 Framebuffer::Framebuffer(
   const Context& ctxt,
   const Task& task,
-  const ImageView& img_view
-) : Framebuffer(create_framebuf(*ctxt.inner, *task.inner, img_view)) {}
+  const Image& attm
+) : inner(std::make_unique<HAL_IMPL_NAMESPACE::Framebuffer>(
+  create_framebuf(*ctxt.inner, *task.inner, *attm.inner))) {}
 Framebuffer::Framebuffer(HAL_IMPL_NAMESPACE::Framebuffer&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Framebuffer>(std::move(inner))) {}
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::Framebuffer>(inner)) {}
 Framebuffer::~Framebuffer() { destroy_framebuf(*inner); }
 
 

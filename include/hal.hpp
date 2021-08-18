@@ -198,6 +198,13 @@ L_DEF_FMT(R32G32B32A32_SFLOAT, 4, 0x20);
 
 
 
+enum BufferUsage {
+  L_BUFFER_USAGE_STAGING,
+  L_BUFFER_USAGE_UNIFORM,
+  L_BUFFER_USAGE_STORAGE,
+  L_BUFFER_USAGE_VERTEX,
+  L_BUFFER_USAGE_INDEX,
+};
 // Describes a buffer.
 struct BufferConfig {
   // Human-readable label of the buffer.
@@ -210,10 +217,8 @@ struct BufferConfig {
   // Buffer base address alignment requirement. Zero is treated as one in this
   // field.
   size_t align;
-  // If true, the buffer is used as a uniform buffer or constant buffer.
-  // Otherwise, the buffer is bound as a storage buffer and can have variable
-  // length in compute shaders.
-  bool is_const;
+  // Usage of the buffer.
+  BufferUsage usage;
 };
 L_IMPL_STRUCT struct Buffer;
 L_IMPL_FN Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg);
@@ -238,6 +243,11 @@ L_IMPL_FN void unmap_mem(
 
 
 
+enum ImageUsage {
+  L_IMAGE_USAGE_SAMPLED,
+  L_IMAGE_USAGE_STORAGE,
+  L_IMAGE_USAGE_ATTACHMENT,
+};
 // Describe a row-major 2D image.
 struct ImageConfig {
   // Human-readable label of the image.
@@ -252,9 +262,8 @@ struct ImageConfig {
   size_t pitch;
   // Pixel format of the image.
   PixelFormat fmt;
-  // If true, the image is bound as a readonly storage image. Otherwise the
-  // image is used as a writeonly or read-weite storage image.
-  bool is_const;
+  // Usage of the image.
+  ImageUsage usage;
 };
 L_IMPL_STRUCT struct Image;
 L_IMPL_FN Image create_img(const Context& ctxt, const ImageConfig& img_cfg);
@@ -343,7 +352,7 @@ L_IMPL_STRUCT struct Framebuffer;
 L_IMPL_FN Framebuffer create_framebuf(
   const Context& ctxt,
   const Task& task,
-  const ImageView& img_view
+  const Image& img
 );
 L_IMPL_FN void destroy_framebuf(Framebuffer& framebuf);
 

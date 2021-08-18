@@ -105,7 +105,7 @@ struct ResourcePool {
 struct Framebuffer {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Framebuffer> inner;
 
-  Framebuffer(const Context& ctxt, const Task& task, const ImageView& img_view);
+  Framebuffer(const Context& ctxt, const Task& task, const Image& attm);
   Framebuffer(HAL_IMPL_NAMESPACE::Framebuffer&& inner);
   Framebuffer(Framebuffer&&) = default;
   ~Framebuffer();
@@ -136,7 +136,7 @@ struct Task {
   }
 
   ResourcePool create_rsc_pool() const;
-  Framebuffer create_framebuf(const ImageView& img_view) const;
+  Framebuffer create_framebuf(const Image& attm) const;
 };
 
 
@@ -308,9 +308,16 @@ public:
     MemoryAccess dev_access,
     size_t size,
     size_t align,
-    bool is_const
+    BufferUsage usage
   ) const;
-  Buffer create_const_buf(
+  Buffer create_staging_buf(
+    const std::string& label,
+    MemoryAccess host_access,
+    MemoryAccess dev_access,
+    size_t size,
+    size_t align = 1
+  ) const;
+  Buffer create_uniform_buf(
     const std::string& label,
     MemoryAccess host_access,
     MemoryAccess dev_access,
@@ -318,6 +325,20 @@ public:
     size_t align = 1
   ) const;
   Buffer create_storage_buf(
+    const std::string& label,
+    MemoryAccess host_access,
+    MemoryAccess dev_access,
+    size_t size,
+    size_t align = 1
+  ) const;
+  Buffer create_vert_buf(
+    const std::string& label,
+    MemoryAccess host_access,
+    MemoryAccess dev_access,
+    size_t size,
+    size_t align = 1
+  ) const;
+  Buffer create_idx_buf(
     const std::string& label,
     MemoryAccess host_access,
     MemoryAccess dev_access,
@@ -332,7 +353,7 @@ public:
     size_t nrow,
     size_t ncol,
     PixelFormat fmt,
-    bool is_const
+    ImageUsage usage
   ) const;
   Image create_sampled_img(
     const std::string& label,
@@ -348,7 +369,14 @@ public:
     MemoryAccess dev_access,
     size_t nrow,
     size_t ncol,
-    size_t pitch,
+    PixelFormat fmt
+  ) const;
+  Image create_attm_img(
+    const std::string& label,
+    MemoryAccess host_access,
+    MemoryAccess dev_access,
+    size_t nrow,
+    size_t ncol,
     PixelFormat fmt
   ) const;
 

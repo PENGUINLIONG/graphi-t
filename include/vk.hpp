@@ -58,7 +58,7 @@ struct Context {
   VkPhysicalDeviceProperties physdev_prop;
   std::vector<ContextSubmitDetail> submit_details;
   std::array<size_t, L_SUBMIT_TYPE_RANGE_SIZE> submit_detail_idx_by_submit_ty;
-  std::array<uint32_t, 4> mem_ty_idx_by_host_access;
+  std::array<std::vector<uint32_t>, 4> mem_ty_idxs_by_host_access;
   // Costless sampler to utilize L1 cache on old mobile platform.
   VkSampler fast_samp;
   ContextConfig ctxt_cfg;
