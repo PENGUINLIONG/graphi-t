@@ -156,7 +156,7 @@ Context create_ctxt(const ContextConfig& cfg) {
   VkDeviceCreateInfo dci {};
   dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
   dci.pEnabledFeatures = &feat;
-  dci.queueCreateInfoCount = dqcis.size();
+  dci.queueCreateInfoCount = static_cast<uint32_t>(dqcis.size());
   dci.pQueueCreateInfos = dqcis.data();
 
   VkDevice dev;
@@ -177,7 +177,7 @@ Context create_ctxt(const ContextConfig& cfg) {
   vkGetPhysicalDeviceMemoryProperties(physdev, &mem_prop);
   // Host access -> memory type.
   std::array<uint32_t, 4> mem_ty_idx_by_host_access;
-  for (auto i = 0; i < mem_prop.memoryTypeCount; ++i) {
+  for (uint32_t i = 0; i < mem_prop.memoryTypeCount; ++i) {
     const auto& mem_ty = mem_prop.memoryTypes[i];
     MemoryAccess host_access {};
     if (mem_ty.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
@@ -449,14 +449,16 @@ const ImageConfig& get_img_cfg(const Image& img) {
 
 
 
-Task create_comp_task(
+VkDescriptorSetLayout _create_desc_set_layout(
   const Context& ctxt,
-  const ComputeTaskConfig& cfg
+  const ResourceConfig* rsc_cfgs,
+  size_t nrsc_cfg,
+  std::vector<VkDescriptorPoolSize> desc_pool_sizes
 ) {
   std::vector<VkDescriptorSetLayoutBinding> dslbs;
   std::map<VkDescriptorType, uint32_t> desc_counter;
-  for (auto i = 0; i < cfg.nrsc_cfg; ++i) {
-    const auto& rsc_cfg = cfg.rsc_cfgs[i];
+  for (auto i = 0; i < nrsc_cfg; ++i) {
+    const auto& rsc_cfg = rsc_cfgs[i];
 
     VkDescriptorSetLayoutBinding dslb {};
     dslb.binding = i;
@@ -482,6 +484,14 @@ Task create_comp_task(
     desc_counter[dslb.descriptorType] += 1;
 
     dslbs.emplace_back(std::move(dslb));
+
+    // Collect `desc_pool_sizes` for checks on resource bindings.
+    for (const auto& pair : desc_counter) {
+      VkDescriptorPoolSize desc_pool_size;
+      desc_pool_size.type = pair.first;
+      desc_pool_size.descriptorCount = pair.second;
+      desc_pool_sizes.emplace_back(std::move(desc_pool_size));
+    }
   }
 
   VkDescriptorSetLayoutCreateInfo dslci {};
@@ -493,6 +503,12 @@ Task create_comp_task(
   VK_ASSERT <<
     vkCreateDescriptorSetLayout(ctxt.dev, &dslci, nullptr, &desc_set_layout);
 
+  return desc_set_layout;
+}
+VkPipelineLayout _create_pipe_layout(
+  const Context& ctxt,
+  VkDescriptorSetLayout desc_set_layout
+) {
   VkPipelineLayoutCreateInfo plci {};
   plci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
   plci.setLayoutCount = 1;
@@ -501,22 +517,34 @@ Task create_comp_task(
   VkPipelineLayout pipe_layout;
   VK_ASSERT << vkCreatePipelineLayout(ctxt.dev, &plci, nullptr, &pipe_layout);
 
-  std::vector<VkDescriptorPoolSize> desc_pool_sizes;
-  for (const auto& pair : desc_counter) {
-    VkDescriptorPoolSize desc_pool_size;
-    desc_pool_size.type = pair.first;
-    desc_pool_size.descriptorCount = pair.second;
-    desc_pool_sizes.emplace_back(std::move(desc_pool_size));
-  }
-
+  return pipe_layout;
+}
+VkShaderModule _create_shader_mod(
+  const Context& ctxt,
+  const void* code,
+  size_t code_size
+) {
   VkShaderModuleCreateInfo smci {};
   smci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
-  smci.pCode = (const uint32_t*)cfg.code;
-  smci.codeSize = cfg.code_size;
+  smci.pCode = (const uint32_t*)code;
+  smci.codeSize = code_size;
 
   VkShaderModule shader_mod;
   VK_ASSERT << vkCreateShaderModule(ctxt.dev, &smci, nullptr, &shader_mod);
 
+  return shader_mod;
+}
+Task create_comp_task(
+  const Context& ctxt,
+  const ComputeTaskConfig& cfg
+) {
+  std::vector<VkDescriptorPoolSize> desc_pool_sizes;
+  VkDescriptorSetLayout desc_set_layout = _create_desc_set_layout(ctxt,
+    cfg.rsc_cfgs, cfg.nrsc_cfg, desc_pool_sizes);
+  VkPipelineLayout pipe_layout = _create_pipe_layout(ctxt, desc_set_layout);
+  VkShaderModule shader_mod = _create_shader_mod(ctxt, cfg.code, cfg.code_size);
+
+  // Specialize to set local group size.
   VkSpecializationMapEntry spec_map_entries[] = {
     VkSpecializationMapEntry { 0, 0 * sizeof(int32_t), sizeof(int32_t) },
     VkSpecializationMapEntry { 1, 1 * sizeof(int32_t), sizeof(int32_t) },
@@ -544,15 +572,200 @@ Task create_comp_task(
   VK_ASSERT <<
     vkCreateComputePipelines(ctxt.dev, nullptr, 1, &cpci, nullptr, &pipe);
 
-  liong::log::info("created task '", cfg.label, "'");
+  liong::log::info("created compute task '", cfg.label, "'");
   return Task {
-    &ctxt, desc_set_layout, pipe_layout, pipe, shader_mod,
+    &ctxt, desc_set_layout, pipe_layout, pipe, VK_NULL_HANDLE, { shader_mod },
     std::move(desc_pool_sizes), cfg.label,
+  };
+}
+VkRenderPass _create_pass(
+  const Context& ctxt
+) {
+  std::array<VkAttachmentReference, 1> ars {
+    { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
+  };
+  std::array<VkAttachmentDescription, 1> ads {};
+  {
+    VkAttachmentDescription& ad = ads[0];
+    ad.format = VK_FORMAT_R8G8B8A8_UNORM;
+    ad.samples = VK_SAMPLE_COUNT_1_BIT;
+    ad.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
+    ad.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
+    // TODO: (penguinliong) Support layout inference in the future.
+    ad.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    ad.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+  }
+  // TODO: (penguinliong) Support input attachments.
+  std::array<VkSubpassDescription, 1> sds {};
+  {
+    VkSubpassDescription& sd = sds[0];
+    sd.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
+    sd.inputAttachmentCount = 0;
+    sd.pInputAttachments = nullptr;
+    sd.colorAttachmentCount = ars.size();
+    sd.pColorAttachments = ars.data();
+    sd.pResolveAttachments = nullptr;
+    sd.pDepthStencilAttachment = nullptr;
+    sd.preserveAttachmentCount = 0;
+    sd.pPreserveAttachments = nullptr;
+  }
+  VkRenderPassCreateInfo rpci {};
+  rpci.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+  rpci.attachmentCount = ads.size();
+  rpci.pAttachments = ads.data();
+  rpci.subpassCount = sds.size();
+  rpci.pSubpasses = sds.data();
+  // TODO: (penguinliong) Implement subpass dependency resolution in the future.
+  rpci.dependencyCount = 0;
+  rpci.pDependencies = nullptr;
+
+  VkRenderPass pass;
+  VK_ASSERT << vkCreateRenderPass(ctxt.dev, &rpci, nullptr, &pass);
+
+  return pass;
+}
+
+
+Task create_graph_task(
+  const Context& ctxt,
+  const GraphicsTaskConfig& cfg
+) {
+  std::vector<VkDescriptorPoolSize> desc_pool_sizes;
+  VkDescriptorSetLayout desc_set_layout =
+    _create_desc_set_layout(ctxt, cfg.rsc_cfgs, cfg.nrsc_cfg, desc_pool_sizes);
+  VkPipelineLayout pipe_layout = _create_pipe_layout(ctxt, desc_set_layout);
+  VkShaderModule vert_shader_mod =
+    _create_shader_mod(ctxt, cfg.vert_code, cfg.vert_code_size);
+  VkShaderModule frag_shader_mod =
+    _create_shader_mod(ctxt, cfg.frag_code, cfg.frag_code_size);
+  VkRenderPass pass = _create_pass(ctxt);
+
+
+
+  VkPipelineShaderStageCreateInfo psscis[2] {};
+  {
+    VkPipelineShaderStageCreateInfo& pssci = psscis[0];
+    pssci.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    pssci.pName = cfg.vert_entry_name.c_str();
+    pssci.stage = VK_SHADER_STAGE_VERTEX_BIT;
+    pssci.module = vert_shader_mod;
+  }
+  {
+    VkPipelineShaderStageCreateInfo& pssci = psscis[1];
+    pssci.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
+    pssci.pName = cfg.frag_entry_name.c_str();
+    pssci.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
+    pssci.module = frag_shader_mod;
+  }
+
+  std::array<VkVertexInputBindingDescription, 1> vibds {
+    VkVertexInputBindingDescription {
+      0, 8 * sizeof(float), VK_VERTEX_INPUT_RATE_VERTEX
+    },
+  };
+  std::array<VkVertexInputAttributeDescription, 1> viads = {
+    VkVertexInputAttributeDescription {
+      0, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 0 * sizeof(float)
+    },
+  };
+  VkPipelineVertexInputStateCreateInfo pvisci {};
+  pvisci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+  pvisci.vertexBindingDescriptionCount = (uint32_t)vibds.size();
+  pvisci.pVertexBindingDescriptions = vibds.data();
+  pvisci.vertexAttributeDescriptionCount = (uint32_t)viads.size();
+  pvisci.pVertexAttributeDescriptions = viads.data();
+
+  VkPipelineInputAssemblyStateCreateInfo piasci {};
+  piasci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+  piasci.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+  piasci.primitiveRestartEnable = VK_FALSE;
+
+  VkPipelineViewportStateCreateInfo pvsci {};
+  pvsci.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+  pvsci.viewportCount = 0;
+  pvsci.pViewports = nullptr; // Dynamically specified.
+  pvsci.scissorCount = 0;
+  pvsci.pScissors = nullptr; // Dynamically specified.
+
+  VkPipelineRasterizationStateCreateInfo prsci {};
+  prsci.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
+  prsci.cullMode = VK_CULL_MODE_BACK_BIT;
+  prsci.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+  prsci.polygonMode = VK_POLYGON_MODE_FILL;
+
+  VkPipelineMultisampleStateCreateInfo pmsci {};
+  pmsci.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+  pmsci.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+  VkPipelineDepthStencilStateCreateInfo pdssci {};
+  pdssci.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+  pdssci.depthTestEnable = VK_TRUE;
+  pdssci.depthWriteEnable = VK_TRUE;
+  pdssci.depthCompareOp = VK_COMPARE_OP_LESS;
+  pdssci.minDepthBounds = 0.0f;
+  pdssci.maxDepthBounds = 1.0f;
+
+  // TODO: (penguinliong) Support multiple attachments.
+  std::array<VkPipelineColorBlendAttachmentState, 1> pcbass {};
+  {
+    VkPipelineColorBlendAttachmentState& pcbas = pcbass[0];
+    pcbas.blendEnable = VK_FALSE;
+    pcbas.colorWriteMask =
+      VK_COLOR_COMPONENT_R_BIT |
+      VK_COLOR_COMPONENT_G_BIT |
+      VK_COLOR_COMPONENT_B_BIT |
+      VK_COLOR_COMPONENT_A_BIT;
+  }
+  VkPipelineColorBlendStateCreateInfo pcbsci {};
+  pcbsci.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+  pcbsci.attachmentCount = pcbass.size();
+  pcbsci.pAttachments = pcbass.data();
+
+  std::array<VkDynamicState, 2> dss {
+    VK_DYNAMIC_STATE_VIEWPORT,
+    VK_DYNAMIC_STATE_SCISSOR,
+  };
+  VkPipelineDynamicStateCreateInfo pdsci {};
+  pdsci.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+  pdsci.dynamicStateCount = dss.size();
+  pdsci.pDynamicStates = dss.data();
+
+  VkGraphicsPipelineCreateInfo gpci {};
+  gpci.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+  gpci.stageCount = 2;
+  gpci.pStages = psscis;
+  gpci.pVertexInputState = &pvisci;
+  gpci.pInputAssemblyState = &piasci;
+  gpci.pTessellationState = nullptr;
+  gpci.pViewportState = &pvsci;
+  gpci.pRasterizationState = &prsci;
+  gpci.pMultisampleState = &pmsci;
+  gpci.pDepthStencilState = &pdssci;
+  gpci.pColorBlendState = &pcbsci;
+  gpci.pDynamicState = &pdsci;
+  gpci.layout = pipe_layout;
+  gpci.renderPass = pass;
+  gpci.subpass = 0;
+
+  VkPipeline pipe;
+  VK_ASSERT <<
+    vkCreateGraphicsPipelines(ctxt.dev, nullptr, 1, &gpci, nullptr, &pipe);
+
+  liong::log::info("created graphics task '", cfg.label, "'");
+  return Task {
+    &ctxt, desc_set_layout, pipe_layout, pipe, pass,
+    { vert_shader_mod, frag_shader_mod }, std::move(desc_pool_sizes), cfg.label,
   };
 }
 void destroy_task(Task& task) {
   vkDestroyPipeline(task.ctxt->dev, task.pipe, nullptr);
-  vkDestroyShaderModule(task.ctxt->dev, task.shader_mod, nullptr);
+  if (task.pass != VK_NULL_HANDLE) {
+    vkDestroyRenderPass(task.ctxt->dev, task.pass, nullptr);
+  }
+  for (const VkShaderModule& shader_mod : task.shader_mods) {
+    vkDestroyShaderModule(task.ctxt->dev, shader_mod, nullptr);
+  }
+  task.shader_mods.clear();
   vkDestroyPipelineLayout(task.ctxt->dev, task.pipe_layout, nullptr);
   vkDestroyDescriptorSetLayout(task.ctxt->dev, task.desc_set_layout, nullptr);
 
@@ -568,7 +781,7 @@ ResourcePool create_rsc_pool(
 ) {
   VkDescriptorPoolCreateInfo dpci {};
   dpci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-  dpci.poolSizeCount = task.desc_pool_sizes.size();
+  dpci.poolSizeCount = static_cast<uint32_t>(task.desc_pool_sizes.size());
   dpci.pPoolSizes = task.desc_pool_sizes.data();
   dpci.maxSets = 1;
 
@@ -823,7 +1036,7 @@ void _record_cmd_copy_buf2img(TransactionLike& transact, const Command& cmd) {
 
   VkBufferImageCopy bic {};
   bic.bufferOffset = src.offset;
-  bic.bufferRowLength = dst.img->img_cfg.pitch;
+  bic.bufferRowLength = static_cast<uint32_t>(dst.img->img_cfg.pitch);
   bic.bufferImageHeight = dst.img->img_cfg.nrow;
   bic.imageOffset.x = dst.col_offset;
   bic.imageOffset.y = dst.row_offset;
@@ -844,8 +1057,8 @@ void _record_cmd_copy_img2buf(TransactionLike& transact, const Command& cmd) {
 
   VkBufferImageCopy bic {};
   bic.bufferOffset = dst.offset;
-  bic.bufferRowLength = src.img->img_cfg.pitch;
-  bic.bufferImageHeight = src.img->img_cfg.nrow;
+  bic.bufferRowLength = static_cast<uint32_t>(src.img->img_cfg.pitch);
+  bic.bufferImageHeight = static_cast<uint32_t>(src.img->img_cfg.nrow);
   bic.imageOffset.x = src.col_offset;
   bic.imageOffset.y = src.row_offset;
   bic.imageExtent.width = src.ncol;

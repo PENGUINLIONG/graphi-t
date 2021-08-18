@@ -99,7 +99,8 @@ struct Task {
   VkDescriptorSetLayout desc_set_layout;
   VkPipelineLayout pipe_layout;
   VkPipeline pipe;
-  VkShaderModule shader_mod;
+  VkRenderPass pass;
+  std::vector<VkShaderModule> shader_mods;
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   std::string label;
   WorkgroupSizeSpecializationDetail workgrp_spec_detail;

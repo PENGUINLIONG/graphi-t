@@ -287,8 +287,8 @@ struct ResourceConfig {
 struct ComputeTaskConfig {
   // Human-readable label of the task.
   std::string label;
-  // Name of the entry point. Ignored if the platform does not require to
-  // the entry point name.
+  // Name of the entry point. Ignored if the platform does not require an entry
+  // point name.
   std::string entry_name;
   // Code of the task program; will not be copied to the created `Task`.
   // Accepting SPIR-V for Vulkan.
@@ -302,10 +302,42 @@ struct ComputeTaskConfig {
   // Local group size; number of threads in a workgroup.
   DispatchSize workgrp_size;
 };
+struct GraphicsTaskConfig {
+  // Human-readable label of the task.
+  std::string label;
+  // Name of the vertex stage entry point. Ignored if the platform does not
+  // require an entry point name.
+  std::string vert_entry_name;
+  // Code of the vertex stage of the task program; will not be copied to the
+  // created `Task`. Accepting SPIR-V for Vulkan.
+  const void* vert_code;
+  // Size of code of the vertex stage of the task program in bytes.
+  size_t vert_code_size;
+  // Name of the fragment stage entry point. Ignored if the platform does not
+  // require an entry point name.
+  std::string frag_entry_name;
+  // Code of the fragment stage of the task program; will not be copied to the
+  // created `Task`. Accepting SPIR-V for Vulkan.
+  const void* frag_code;
+  // Size of code of the fragment stage of the task program in bytes.
+  size_t frag_code_size;
+  // Resources to be allocated.
+  const ResourceConfig* rsc_cfgs;
+  // Number of resources allocated.
+  size_t nrsc_cfg;
+  // Number of vertice works dispatched.
+  uint32_t nvert;
+  // Number of instance works dispatched.
+  uint32_t ninst;
+};
 L_IMPL_STRUCT struct Task;
 L_IMPL_FN Task create_comp_task(
   const Context& ctxt,
   const ComputeTaskConfig& cfg
+);
+L_IMPL_FN Task create_graph_task(
+  const Context& ctxt,
+  const GraphicsTaskConfig& cfg
 );
 L_IMPL_FN void destroy_task(Task& task);
 

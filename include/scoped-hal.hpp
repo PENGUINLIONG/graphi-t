@@ -150,7 +150,7 @@ struct Image {
   }
   inline ImageView view() const {
     auto& img_cfg = cfg();
-    return view(0, 0, img_cfg.nrow, img_cfg.ncol);
+    return view(0, 0, (uint32_t)img_cfg.nrow, (uint32_t)img_cfg.ncol);
   }
 };
 
