@@ -278,6 +278,29 @@ public:
     return create_comp_task(label, entry_point, code.data(),
       code.size() * sizeof(T), rsc_cfgs, workgrp_size);
   }
+  Task create_graph_task(
+    const std::string& label,
+    const std::string& vert_entry_point,
+    const void* vert_code,
+    const size_t vert_code_size,
+    const std::string& frag_entry_point,
+    const void* frag_code,
+    const size_t frag_code_size,
+    const std::vector<ResourceConfig>& rsc_cfgs
+  ) const;
+  template<typename T>
+  inline Task create_graph_task(
+    const std::string& label,
+    const std::string& vert_entry_point,
+    const std::vector<T>& vert_code,
+    const std::string& frag_entry_point,
+    const std::vector<T>& frag_code,
+    const std::vector<ResourceConfig>& rsc_cfgs
+  ) const {
+    return create_graph_task(label, vert_entry_point, vert_code.data(),
+      vert_code.size() * sizeof(T), frag_entry_point, frag_code.data(),
+      frag_code.size() * sizeof(T), rsc_cfgs);
+  }
 
   Buffer create_buf(
     const std::string& label,

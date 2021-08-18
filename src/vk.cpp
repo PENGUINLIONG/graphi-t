@@ -655,8 +655,6 @@ Task create_graph_task(
     _create_shader_mod(ctxt, cfg.frag_code, cfg.frag_code_size);
   VkRenderPass pass = _create_pass(ctxt);
 
-
-
   VkPipelineShaderStageCreateInfo psscis[2] {};
   {
     VkPipelineShaderStageCreateInfo& pssci = psscis[0];
@@ -1234,6 +1232,15 @@ void _record_cmd_draw(TransactionLike& transact, const Command& cmd) {
   vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
     task.pipe_layout, 0, 1, &rsc_pool.desc_set, 0, nullptr);
   vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts->buf->buf, &in.verts->offset);
+  VkRect2D scissor {};
+  scissor.extent = framebuf.viewport.extent;
+  vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
+  VkViewport viewport {};
+  viewport.width = (float)framebuf.viewport.extent.width;
+  viewport.height = (float)framebuf.viewport.extent.height;
+  viewport.minDepth = 0.0f;
+  viewport.maxDepth = 1.0f;
+  vkCmdSetViewport(cmdbuf, 0, 1, &viewport);
   vkCmdDraw(cmdbuf, in.nvert, in.ninst, 0, 0);
   // TODO: (penguinliong) Move this to a specialized command.
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {

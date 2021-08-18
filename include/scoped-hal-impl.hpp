@@ -35,6 +35,28 @@ Task Context::create_comp_task(
   comp_task_cfg.workgrp_size = workgrp_size;
   return HAL_IMPL_NAMESPACE::create_comp_task(*inner, comp_task_cfg);
 }
+Task Context::create_graph_task(
+  const std::string& label,
+  const std::string& vert_entry_point,
+  const void* vert_code,
+  const size_t vert_code_size,
+  const std::string& frag_entry_point,
+  const void* frag_code,
+  const size_t frag_code_size,
+  const std::vector<ResourceConfig>& rsc_cfgs
+) const {
+  GraphicsTaskConfig graph_task_cfg {};
+  graph_task_cfg.label = label;
+  graph_task_cfg.vert_entry_name = vert_entry_point.c_str();
+  graph_task_cfg.vert_code = vert_code;
+  graph_task_cfg.vert_code_size = vert_code_size;
+  graph_task_cfg.frag_entry_name = frag_entry_point.c_str();
+  graph_task_cfg.frag_code = frag_code;
+  graph_task_cfg.frag_code_size = frag_code_size;
+  graph_task_cfg.rsc_cfgs = rsc_cfgs.data();
+  graph_task_cfg.nrsc_cfg = rsc_cfgs.size();
+  return HAL_IMPL_NAMESPACE::create_graph_task(*inner, graph_task_cfg);
+}
 
 Buffer Context::create_buf(
   const std::string& label,
