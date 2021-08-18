@@ -625,7 +625,6 @@ VkRenderPass _create_pass(
   return pass;
 }
 
-
 Task create_graph_task(
   const Context& ctxt,
   const GraphicsTaskConfig& cfg
@@ -771,6 +770,40 @@ void destroy_task(Task& task) {
 
   liong::log::info("destroyed task '", task.label, "'");
   task = {};
+}
+
+
+
+Framebuffer create_framebuf(
+  const Context& ctxt,
+  const Task& task,
+  const ImageView& img_view
+) {
+  VkFramebufferCreateInfo fci {};
+  fci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+  fci.renderPass = task.pass;
+  fci.attachmentCount = 1;
+  fci.pAttachments = &img_view.img->img_view;
+  fci.width = img_view.ncol;
+  fci.height = img_view.nrow;
+  fci.layers = 1;
+
+  VkFramebuffer framebuf;
+  VK_ASSERT << vkCreateFramebuffer(ctxt.dev, &fci, nullptr, &framebuf);
+
+  VkRect2D viewport;
+  viewport.extent.width = img_view.ncol;
+  viewport.extent.height = img_view.nrow;
+  viewport.offset.x = img_view.col_offset;
+  viewport.offset.y = img_view.row_offset;
+
+  liong::log::info("created framebuffer");
+  return { &ctxt, &task, img_view.img, std::move(viewport), framebuf };
+}
+void destroy_framebuf(Framebuffer& framebuf) {
+  vkDestroyFramebuffer(framebuf.ctxt->dev, framebuf.framebuf, nullptr);
+  framebuf.framebuf = nullptr;
+  liong::log::info("destroyed framebuffer");
 }
 
 

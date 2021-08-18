@@ -106,6 +106,14 @@ struct Task {
   WorkgroupSizeSpecializationDetail workgrp_spec_detail;
 };
 
+struct Framebuffer {
+  const Context* ctxt;
+  const Task* task;
+  const Image* img;
+  VkRect2D viewport;
+  VkFramebuffer framebuf;
+};
+
 struct ResourcePool {
   const Context* ctxt;
   VkDescriptorPool desc_pool;

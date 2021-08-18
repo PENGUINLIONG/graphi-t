@@ -15,6 +15,7 @@ struct Context;
 struct Buffer;
 struct Image;
 struct Task;
+struct Framebuffer;
 struct ResourcePool;
 struct Transaction;
 struct CommandDrain;
@@ -101,6 +102,24 @@ struct ResourcePool {
 
 
 
+struct Framebuffer {
+  std::unique_ptr<HAL_IMPL_NAMESPACE::Framebuffer> inner;
+
+  Framebuffer(const Context& ctxt, const Task& task, const ImageView& img_view);
+  Framebuffer(HAL_IMPL_NAMESPACE::Framebuffer&& inner);
+  Framebuffer(Framebuffer&&) = default;
+  ~Framebuffer();
+
+  inline operator HAL_IMPL_NAMESPACE::Framebuffer& () {
+    return *inner;
+  }
+  inline operator const HAL_IMPL_NAMESPACE::Framebuffer& () const {
+    return *inner;
+  }
+};
+
+
+
 struct Task {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Task> inner;
 
@@ -117,6 +136,7 @@ struct Task {
   }
 
   ResourcePool create_rsc_pool() const;
+  Framebuffer create_framebuf(const ImageView& img_view) const;
 };
 
 

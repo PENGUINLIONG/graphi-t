@@ -343,6 +343,16 @@ L_IMPL_FN void destroy_task(Task& task);
 
 
 
+L_IMPL_STRUCT struct Framebuffer;
+L_IMPL_FN Framebuffer create_framebuf(
+  const Context& ctxt,
+  const Task& task,
+  const ImageView& img_view
+);
+L_IMPL_FN void destroy_framebuf(Framebuffer& framebuf);
+
+
+
 L_IMPL_STRUCT struct ResourcePool;
 L_IMPL_FN ResourcePool create_rsc_pool(
   const Context& ctxt,

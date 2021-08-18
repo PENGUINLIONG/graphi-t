@@ -158,6 +158,20 @@ Task::~Task() { destroy_task(*inner); }
 ResourcePool Task::create_rsc_pool() const {
   return HAL_IMPL_NAMESPACE::create_rsc_pool(*inner->ctxt, *inner);
 }
+Framebuffer Task::create_framebuf(const ImageView& img_view) const {
+  return HAL_IMPL_NAMESPACE::create_framebuf(*inner->ctxt, *inner, img_view);
+}
+
+
+
+Framebuffer::Framebuffer(
+  const Context& ctxt,
+  const Task& task,
+  const ImageView& img_view
+) : Framebuffer(create_framebuf(*ctxt.inner, *task.inner, img_view)) {}
+Framebuffer::Framebuffer(HAL_IMPL_NAMESPACE::Framebuffer&& inner) :
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::Framebuffer>(std::move(inner))) {}
+Framebuffer::~Framebuffer() { destroy_framebuf(*inner); }
 
 
 
