@@ -11,7 +11,7 @@ void log_cb(liong::log::LogLevel lv, const std::string& msg) {
   using liong::log::LogLevel;
   switch (lv) {
   case LogLevel::L_LOG_LEVEL_DEBUG:
-    printf("[DEBUG] %s\n", msg.c_str());
+    printf("[\x1b[90mDEBUG\x1B[0m] %s\n", msg.c_str());
     break;
   case LogLevel::L_LOG_LEVEL_INFO:
     printf("[\x1B[32mINFO\x1B[0m] %s\n", msg.c_str());
@@ -171,36 +171,56 @@ void guarded_main2() {
   dbg_enum_dev_descs();
 
   std::string vert_glsl = R"(
-    #version 450 core
-
-    layout(location=0)
-    in vec4 pos;
-
-    void main() {
-      gl_Position = vec4(pos.xy, 0.0f, 1.0f);
+    void main(
+      in float4 InPosition: ATTRIBUTE0,
+      out float4 OutColor: TEXCOORD0,
+      out float4 OutPosition: SV_POSITION
+    ) {
+      OutColor = float4(1.0f, 1.0f, 0.0f, 1.0f);
+      OutPosition = float4(InPosition.xy, 0.0f, 1.0f);
     }
   )";
   std::string frag_glsl = R"(
-    #version 450 core
+    float4 ColorMultiplier;
 
-    layout(location=0)
-    out vec4 color;
-
-    void main() {
-      color = vec4(1.0f, 0.0f, 1.0f, 1.0f);
+    half4 main(
+      in float4 InColor: TEXCOORD
+    ) : SV_TARGET {
+      return half4((InColor * ColorMultiplier));
     }
   )";
   glslang::GraphicsSpirvArtifact art =
-    glslang::compile_graph(vert_glsl, "main", frag_glsl, "main");
+    glslang::compile_graph_hlsl(vert_glsl, "main", frag_glsl, "main");
   dbg_dump_spv_art("out", art);
+
+  liong::assert(art.ubo_size == 4 * sizeof(float),
+    "unexpected ubo size; should be 16, but is ", art.ubo_size);
 
   scoped::Context ctxt("ctxt", 0);
 
-  std::vector<ResourceConfig> rsc_cfgs {};
+  std::vector<ResourceConfig> rsc_cfgs {
+    { L_RESOURCE_TYPE_BUFFER, true },
+  };
+
   scoped::Task task = ctxt.create_graph_task("graph_task",
     "main", art.vert_spv, "main", art.frag_spv, rsc_cfgs);
 
+  scoped::Buffer ubo = ctxt.create_uniform_buf(
+    "ubo",
+    L_MEMORY_ACCESS_WRITE_ONLY,
+    L_MEMORY_ACCESS_READ_ONLY,
+    4 * sizeof(float));
+  {
+    float data[4] {
+      0, 1, 0, 1
+    };
+    scoped::MappedBuffer mapped = ubo.map(L_MEMORY_ACCESS_WRITE_ONLY);
+    float* ubo_data = (float*)mapped;
+    std::memcpy(ubo_data, data, sizeof(data));
+  }
+
   scoped::ResourcePool rsc_pool = task.create_rsc_pool();
+  rsc_pool.bind(0, ubo.view());
 
   scoped::Buffer verts = ctxt.create_vert_buf(
     "verts",

@@ -1,5 +1,6 @@
 #include "glslang/SPIRV/GlslangToSpv.h"
 #include "glslang/glslang/Public/ShaderLang.h"
+#include "glslang/glslang/Include/BaseTypes.h"
 #include "glslang.hpp"
 #include "assert.hpp"
 #include "log.hpp"
@@ -165,6 +166,9 @@ public:
     shader->setEnvInput(src_lang, stage, target_client, ver);
     shader->setEnvClient(target_client, target_client_ver);
     shader->setEnvTarget(target_lang, target_lang_ver);
+    // Allow auto-mapping to ease language constructs.
+    shader->setAutoMapBindings(true);
+    shader->setAutoMapLocations(true);
 
     TBuiltInResource builtin_rsc = make_default_builtin_rsc();
     ::glslang::TShader::ForbidIncluder includer;
@@ -211,6 +215,175 @@ public:
 
     return spv;
   }
+  void reflect(size_t& ubo_size) {
+    if (!program->buildReflection(MSG_OPTS)) {
+      liong::panic("reflection failed: ", program->getInfoLog());
+    }
+    // Uncomment this line to print reflection details:
+    //program->dumpReflection();
+
+    bool is_graph_pipe = program->getShaders(EShLangCompute).size() == 0;
+
+    // Collect uniform block size.
+    {
+      uint32_t nubo = program->getNumUniformBlocks();
+      liong::assert(nubo <= 1, "a pipeline can only bind to one uniform block");
+      if (nubo != 0) {
+        auto ubo = program->getUniformBlock(0);
+        liong::assert(ubo.getBinding(), "uniform block binding point must be 0");
+        liong::assert(ubo.size != 0, "unexpected zero-sized uniform block");
+        ubo_size = ubo.size;
+      } else {
+        ubo_size = 0;
+      }
+    }
+
+    // Make sure there is at most one vertex input.
+    if (is_graph_pipe) {
+      liong::assert(program->getNumPipeInputs() == 1,
+        "must have exactly one vertex input");
+      const auto& input = program->getPipeInput(0);
+      liong::assert(input.index == 0,
+        "vertex input must be bound to location 0");
+    }
+    // Make sure there is exactly one fragment output.
+    if (is_graph_pipe) {
+      liong::assert(program->getNumPipeOutputs() == 1,
+        "must have exactly one fragment output");
+      const auto output = program->getPipeOutput(0);
+      liong::assert(output.index == 0,
+        "fragment output must be bound to location 0");
+    }
+  }
+};
+
+class Hlsl2Spv {
+private:
+  using Shader = ::glslang::TShader;
+  using Program = ::glslang::TProgram;
+
+  std::unique_ptr<Program> program;
+  std::vector<std::unique_ptr<Shader>> shaders;
+
+public:
+  Hlsl2Spv() :
+    program(std::make_unique<Program>()),
+    shaders() {}
+
+  constexpr static EShMessages MSG_OPTS = (EShMessages)(
+    EShMsgSpvRules |
+    EShMsgVulkanRules |
+    EShMsgDebugInfo);
+
+  Hlsl2Spv& with_shader(
+    EShLanguage stage,
+    const std::string& src,
+    const std::string& entry_point
+  ) {
+    auto shader = std::make_unique<Shader>(stage);
+
+    auto src_c_str = src.c_str();
+    auto ver = 100;
+    auto src_lang          = ::glslang::EShSourceHlsl;
+    auto target_client     = ::glslang::EShClientVulkan;
+    auto target_client_ver = ::glslang::EShTargetVulkan_1_0;
+    auto target_lang       = ::glslang::EShTargetSpv;
+    auto target_lang_ver   = ::glslang::EShTargetSpv_1_0;
+    shader->setStrings(&src_c_str, 1);
+    shader->setEntryPoint("main");
+    shader->setSourceEntryPoint(entry_point.c_str());
+    shader->setEnvInput(src_lang, stage, target_client, ver);
+    shader->setEnvClient(target_client, target_client_ver);
+    shader->setEnvTarget(target_lang, target_lang_ver);
+    // Allow auto-mapping to ease language constructs.
+    shader->setAutoMapBindings(true);
+    shader->setAutoMapLocations(true);
+
+    TBuiltInResource builtin_rsc = make_default_builtin_rsc();
+    ::glslang::TShader::ForbidIncluder includer;
+
+    std::string dummy;
+    if (!shader->preprocess(&builtin_rsc, ver, ENoProfile, false, false,
+      MSG_OPTS, &dummy, includer)
+    ) {
+      liong::panic("preprocessing failed: ", shader->getInfoLog());
+    }
+
+    if (!shader->parse(&builtin_rsc, ver, false, MSG_OPTS, includer)) {
+      liong::panic("compilation failed: ", shader->getInfoLog());
+    }
+
+    program->addShader(&*shader);
+    shaders.emplace_back(std::move(shader));
+    return *this;
+  }
+  void link() {
+    if (!program->link(MSG_OPTS)) {
+      liong::panic("link failed: ", program->getInfoLog());
+    }
+  }
+  std::vector<uint32_t> to_spv(EShLanguage stage) {
+    ::spv::SpvBuildLogger logger;
+    ::glslang::SpvOptions opts;
+    opts.validate          = true;
+    opts.generateDebugInfo = true;
+    opts.optimizeSize      = true;
+    opts.stripDebugInfo    = false;
+    opts.disableOptimizer  = false;
+    opts.disassemble       = false;
+
+    std::vector<uint32_t> spv;
+    ::glslang::GlslangToSpv(*program->getIntermediate((EShLanguage)stage), spv,
+      &logger, &opts);
+
+    std::string msg = logger.getAllMessages();
+    if (msg.size() != 0) {
+      liong::log::warn("compiler reported issues when translating glsl into "
+        "spirv", msg);
+    }
+
+    return spv;
+  }
+  void reflect(size_t& ubo_size) {
+    if (!program->buildReflection(MSG_OPTS)) {
+      liong::panic("reflection failed: ", program->getInfoLog());
+    }
+    // Uncomment this line to print reflection details:
+    //program->dumpReflection();
+
+    bool is_graph_pipe = program->getShaders(EShLangCompute).size() == 0;
+
+    // Collect uniform block size.
+    {
+      uint32_t nubo = program->getNumUniformBlocks();
+      liong::assert(nubo <= 1, "a pipeline can only bind to one uniform block");
+      if (nubo != 0) {
+        auto ubo = program->getUniformBlock(0);
+        liong::assert(ubo.getBinding(), "uniform block binding point must be 0");
+        liong::assert(ubo.size != 0, "unexpected zero-sized uniform block");
+        ubo_size = ubo.size;
+      } else {
+        ubo_size = 0;
+      }
+    }
+
+    // Make sure there is at most one vertex input.
+    if (is_graph_pipe) {
+      liong::assert(program->getNumPipeInputs() == 1,
+        "must have exactly one vertex input");
+      const auto& input = program->getPipeInput(0);
+      liong::assert(input.index == 0,
+        "vertex input must be bound to location 0");
+    }
+    // Make sure there is exactly one fragment output.
+    if (is_graph_pipe) {
+      liong::assert(program->getNumPipeOutputs() == 1,
+        "must have exactly one fragment output");
+      const auto output = program->getPipeOutput(0);
+      liong::assert(output.index == 0,
+        "fragment output must be bound to location 0");
+    }
+  }
 };
 
 ComputeSpirvArtifact compile_comp(
@@ -221,8 +394,26 @@ ComputeSpirvArtifact compile_comp(
   conv
     .with_shader(EShLangCompute, comp_src, comp_entry_point)
     .link();
+  size_t ubo_size;
+  conv.reflect(ubo_size);
   return {
     conv.to_spv(EShLangCompute),
+    ubo_size
+  };
+}
+ComputeSpirvArtifact compile_comp_hlsl(
+  const std::string& comp_src,
+  const std::string& comp_entry_point
+) {
+  Hlsl2Spv conv {};
+  conv
+    .with_shader(EShLangCompute, comp_src, comp_entry_point)
+    .link();
+  size_t ubo_size;
+  conv.reflect(ubo_size);
+  return {
+    conv.to_spv(EShLangCompute),
+    ubo_size
   };
 }
 
@@ -237,9 +428,31 @@ GraphicsSpirvArtifact compile_graph(
     .with_shader(EShLangVertex, vert_src, vert_entry_point)
     .with_shader(EShLangFragment, frag_src, frag_entry_point)
     .link();
+  size_t ubo_size;
+  conv.reflect(ubo_size);
   return {
     conv.to_spv(EShLangVertex),
     conv.to_spv(EShLangFragment),
+    ubo_size
+  };
+}
+GraphicsSpirvArtifact compile_graph_hlsl(
+  const std::string& vert_src,
+  const std::string& vert_entry_point,
+  const std::string& frag_src,
+  const std::string& frag_entry_point
+) {
+  Hlsl2Spv conv {};
+  conv
+    .with_shader(EShLangVertex, vert_src, vert_entry_point)
+    .with_shader(EShLangFragment, frag_src, frag_entry_point)
+    .link();
+  size_t ubo_size;
+  conv.reflect(ubo_size);
+  return {
+    conv.to_spv(EShLangVertex),
+    conv.to_spv(EShLangFragment),
+    ubo_size
   };
 }
 

@@ -570,7 +570,8 @@ VkDescriptorSetLayout _create_desc_set_layout(
     VkDescriptorSetLayoutBinding dslb {};
     dslb.binding = i;
     dslb.descriptorCount = 1;
-    dslb.stageFlags = VK_SHADER_STAGE_COMPUTE_BIT;
+    dslb.stageFlags =
+      VK_SHADER_STAGE_ALL_GRAPHICS | VK_SHADER_STAGE_COMPUTE_BIT;
     if (rsc_cfg.is_const) {
       switch (rsc_cfg.rsc_ty) {
       case L_RESOURCE_TYPE_BUFFER:
