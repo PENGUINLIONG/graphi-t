@@ -171,7 +171,7 @@ void guarded_main2() {
   dbg_enum_dev_descs();
 
   std::string vert_glsl = R"(
-    void main(
+    void vert(
       in float4 InPosition: ATTRIBUTE0,
       out float4 OutColor: TEXCOORD0,
       out float4 OutPosition: SV_POSITION
@@ -179,18 +179,16 @@ void guarded_main2() {
       OutColor = float4(1.0f, 1.0f, 0.0f, 1.0f);
       OutPosition = float4(InPosition.xy, 0.0f, 1.0f);
     }
-  )";
-  std::string frag_glsl = R"(
     float4 ColorMultiplier;
 
-    half4 main(
+    half4 frag(
       in float4 InColor: TEXCOORD
     ) : SV_TARGET {
       return half4((InColor * ColorMultiplier));
     }
   )";
   glslang::GraphicsSpirvArtifact art =
-    glslang::compile_graph_hlsl(vert_glsl, "main", frag_glsl, "main");
+    glslang::compile_graph_hlsl(vert_glsl, "vert", vert_glsl, "frag");
   dbg_dump_spv_art("out", art);
 
   liong::assert(art.ubo_size == 4 * sizeof(float),
