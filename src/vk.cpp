@@ -437,6 +437,10 @@ VkFormat _make_img_fmt(PixelFormat fmt) {
 Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   VkFormat fmt = _make_img_fmt(img_cfg.fmt);
 
+  VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+  uint32_t qfam_idx;
+
   VkImageCreateInfo ici {};
   ici.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
   ici.imageType = VK_IMAGE_TYPE_2D;
@@ -453,12 +457,22 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
     ici.usage =
       VK_IMAGE_USAGE_SAMPLED_BIT |
       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    {
+      auto isubmit_detail =
+        ctxt.submit_detail_idx_by_submit_ty[L_SUBMIT_TYPE_TRANSFER];
+      qfam_idx = ctxt.submit_details[isubmit_detail].qfam_idx;
+    }
     break;
   case L_IMAGE_USAGE_STORAGE:
     ici.usage =
       VK_IMAGE_USAGE_STORAGE_BIT |
       VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    {
+      auto isubmit_detail =
+        ctxt.submit_detail_idx_by_submit_ty[L_SUBMIT_TYPE_TRANSFER];
+      qfam_idx = ctxt.submit_details[isubmit_detail].qfam_idx;
+    }
     break;
   case L_IMAGE_USAGE_ATTACHMENT:
     ici.usage =
@@ -468,13 +482,18 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
       VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
     break;
+    {
+      auto isubmit_detail =
+        ctxt.submit_detail_idx_by_submit_ty[L_SUBMIT_TYPE_GRAPHICS];
+      qfam_idx = ctxt.submit_details[isubmit_detail].qfam_idx;
+    }
   default:
     liong::unreachable();
   }
   ici.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
   ici.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
   ici.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  ici.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+  ici.initialLayout = layout;
 
   VkImage img;
   VK_ASSERT << vkCreateImage(ctxt.dev, &ici, nullptr, &img);
@@ -520,7 +539,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   VK_ASSERT << vkCreateImageView(ctxt.dev, &ivci, nullptr, &img_view);
 
   liong::log::info("created image '", img_cfg.label, "'");
-  return Image { &ctxt, devmem, img, img_view, img_cfg };
+  return Image { &ctxt, devmem, img, img_view, layout, qfam_idx, img_cfg };
 }
 void destroy_img(Image& img) {
   vkDestroyImageView(img.ctxt->dev, img.img_view, nullptr);
@@ -541,7 +560,7 @@ VkDescriptorSetLayout _create_desc_set_layout(
   const Context& ctxt,
   const ResourceConfig* rsc_cfgs,
   size_t nrsc_cfg,
-  std::vector<VkDescriptorPoolSize> desc_pool_sizes
+  std::vector<VkDescriptorPoolSize>& desc_pool_sizes
 ) {
   std::vector<VkDescriptorSetLayoutBinding> dslbs;
   std::map<VkDescriptorType, uint32_t> desc_counter;
@@ -927,6 +946,7 @@ ResourcePool create_rsc_pool(
 void destroy_rsc_pool(ResourcePool& rsc_pool) {
   if (rsc_pool.desc_pool != VK_NULL_HANDLE) {
     vkDestroyDescriptorPool(rsc_pool.ctxt->dev, rsc_pool.desc_pool, nullptr);
+    rsc_pool.desc_pool = VK_NULL_HANDLE;
   }
   liong::log::info("destroyed resource pool");
 }
@@ -935,6 +955,9 @@ void bind_pool_rsc(
   uint32_t idx,
   const BufferView& buf_view
 ) {
+  liong::assert(rsc_pool.desc_pool != VK_NULL_HANDLE,
+    "cannot bind to empty resource pool");
+
   VkDescriptorBufferInfo dbi {};
   dbi.buffer = buf_view.buf->buf;
   dbi.offset = buf_view.offset;
@@ -967,6 +990,9 @@ void bind_pool_rsc(
   uint32_t idx,
   const ImageView& img_view
 ) {
+  liong::assert(rsc_pool.desc_pool != VK_NULL_HANDLE,
+    "cannot bind to empty resource pool");
+
   VkDescriptorImageInfo dii {};
   dii.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
   dii.imageView = img_view.img->img_view;
@@ -1083,6 +1109,7 @@ VkCommandBuffer _get_cmdbuf(
 ) {
   auto isubmit_detail = transact.ctxt->get_queue_rsc_idx(submit_ty);
   auto queue = transact.ctxt->submit_details[isubmit_detail].queue;
+  auto qfam_idx = transact.ctxt->submit_details[isubmit_detail].qfam_idx;
   if (!transact.submit_details.empty()) {
     auto& last_submit = transact.submit_details.back();
     if (queue == last_submit.queue) {
@@ -1134,8 +1161,11 @@ VkCommandBuffer _get_cmdbuf(
   submit_detail.submit_ty = submit_ty;
   submit_detail.cmdbuf = cmdbuf;
   submit_detail.queue = queue;
+  submit_detail.qfam_idx = qfam_idx;
   submit_detail.pass = VK_NULL_HANDLE;
   submit_detail.framebuf = VK_NULL_HANDLE;
+  submit_detail.render_area = {};
+  submit_detail.clear_value = {{{ 0.0f, 0.0f, 0.0f, 0.0f }}};
 
   transact.submit_details.emplace_back(std::move(submit_detail));
   return cmdbuf;
@@ -1318,6 +1348,34 @@ void _record_cmd_draw(TransactionLike& transact, const Command& cmd) {
 
   // TODO: (penguinliong) Move this to a specialized command.
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    VkImageLayout src_layout = framebuf.img->layout;
+    VkImageLayout dst_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    uint32_t src_qfam_idx = framebuf.img->qfam_idx;
+    uint32_t dst_qfam_idx = transact.submit_details.back().qfam_idx;
+
+    VkImageMemoryBarrier imb {};
+    imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    imb.srcAccessMask = 0;
+    imb.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+    imb.oldLayout = src_layout;
+    imb.newLayout = dst_layout;
+    imb.srcQueueFamilyIndex = src_qfam_idx;
+    imb.dstQueueFamilyIndex = dst_qfam_idx;
+
+    vkCmdPipelineBarrier(cmdbuf,
+      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+      VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+      0,
+      0, nullptr,
+      0, nullptr,
+      1, &imb);
+
+    {
+      Image& img_mut = *((Image*)(const Image*)&framebuf.img);
+      img_mut.layout = dst_layout;
+      img_mut.qfam_idx = dst_qfam_idx;
+    }
+
     VkRenderPassBeginInfo rpbi {};
     rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     rpbi.renderPass = task.pass;
@@ -1325,6 +1383,7 @@ void _record_cmd_draw(TransactionLike& transact, const Command& cmd) {
     rpbi.renderArea.extent = framebuf.viewport.extent;
     rpbi.clearValueCount = 1;
     rpbi.pClearValues = &framebuf.clear_value;
+
     vkCmdBeginRenderPass(cmdbuf, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
   } else {
     auto& last_submit = transact.submit_details.back();
@@ -1335,6 +1394,7 @@ void _record_cmd_draw(TransactionLike& transact, const Command& cmd) {
     last_submit.render_area = framebuf.viewport.extent;
     last_submit.clear_value = framebuf.clear_value;
   }
+
   vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, task.pipe);
   if (rsc_pool.desc_set != VK_NULL_HANDLE) {
     vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,

@@ -87,6 +87,9 @@ struct Image {
   VkDeviceMemory devmem;
   VkImage img;
   VkImageView img_view;
+  VkImageLayout layout;
+  // Dynamic properties.
+  uint32_t qfam_idx;
   ImageConfig img_cfg;
 };
 
@@ -125,6 +128,7 @@ struct ResourcePool {
 struct TransactionSubmitDetail {
   SubmitType submit_ty;
   VkQueue queue;
+  uint32_t qfam_idx;
   VkCommandBuffer cmdbuf;
   // Only in graphics transactions.
   VkRenderPass pass;
