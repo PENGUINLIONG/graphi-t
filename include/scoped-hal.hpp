@@ -15,6 +15,7 @@ struct Context;
 struct Buffer;
 struct Image;
 struct Task;
+struct Framebuffer;
 struct ResourcePool;
 struct Transaction;
 struct CommandDrain;
@@ -101,6 +102,24 @@ struct ResourcePool {
 
 
 
+struct Framebuffer {
+  std::unique_ptr<HAL_IMPL_NAMESPACE::Framebuffer> inner;
+
+  Framebuffer(const Context& ctxt, const Task& task, const Image& attm);
+  Framebuffer(HAL_IMPL_NAMESPACE::Framebuffer&& inner);
+  Framebuffer(Framebuffer&&) = default;
+  ~Framebuffer();
+
+  inline operator HAL_IMPL_NAMESPACE::Framebuffer& () {
+    return *inner;
+  }
+  inline operator const HAL_IMPL_NAMESPACE::Framebuffer& () const {
+    return *inner;
+  }
+};
+
+
+
 struct Task {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Task> inner;
 
@@ -117,6 +136,7 @@ struct Task {
   }
 
   ResourcePool create_rsc_pool() const;
+  Framebuffer create_framebuf(const Image& attm) const;
 };
 
 
@@ -150,7 +170,7 @@ struct Image {
   }
   inline ImageView view() const {
     auto& img_cfg = cfg();
-    return view(0, 0, img_cfg.nrow, img_cfg.ncol);
+    return view(0, 0, (uint32_t)img_cfg.nrow, (uint32_t)img_cfg.ncol);
   }
 };
 
@@ -258,6 +278,29 @@ public:
     return create_comp_task(label, entry_point, code.data(),
       code.size() * sizeof(T), rsc_cfgs, workgrp_size);
   }
+  Task create_graph_task(
+    const std::string& label,
+    const std::string& vert_entry_point,
+    const void* vert_code,
+    const size_t vert_code_size,
+    const std::string& frag_entry_point,
+    const void* frag_code,
+    const size_t frag_code_size,
+    const std::vector<ResourceConfig>& rsc_cfgs
+  ) const;
+  template<typename T>
+  inline Task create_graph_task(
+    const std::string& label,
+    const std::string& vert_entry_point,
+    const std::vector<T>& vert_code,
+    const std::string& frag_entry_point,
+    const std::vector<T>& frag_code,
+    const std::vector<ResourceConfig>& rsc_cfgs
+  ) const {
+    return create_graph_task(label, vert_entry_point, vert_code.data(),
+      vert_code.size() * sizeof(T), frag_entry_point, frag_code.data(),
+      frag_code.size() * sizeof(T), rsc_cfgs);
+  }
 
   Buffer create_buf(
     const std::string& label,
@@ -265,9 +308,16 @@ public:
     MemoryAccess dev_access,
     size_t size,
     size_t align,
-    bool is_const
+    BufferUsage usage
   ) const;
-  Buffer create_const_buf(
+  Buffer create_staging_buf(
+    const std::string& label,
+    MemoryAccess host_access,
+    MemoryAccess dev_access,
+    size_t size,
+    size_t align = 1
+  ) const;
+  Buffer create_uniform_buf(
     const std::string& label,
     MemoryAccess host_access,
     MemoryAccess dev_access,
@@ -275,6 +325,20 @@ public:
     size_t align = 1
   ) const;
   Buffer create_storage_buf(
+    const std::string& label,
+    MemoryAccess host_access,
+    MemoryAccess dev_access,
+    size_t size,
+    size_t align = 1
+  ) const;
+  Buffer create_vert_buf(
+    const std::string& label,
+    MemoryAccess host_access,
+    MemoryAccess dev_access,
+    size_t size,
+    size_t align = 1
+  ) const;
+  Buffer create_idx_buf(
     const std::string& label,
     MemoryAccess host_access,
     MemoryAccess dev_access,
@@ -289,7 +353,7 @@ public:
     size_t nrow,
     size_t ncol,
     PixelFormat fmt,
-    bool is_const
+    ImageUsage usage
   ) const;
   Image create_sampled_img(
     const std::string& label,
@@ -305,7 +369,14 @@ public:
     MemoryAccess dev_access,
     size_t nrow,
     size_t ncol,
-    size_t pitch,
+    PixelFormat fmt
+  ) const;
+  Image create_attm_img(
+    const std::string& label,
+    MemoryAccess host_access,
+    MemoryAccess dev_access,
+    size_t nrow,
+    size_t ncol,
     PixelFormat fmt
   ) const;
 
