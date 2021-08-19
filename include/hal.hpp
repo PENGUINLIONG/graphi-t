@@ -440,7 +440,7 @@ struct Command {
       const Framebuffer* framebuf;
       const BufferView* verts;
       const BufferView* idxs;
-      uint32_t nvert;
+      uint32_t nidx;
       uint32_t ninst;
     } cmd_draw_indexed;
   };
@@ -525,7 +525,7 @@ inline Command cmd_draw_indexed(
   const ResourcePool& rsc_pool,
   const BufferView& idxs,
   const BufferView& verts,
-  uint32_t nvert,
+  uint32_t nidx,
   uint32_t ninst,
   const Framebuffer& framebuf
 ) {
@@ -536,7 +536,7 @@ inline Command cmd_draw_indexed(
   cmd.cmd_draw_indexed.framebuf = &framebuf;
   cmd.cmd_draw_indexed.verts = &verts;
   cmd.cmd_draw_indexed.idxs = &idxs;
-  cmd.cmd_draw_indexed.nvert = nvert;
+  cmd.cmd_draw_indexed.nidx = nidx;
   cmd.cmd_draw_indexed.ninst = ninst;
   return cmd;
 }

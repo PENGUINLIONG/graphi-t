@@ -207,7 +207,6 @@ void guarded_main2() {
     L_MEMORY_ACCESS_READ_WRITE,
     L_MEMORY_ACCESS_READ_ONLY,
     3 * 4 * sizeof(float));
-
   {
     float data[12] {
        1, -1, 0, 1,
@@ -218,13 +217,21 @@ void guarded_main2() {
     float* verts_data = (float*)mapped;
     std::memcpy(verts_data, data, sizeof(data));
   }
+
+  scoped::Buffer idxs = ctxt.create_idx_buf(
+    "idxs",
+    L_MEMORY_ACCESS_READ_WRITE,
+    L_MEMORY_ACCESS_READ_ONLY,
+    3 * 4 * sizeof(uint16_t));
   {
-    scoped::MappedBuffer mapped = verts.map(L_MEMORY_ACCESS_READ_ONLY);
-    float* verts_data = (float*)mapped;
-    for (int i = 0; i < 12; ++i) {
-      liong::log::info(verts_data[i]);
-    }
+    uint16_t data[3] {
+      0, 1, 2
+    };
+    scoped::MappedBuffer mapped = idxs.map(L_MEMORY_ACCESS_WRITE_ONLY);
+    uint16_t* idxs_data = (uint16_t*)mapped;
+    std::memcpy(idxs_data, data, sizeof(data));
   }
+
 
   constexpr uint32_t FRAMEBUF_NCOL = 4;
   constexpr uint32_t FRAMEBUF_NROW = 4;
@@ -244,7 +251,7 @@ void guarded_main2() {
     FRAMEBUF_NCOL * FRAMEBUF_NROW * 4 * sizeof(float));
 
   std::vector<Command> cmds {
-    cmd_draw(task, rsc_pool, verts.view(), 3, 1, framebuf),
+    cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 3, 1, framebuf),
     cmd_copy_img2buf(out_img.view(), out_buf.view()),
   };
 

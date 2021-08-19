@@ -1422,8 +1422,91 @@ void _record_cmd_draw(TransactionLike& transact, const Command& cmd) {
     vkCmdEndRenderPass(cmdbuf);
   }
 }
+// TODO: (penguinliong) Refactor this.
 void _record_cmd_draw_indexed(TransactionLike& transact, const Command& cmd) {
-  liong::unreachable();
+  const auto& in = cmd.cmd_draw_indexed;
+  const auto& task = *in.task;
+  const auto& rsc_pool = *in.rsc_pool;
+  const auto& framebuf = *in.framebuf;
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
+
+  // TODO: (penguinliong) Move this to a specialized command.
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    VkImageLayout src_layout = framebuf.img->layout;
+    VkImageLayout dst_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    uint32_t src_qfam_idx = framebuf.img->qfam_idx;
+    uint32_t dst_qfam_idx = transact.submit_details.back().qfam_idx;
+
+    VkImageMemoryBarrier imb {};
+    imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    imb.image = framebuf.img->img;
+    imb.srcAccessMask = 0;
+    imb.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+    imb.oldLayout = src_layout;
+    imb.newLayout = dst_layout;
+    imb.srcQueueFamilyIndex = src_qfam_idx;
+    imb.dstQueueFamilyIndex = dst_qfam_idx;
+    imb.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    imb.subresourceRange.baseArrayLayer = 0;
+    imb.subresourceRange.layerCount = 1;
+    imb.subresourceRange.baseMipLevel = 0;
+    imb.subresourceRange.levelCount = 1;
+
+    vkCmdPipelineBarrier(cmdbuf,
+      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+      VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+      0,
+      0, nullptr,
+      0, nullptr,
+      1, &imb);
+
+    {
+      Image& img_mut = *((Image*)(const Image*)&framebuf.img);
+      img_mut.layout = dst_layout;
+      img_mut.qfam_idx = dst_qfam_idx;
+    }
+
+    VkRenderPassBeginInfo rpbi {};
+    rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    rpbi.renderPass = task.pass;
+    rpbi.framebuffer = framebuf.framebuf;
+    rpbi.renderArea.extent = framebuf.viewport.extent;
+    rpbi.clearValueCount = 1;
+    rpbi.pClearValues = &framebuf.clear_value;
+
+    vkCmdBeginRenderPass(cmdbuf, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
+  } else {
+    auto& last_submit = transact.submit_details.back();
+    liong::assert(last_submit.pass != VK_NULL_HANDLE,
+      "secondary command buffer can only contain one render pass");
+    last_submit.pass = task.pass;
+    last_submit.framebuf = framebuf.framebuf;
+    last_submit.render_area = framebuf.viewport.extent;
+    last_submit.clear_value = framebuf.clear_value;
+  }
+
+  vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, task.pipe);
+  if (rsc_pool.desc_set != VK_NULL_HANDLE) {
+    vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+      task.pipe_layout, 0, 1, &rsc_pool.desc_set, 0, nullptr);
+  }
+  vkCmdBindIndexBuffer(cmdbuf, in.idxs->buf->buf, in.idxs->offset,
+    VK_INDEX_TYPE_UINT16);
+  vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts->buf->buf, &in.verts->offset);
+  VkRect2D scissor {};
+  scissor.extent = framebuf.viewport.extent;
+  vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
+  VkViewport viewport {};
+  viewport.width = (float)framebuf.viewport.extent.width;
+  viewport.height = (float)framebuf.viewport.extent.height;
+  viewport.minDepth = 0.0f;
+  viewport.maxDepth = 1.0f;
+  vkCmdSetViewport(cmdbuf, 0, 1, &viewport);
+  vkCmdDrawIndexed(cmdbuf, in.nidx, in.ninst, 0, 0, 0);
+  // TODO: (penguinliong) Move this to a specialized command.
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    vkCmdEndRenderPass(cmdbuf);
+  }
 }
 
 // Returns whether the submit queue to submit has changed.
