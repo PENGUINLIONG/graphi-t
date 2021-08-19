@@ -258,8 +258,6 @@ struct ImageConfig {
   size_t nrow;
   // Number of columns in the image.
   size_t ncol;
-  // Stride between base addresses of rows.
-  size_t pitch;
   // Pixel format of the image.
   PixelFormat fmt;
   // Usage of the image.

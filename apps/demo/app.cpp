@@ -76,6 +76,19 @@ void dbg_dump_spv_art(
     art.comp_spv.data(),
     art.comp_spv.size() * sizeof(uint32_t));
 }
+void dbg_dump_spv_art(
+  const std::string& prefix,
+  glslang::GraphicsSpirvArtifact art
+) {
+  liong::util::save_file(
+    (prefix + ".vert.spv").c_str(),
+    art.vert_spv.data(),
+    art.vert_spv.size() * sizeof(uint32_t));
+  liong::util::save_file(
+    (prefix + ".frag.spv").c_str(),
+    art.frag_spv.data(),
+    art.frag_spv.size() * sizeof(uint32_t));
+}
 
 
 
@@ -151,10 +164,109 @@ void guarded_main() {
   }
 }
 
+void guarded_main2() {
+  vk::initialize();
+  glslang::initialize();
+
+  dbg_enum_dev_descs();
+
+  std::string vert_glsl = R"(
+    #version 450 core
+
+    layout(location=0)
+    in vec4 pos;
+
+    void main() {
+      gl_Position = vec4(pos.xy, 0.0f, 1.0f);
+    }
+  )";
+  std::string frag_glsl = R"(
+    #version 450 core
+
+    layout(location=0)
+    out vec4 color;
+
+    void main() {
+      color = vec4(1.0f, 0.0f, 1.0f, 1.0f);
+    }
+  )";
+  glslang::GraphicsSpirvArtifact art =
+    glslang::compile_graph(vert_glsl, "main", frag_glsl, "main");
+  dbg_dump_spv_art("out", art);
+
+  scoped::Context ctxt("ctxt", 0);
+
+  std::vector<ResourceConfig> rsc_cfgs {};
+  scoped::Task task = ctxt.create_graph_task("graph_task",
+    "main", art.vert_spv, "main", art.frag_spv, rsc_cfgs);
+
+  scoped::ResourcePool rsc_pool = task.create_rsc_pool();
+
+  scoped::Buffer verts = ctxt.create_vert_buf(
+    "verts",
+    L_MEMORY_ACCESS_READ_WRITE,
+    L_MEMORY_ACCESS_READ_ONLY,
+    3 * 4 * sizeof(float));
+
+  {
+    float data[12] {
+       1, -1, 0, 1,
+      -1, -1, 0, 1,
+      -1,  1, 0, 1,
+    };
+    scoped::MappedBuffer mapped = verts.map(L_MEMORY_ACCESS_WRITE_ONLY);
+    float* verts_data = (float*)mapped;
+    std::memcpy(verts_data, data, sizeof(data));
+  }
+  {
+    scoped::MappedBuffer mapped = verts.map(L_MEMORY_ACCESS_READ_ONLY);
+    float* verts_data = (float*)mapped;
+    for (int i = 0; i < 12; ++i) {
+      liong::log::info(verts_data[i]);
+    }
+  }
+
+  constexpr uint32_t FRAMEBUF_NCOL = 4;
+  constexpr uint32_t FRAMEBUF_NROW = 4;
+
+  scoped::Image out_img = ctxt.create_attm_img(
+    "attm",
+    L_MEMORY_ACCESS_NONE,
+    L_MEMORY_ACCESS_WRITE_ONLY,
+    4, 4, L_FORMAT_R32G32B32A32_SFLOAT);
+
+  scoped::Framebuffer framebuf = task.create_framebuf(out_img);
+
+  scoped::Buffer out_buf = ctxt.create_staging_buf(
+    "out_buf",
+    L_MEMORY_ACCESS_READ_ONLY,
+    L_MEMORY_ACCESS_WRITE_ONLY,
+    FRAMEBUF_NCOL * FRAMEBUF_NROW * 4 * sizeof(float));
+
+  std::vector<Command> cmds {
+    cmd_draw(task, rsc_pool, verts.view(), 3, 1, framebuf),
+    cmd_copy_img2buf(out_img.view(), out_buf.view()),
+  };
+
+  scoped::CommandDrain cmd_drain = ctxt.create_cmd_drain();
+  cmd_drain.submit(cmds);
+  cmd_drain.wait();
+
+  {
+    scoped::MappedBuffer mapped = out_buf.map(L_MEMORY_ACCESS_READ_ONLY);
+    const float* out_data = (const float*)mapped;
+    std::stringstream ss;
+
+    liong::util::save_bmp(out_data, FRAMEBUF_NCOL, FRAMEBUF_NROW, "out_img.bmp");
+  }
+}
+
+
 int main(int argc, char** argv) {
   liong::log::set_log_callback(log_cb);
   try {
     guarded_main();
+    guarded_main2();
   } catch (const std::exception& e) {
     liong::log::error("application threw an exception");
     liong::log::error(e.what());

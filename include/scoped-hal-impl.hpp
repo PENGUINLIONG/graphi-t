@@ -135,17 +135,12 @@ Image Context::create_img(
   PixelFormat fmt,
   ImageUsage usage
 ) const {
-  size_t align =
-    inner->physdev_prop.limits.optimalBufferCopyRowPitchAlignment;
-  size_t pitch = align_size(ncol, align);
-
   ImageConfig img_cfg {};
   img_cfg.label = label;
   img_cfg.host_access = host_access;
   img_cfg.dev_access = dev_access;
   img_cfg.nrow = nrow;
   img_cfg.ncol = ncol;
-  img_cfg.pitch = pitch;
   img_cfg.fmt = fmt;
   img_cfg.usage = usage;
   return HAL_IMPL_NAMESPACE::create_img(*inner, img_cfg);

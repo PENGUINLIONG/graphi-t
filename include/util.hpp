@@ -48,7 +48,19 @@ inline std::string format(const TArgs& ... args) {
 extern std::vector<uint8_t> load_file(const char* path);
 extern std::string load_text(const char* path);
 extern void save_file(const char* path, const void* data, size_t size);
-extern std::map<std::string, std::string> load_ini(const char* path);
+
+void save_bmp(
+  const uint32_t* pxs,
+  uint32_t w,
+  uint32_t h,
+  const char* path
+);
+void save_bmp(
+  const float* pxs,
+  uint32_t w,
+  uint32_t h,
+  const char* path
+);
 
 } // namespace util
 

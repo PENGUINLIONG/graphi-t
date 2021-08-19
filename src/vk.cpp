@@ -481,12 +481,12 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
       VK_IMAGE_USAGE_SAMPLED_BIT |
       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
       VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
-    break;
     {
       auto isubmit_detail =
         ctxt.submit_detail_idx_by_submit_ty[L_SUBMIT_TYPE_GRAPHICS];
       qfam_idx = ctxt.submit_details[isubmit_detail].qfam_idx;
     }
+    break;
   default:
     liong::unreachable();
   }
@@ -1232,7 +1232,7 @@ void _record_cmd_copy_buf2img(TransactionLike& transact, const Command& cmd) {
 
   VkBufferImageCopy bic {};
   bic.bufferOffset = src.offset;
-  bic.bufferRowLength = static_cast<uint32_t>(dst.img->img_cfg.pitch);
+  bic.bufferRowLength = 0;
   bic.bufferImageHeight = dst.img->img_cfg.nrow;
   bic.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   bic.imageSubresource.mipLevel = 0;
@@ -1257,7 +1257,7 @@ void _record_cmd_copy_img2buf(TransactionLike& transact, const Command& cmd) {
 
   VkBufferImageCopy bic {};
   bic.bufferOffset = dst.offset;
-  bic.bufferRowLength = static_cast<uint32_t>(src.img->img_cfg.pitch);
+  bic.bufferRowLength = 0;
   bic.bufferImageHeight = static_cast<uint32_t>(src.img->img_cfg.nrow);
   bic.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   bic.imageSubresource.mipLevel = 0;
@@ -1355,12 +1355,18 @@ void _record_cmd_draw(TransactionLike& transact, const Command& cmd) {
 
     VkImageMemoryBarrier imb {};
     imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    imb.image = framebuf.img->img;
     imb.srcAccessMask = 0;
     imb.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
     imb.oldLayout = src_layout;
     imb.newLayout = dst_layout;
     imb.srcQueueFamilyIndex = src_qfam_idx;
     imb.dstQueueFamilyIndex = dst_qfam_idx;
+    imb.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    imb.subresourceRange.baseArrayLayer = 0;
+    imb.subresourceRange.layerCount = 1;
+    imb.subresourceRange.baseMipLevel = 0;
+    imb.subresourceRange.levelCount = 1;
 
     vkCmdPipelineBarrier(cmdbuf,
       VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
