@@ -60,12 +60,33 @@ Task Context::create_graph_task(
 
 Buffer Context::create_buf(
   const std::string& label,
-  MemoryAccess host_access,
-  MemoryAccess dev_access,
+  BufferUsage usage,
   size_t size,
-  size_t align,
-  BufferUsage usage
+  size_t align
 ) const {
+  MemoryAccess host_access = 0;
+  MemoryAccess dev_access = 0;
+  if (usage & L_BUFFER_USAGE_STAGING_BIT) {
+    host_access |= L_MEMORY_ACCESS_READ_WRITE;
+    dev_access |= L_MEMORY_ACCESS_READ_WRITE;
+  }
+  if (usage & L_BUFFER_USAGE_UNIFORM_BIT) {
+    host_access |= L_MEMORY_ACCESS_WRITE_BIT;
+    dev_access |= L_MEMORY_ACCESS_READ_BIT;
+  }
+  if (usage & L_BUFFER_USAGE_STORAGE_BIT) {
+    host_access |= L_MEMORY_ACCESS_READ_WRITE;
+    dev_access |= L_MEMORY_ACCESS_READ_WRITE;
+  }
+  if (usage & L_BUFFER_USAGE_VERTEX_BIT) {
+    host_access |= L_MEMORY_ACCESS_WRITE_BIT;
+    dev_access |= L_MEMORY_ACCESS_READ_BIT;
+  }
+  if (usage & L_BUFFER_USAGE_INDEX_BIT) {
+    host_access |= L_MEMORY_ACCESS_WRITE_BIT;
+    dev_access |= L_MEMORY_ACCESS_READ_BIT;
+  }
+
   BufferConfig buf_cfg {};
   buf_cfg.label = label;
   buf_cfg.size = size;
@@ -80,51 +101,64 @@ Buffer Context::create_staging_buf(
   size_t size,
   size_t align
 ) const {
-  return create_buf(label, L_MEMORY_ACCESS_READ_WRITE,
-    L_MEMORY_ACCESS_READ_WRITE, size, align, L_BUFFER_USAGE_STAGING);
+  return create_buf(label, L_BUFFER_USAGE_STAGING_BIT, size, align);
 }
 Buffer Context::create_uniform_buf(
   const std::string& label,
   size_t size,
   size_t align
 ) const {
-  return create_buf(label, L_MEMORY_ACCESS_WRITE_ONLY,
-    L_MEMORY_ACCESS_READ_ONLY, size, align, L_BUFFER_USAGE_UNIFORM);
+  return create_buf(label, L_BUFFER_USAGE_UNIFORM_BIT, size, align);
 }
 Buffer Context::create_storage_buf(
   const std::string& label,
   size_t size,
   size_t align
 ) const {
-  return create_buf(label, L_MEMORY_ACCESS_READ_WRITE,
-    L_MEMORY_ACCESS_READ_WRITE, size, align, L_BUFFER_USAGE_STORAGE);
+  return create_buf(label, L_BUFFER_USAGE_STORAGE_BIT, size, align);
 }
 Buffer Context::create_vert_buf(
   const std::string& label,
   size_t size,
   size_t align
 ) const {
-  return create_buf(label, L_MEMORY_ACCESS_WRITE_ONLY,
-    L_MEMORY_ACCESS_READ_ONLY, size, align, L_BUFFER_USAGE_VERTEX);
+  return create_buf(label, L_BUFFER_USAGE_VERTEX_BIT, size, align);
 }
 Buffer Context::create_idx_buf(
   const std::string& label,
   size_t size,
   size_t align
 ) const {
-  return create_buf(label, L_MEMORY_ACCESS_WRITE_ONLY,
-    L_MEMORY_ACCESS_READ_ONLY, size, align, L_BUFFER_USAGE_INDEX);
+  return create_buf(label, L_BUFFER_USAGE_INDEX_BIT, size, align);
 }
 
 Image Context::create_img(
   const std::string& label,
-  MemoryAccess host_access,
-  MemoryAccess dev_access,
+  ImageUsage usage,
   size_t nrow,
   size_t ncol,
-  PixelFormat fmt,
-  ImageUsage usage
+  PixelFormat fmt
 ) const {
+  MemoryAccess host_access = 0;
+  MemoryAccess dev_access = 0;
+  switch (usage)
+  {
+  case L_IMAGE_USAGE_SAMPLED_BIT:
+    host_access |= L_MEMORY_ACCESS_NONE;
+    dev_access |= L_MEMORY_ACCESS_READ_BIT;
+    break;
+  case L_IMAGE_USAGE_STORAGE_BIT:
+    host_access |= L_MEMORY_ACCESS_NONE;
+    dev_access |= L_MEMORY_ACCESS_READ_WRITE;
+    break;
+  case L_IMAGE_USAGE_ATTACHMENT_BIT:
+    host_access |= L_MEMORY_ACCESS_NONE;
+    dev_access |= L_MEMORY_ACCESS_WRITE_BIT;
+    break;
+  default:
+    liong::panic("unexpected image usage");
+  }
+
   ImageConfig img_cfg {};
   img_cfg.label = label;
   img_cfg.host_access = host_access;
@@ -137,36 +171,27 @@ Image Context::create_img(
 }
 Image Context::create_sampled_img(
   const std::string& label,
-  MemoryAccess host_access,
-  MemoryAccess dev_access,
   size_t nrow,
   size_t ncol,
   PixelFormat fmt
 ) const {
-  return create_img(label, host_access, dev_access, nrow, ncol, fmt,
-    L_IMAGE_USAGE_SAMPLED);
+  return create_img(label, L_IMAGE_USAGE_SAMPLED_BIT, nrow, ncol, fmt);
 }
 Image Context::create_storage_img(
   const std::string& label,
-  MemoryAccess host_access,
-  MemoryAccess dev_access,
   size_t nrow,
   size_t ncol,
   PixelFormat fmt
 ) const {
-  return create_img(label, host_access, dev_access, nrow, ncol, fmt,
-    L_IMAGE_USAGE_STORAGE);
+  return create_img(label, L_IMAGE_USAGE_STORAGE_BIT, nrow, ncol, fmt);
 }
 Image Context::create_attm_img(
   const std::string& label,
-  MemoryAccess host_access,
-  MemoryAccess dev_access,
   size_t nrow,
   size_t ncol,
   PixelFormat fmt
 ) const {
-  return create_img(label, host_access, dev_access, nrow, ncol, fmt,
-    L_IMAGE_USAGE_ATTACHMENT);
+  return create_img(label, L_IMAGE_USAGE_ATTACHMENT_BIT, nrow, ncol, fmt);
 }
 
 Transaction Context::create_transact(

@@ -53,12 +53,17 @@ L_IMPL_FN const ContextConfig& get_ctxt_cfg(const Context& ctxt);
 
 
 
-enum MemoryAccess {
-  L_MEMORY_ACCESS_NONE = 0b00,
-  L_MEMORY_ACCESS_READ_ONLY = 0b01,
-  L_MEMORY_ACCESS_WRITE_ONLY = 0b10,
-  L_MEMORY_ACCESS_READ_WRITE = 0b11,
+enum MemoryAccessBits {
+  L_MEMORY_ACCESS_READ_BIT = 0b01,
+  L_MEMORY_ACCESS_WRITE_BIT = 0b10,
+
+  L_MEMORY_ACCESS_NONE = 0,
+  L_MEMORY_ACCESS_READ_ONLY = L_MEMORY_ACCESS_READ_BIT,
+  L_MEMORY_ACCESS_WRITE_ONLY = L_MEMORY_ACCESS_WRITE_BIT,
+  L_MEMORY_ACCESS_READ_WRITE =
+    L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT,
 };
+typedef uint32_t MemoryAccess;
 
 // Calculate a minimal size of allocation that guarantees that we can sub-
 // allocate an address-aligned memory of `size`.
@@ -198,13 +203,14 @@ L_DEF_FMT(R32G32B32A32_SFLOAT, 4, 0x20);
 
 
 
-enum BufferUsage {
-  L_BUFFER_USAGE_STAGING,
-  L_BUFFER_USAGE_UNIFORM,
-  L_BUFFER_USAGE_STORAGE,
-  L_BUFFER_USAGE_VERTEX,
-  L_BUFFER_USAGE_INDEX,
+enum BufferUsageBits {
+  L_BUFFER_USAGE_STAGING_BIT = (1 << 0),
+  L_BUFFER_USAGE_UNIFORM_BIT = (1 << 1),
+  L_BUFFER_USAGE_STORAGE_BIT = (1 << 2),
+  L_BUFFER_USAGE_VERTEX_BIT = (1 << 3),
+  L_BUFFER_USAGE_INDEX_BIT = (1 << 4),
 };
+typedef uint32_t BufferUsage;
 // Describes a buffer.
 struct BufferConfig {
   // Human-readable label of the buffer.
@@ -243,11 +249,12 @@ L_IMPL_FN void unmap_mem(
 
 
 
-enum ImageUsage {
-  L_IMAGE_USAGE_SAMPLED,
-  L_IMAGE_USAGE_STORAGE,
-  L_IMAGE_USAGE_ATTACHMENT,
+enum ImageUsageBits {
+  L_IMAGE_USAGE_SAMPLED_BIT = (1 << 0),
+  L_IMAGE_USAGE_STORAGE_BIT = (1 << 1),
+  L_IMAGE_USAGE_ATTACHMENT_BIT = (1 << 2),
 };
+typedef uint32_t ImageUsage;
 // Describe a row-major 2D image.
 struct ImageConfig {
   // Human-readable label of the image.

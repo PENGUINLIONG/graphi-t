@@ -239,11 +239,8 @@ void guarded_main2() {
   constexpr uint32_t FRAMEBUF_NCOL = 4;
   constexpr uint32_t FRAMEBUF_NROW = 4;
 
-  scoped::Image out_img = ctxt.create_attm_img(
-    "attm",
-    L_MEMORY_ACCESS_NONE,
-    L_MEMORY_ACCESS_WRITE_ONLY,
-    4, 4, L_FORMAT_R32G32B32A32_SFLOAT);
+  scoped::Image out_img = ctxt.create_attm_img("attm", 4, 4,
+    L_FORMAT_R32G32B32A32_SFLOAT);
 
   scoped::Framebuffer framebuf = task.create_framebuf(out_img);
 

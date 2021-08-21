@@ -304,11 +304,9 @@ public:
 
   Buffer create_buf(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
+    BufferUsage usage,
     size_t size,
-    size_t align,
-    BufferUsage usage
+    size_t align
   ) const;
   Buffer create_staging_buf(
     const std::string& label,
@@ -338,33 +336,25 @@ public:
 
   Image create_img(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
+    ImageUsage usage,
     size_t nrow,
     size_t ncol,
-    PixelFormat fmt,
-    ImageUsage usage
+    PixelFormat fmt
   ) const;
   Image create_sampled_img(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
     size_t nrow,
     size_t ncol,
     PixelFormat fmt
   ) const;
   Image create_storage_img(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
     size_t nrow,
     size_t ncol,
     PixelFormat fmt
   ) const;
   Image create_attm_img(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
     size_t nrow,
     size_t ncol,
     PixelFormat fmt
