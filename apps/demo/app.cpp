@@ -122,15 +122,8 @@ void guarded_main() {
 
   scoped::Context ctxt("ctxt", 0);
 
-  std::vector<ResourceConfig> rsc_cfgs {
-    { L_RESOURCE_TYPE_BUFFER, false },
-  };
-  DispatchSize local_size { 1, 1, 1 };
-  scoped::Task task = ctxt.create_comp_task("comp_task",
-    "main",
-    art.comp_spv,
-    rsc_cfgs,
-    local_size);
+  scoped::Task task = ctxt.create_comp_task("comp_task", "main", art.comp_spv,
+    { 1, 1, 1 }, { L_RESOURCE_TYPE_STORAGE_BUFFER });
 
   scoped::Buffer buf = ctxt.create_storage_buf("buf", 16 * sizeof(float));
 
@@ -193,12 +186,12 @@ void guarded_main2() {
 
   scoped::Context ctxt("ctxt", 0);
 
-  std::vector<ResourceConfig> rsc_cfgs {
-    { L_RESOURCE_TYPE_BUFFER, true },
+  std::vector<ResourceType> rsc_tys {
+    L_RESOURCE_TYPE_UNIFORM_BUFFER,
   };
 
-  scoped::Task task = ctxt.create_graph_task("graph_task",
-    "main", art.vert_spv, "main", art.frag_spv, rsc_cfgs);
+  scoped::Task task = ctxt.create_graph_task("graph_task", "main", art.vert_spv,
+    "main", art.frag_spv, rsc_tys);
 
   scoped::Buffer ubo = ctxt.create_uniform_buf("ubo", 4 * sizeof(float));
   {

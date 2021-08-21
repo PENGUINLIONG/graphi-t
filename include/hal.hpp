@@ -287,8 +287,10 @@ struct DispatchSize {
   uint32_t x, y, z;
 };
 enum ResourceType {
-  L_RESOURCE_TYPE_BUFFER,
-  L_RESOURCE_TYPE_IMAGE,
+  L_RESOURCE_TYPE_UNIFORM_BUFFER,
+  L_RESOURCE_TYPE_STORAGE_BUFFER,
+  L_RESOURCE_TYPE_SAMPLED_IMAGE,
+  L_RESOURCE_TYPE_STORAGE_IMAGE,
 };
 struct ResourceConfig {
   // Type of the resource.
@@ -310,9 +312,9 @@ struct ComputeTaskConfig {
   // Size of code of the task program in bytes.
   size_t code_size;
   // The resources to be allocated.
-  const ResourceConfig* rsc_cfgs;
+  const ResourceType* rsc_tys;
   // Number of resources to be allocated.
-  size_t nrsc_cfg;
+  size_t nrsc_ty;
   // Local group size; number of threads in a workgroup.
   DispatchSize workgrp_size;
 };
@@ -336,9 +338,9 @@ struct GraphicsTaskConfig {
   // Size of code of the fragment stage of the task program in bytes.
   size_t frag_code_size;
   // Resources to be allocated.
-  const ResourceConfig* rsc_cfgs;
+  const ResourceType* rsc_tys;
   // Number of resources allocated.
-  size_t nrsc_cfg;
+  size_t nrsc_ty;
 };
 L_IMPL_STRUCT struct Task;
 L_IMPL_FN Task create_comp_task(

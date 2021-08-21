@@ -548,36 +548,36 @@ const ImageConfig& get_img_cfg(const Image& img) {
 
 VkDescriptorSetLayout _create_desc_set_layout(
   const Context& ctxt,
-  const ResourceConfig* rsc_cfgs,
-  size_t nrsc_cfg,
+  const ResourceType* rsc_tys,
+  size_t nrsc_ty,
   std::vector<VkDescriptorPoolSize>& desc_pool_sizes
 ) {
   std::vector<VkDescriptorSetLayoutBinding> dslbs;
   std::map<VkDescriptorType, uint32_t> desc_counter;
-  for (auto i = 0; i < nrsc_cfg; ++i) {
-    const auto& rsc_cfg = rsc_cfgs[i];
+  for (auto i = 0; i < nrsc_ty; ++i) {
+    const auto& rsc_ty = rsc_tys[i];
 
     VkDescriptorSetLayoutBinding dslb {};
     dslb.binding = i;
     dslb.descriptorCount = 1;
     dslb.stageFlags =
       VK_SHADER_STAGE_ALL_GRAPHICS | VK_SHADER_STAGE_COMPUTE_BIT;
-    if (rsc_cfg.is_const) {
-      switch (rsc_cfg.rsc_ty) {
-      case L_RESOURCE_TYPE_BUFFER:
-        dslb.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; break;
-      case L_RESOURCE_TYPE_IMAGE:
-        dslb.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        dslb.pImmutableSamplers = &ctxt.fast_samp;
-        break;
-      }
-    } else {
-      switch (rsc_cfg.rsc_ty) {
-      case L_RESOURCE_TYPE_BUFFER:
-        dslb.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; break;
-      case L_RESOURCE_TYPE_IMAGE:
-        dslb.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; break;
-      }
+    switch (rsc_ty) {
+    case L_RESOURCE_TYPE_UNIFORM_BUFFER:
+      dslb.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      break;
+    case L_RESOURCE_TYPE_STORAGE_BUFFER:
+      dslb.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      break;
+    case L_RESOURCE_TYPE_SAMPLED_IMAGE:
+      dslb.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      dslb.pImmutableSamplers = &ctxt.fast_samp;
+      break;
+    case L_RESOURCE_TYPE_STORAGE_IMAGE:
+      dslb.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+      break;
+    default:
+      liong::panic("unexpected resource type");
     }
     desc_counter[dslb.descriptorType] += 1;
 
@@ -638,7 +638,7 @@ Task create_comp_task(
 ) {
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   VkDescriptorSetLayout desc_set_layout = _create_desc_set_layout(ctxt,
-    cfg.rsc_cfgs, cfg.nrsc_cfg, desc_pool_sizes);
+    cfg.rsc_tys, cfg.nrsc_ty, desc_pool_sizes);
   VkPipelineLayout pipe_layout = _create_pipe_layout(ctxt, desc_set_layout);
   VkShaderModule shader_mod = _create_shader_mod(ctxt, cfg.code, cfg.code_size);
 
@@ -729,7 +729,7 @@ Task create_graph_task(
 ) {
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   VkDescriptorSetLayout desc_set_layout =
-    _create_desc_set_layout(ctxt, cfg.rsc_cfgs, cfg.nrsc_cfg, desc_pool_sizes);
+    _create_desc_set_layout(ctxt, cfg.rsc_tys, cfg.nrsc_ty, desc_pool_sizes);
   VkPipelineLayout pipe_layout = _create_pipe_layout(ctxt, desc_set_layout);
   VkShaderModule vert_shader_mod =
     _create_shader_mod(ctxt, cfg.vert_code, cfg.vert_code_size);

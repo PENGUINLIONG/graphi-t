@@ -22,16 +22,16 @@ Task Context::create_comp_task(
   const std::string& entry_point,
   const void* code,
   const size_t code_size,
-  const std::vector<ResourceConfig>& rsc_cfgs,
-  const DispatchSize& workgrp_size
+  const DispatchSize& workgrp_size,
+  const std::vector<ResourceType>& rsc_tys
 ) const {
   ComputeTaskConfig comp_task_cfg {};
   comp_task_cfg.label = label;
   comp_task_cfg.entry_name = entry_point.c_str();
   comp_task_cfg.code = code;
   comp_task_cfg.code_size = code_size;
-  comp_task_cfg.rsc_cfgs = rsc_cfgs.data();
-  comp_task_cfg.nrsc_cfg = rsc_cfgs.size();
+  comp_task_cfg.rsc_tys = rsc_tys.data();
+  comp_task_cfg.nrsc_ty = rsc_tys.size();
   comp_task_cfg.workgrp_size = workgrp_size;
   return HAL_IMPL_NAMESPACE::create_comp_task(*inner, comp_task_cfg);
 }
@@ -43,7 +43,7 @@ Task Context::create_graph_task(
   const std::string& frag_entry_point,
   const void* frag_code,
   const size_t frag_code_size,
-  const std::vector<ResourceConfig>& rsc_cfgs
+  const std::vector<ResourceType>& rsc_tys
 ) const {
   GraphicsTaskConfig graph_task_cfg {};
   graph_task_cfg.label = label;
@@ -53,8 +53,8 @@ Task Context::create_graph_task(
   graph_task_cfg.frag_entry_name = frag_entry_point.c_str();
   graph_task_cfg.frag_code = frag_code;
   graph_task_cfg.frag_code_size = frag_code_size;
-  graph_task_cfg.rsc_cfgs = rsc_cfgs.data();
-  graph_task_cfg.nrsc_cfg = rsc_cfgs.size();
+  graph_task_cfg.rsc_tys = rsc_tys.data();
+  graph_task_cfg.nrsc_ty = rsc_tys.size();
   return HAL_IMPL_NAMESPACE::create_graph_task(*inner, graph_task_cfg);
 }
 
