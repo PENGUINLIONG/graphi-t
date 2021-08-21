@@ -312,36 +312,26 @@ public:
   ) const;
   Buffer create_staging_buf(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
     size_t size,
     size_t align = 1
   ) const;
   Buffer create_uniform_buf(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
     size_t size,
     size_t align = 1
   ) const;
   Buffer create_storage_buf(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
     size_t size,
     size_t align = 1
   ) const;
   Buffer create_vert_buf(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
     size_t size,
     size_t align = 1
   ) const;
   Buffer create_idx_buf(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
     size_t size,
     size_t align = 1
   ) const;

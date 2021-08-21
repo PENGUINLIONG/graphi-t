@@ -77,53 +77,43 @@ Buffer Context::create_buf(
 }
 Buffer Context::create_staging_buf(
   const std::string& label,
-  MemoryAccess host_access,
-  MemoryAccess dev_access,
   size_t size,
   size_t align
 ) const {
-  return create_buf(label, host_access, dev_access, size, align,
-    L_BUFFER_USAGE_STAGING);
+  return create_buf(label, L_MEMORY_ACCESS_READ_WRITE,
+    L_MEMORY_ACCESS_READ_WRITE, size, align, L_BUFFER_USAGE_STAGING);
 }
 Buffer Context::create_uniform_buf(
   const std::string& label,
-  MemoryAccess host_access,
-  MemoryAccess dev_access,
   size_t size,
   size_t align
 ) const {
-  return create_buf(label, host_access, dev_access, size, align,
-    L_BUFFER_USAGE_UNIFORM);
+  return create_buf(label, L_MEMORY_ACCESS_WRITE_ONLY,
+    L_MEMORY_ACCESS_READ_ONLY, size, align, L_BUFFER_USAGE_UNIFORM);
 }
 Buffer Context::create_storage_buf(
   const std::string& label,
-  MemoryAccess host_access,
-  MemoryAccess dev_access,
   size_t size,
   size_t align
 ) const {
-  return create_buf(label, host_access, dev_access, size, align,
-    L_BUFFER_USAGE_STORAGE);
+  return create_buf(label, L_MEMORY_ACCESS_READ_WRITE,
+    L_MEMORY_ACCESS_READ_WRITE, size, align, L_BUFFER_USAGE_STORAGE);
 }
 Buffer Context::create_vert_buf(
   const std::string& label,
-  MemoryAccess host_access,
-  MemoryAccess dev_access,
   size_t size,
   size_t align
 ) const {
-  return create_buf(label, host_access, dev_access, size, align,
-    L_BUFFER_USAGE_VERTEX);
+  return create_buf(label, L_MEMORY_ACCESS_WRITE_ONLY,
+    L_MEMORY_ACCESS_READ_ONLY, size, align, L_BUFFER_USAGE_VERTEX);
 }
 Buffer Context::create_idx_buf(
   const std::string& label,
-  MemoryAccess host_access,
-  MemoryAccess dev_access,
   size_t size,
   size_t align
 ) const {
-  return create_buf(label, host_access, dev_access, size, align,
-    L_BUFFER_USAGE_INDEX);
+  return create_buf(label, L_MEMORY_ACCESS_WRITE_ONLY,
+    L_MEMORY_ACCESS_READ_ONLY, size, align, L_BUFFER_USAGE_INDEX);
 }
 
 Image Context::create_img(

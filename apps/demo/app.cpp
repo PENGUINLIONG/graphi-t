@@ -132,10 +132,7 @@ void guarded_main() {
     rsc_cfgs,
     local_size);
 
-  scoped::Buffer buf = ctxt.create_storage_buf("buf",
-    L_MEMORY_ACCESS_READ_WRITE,
-    L_MEMORY_ACCESS_WRITE_ONLY,
-    16 * sizeof(float));
+  scoped::Buffer buf = ctxt.create_storage_buf("buf", 16 * sizeof(float));
 
   scoped::ResourcePool rsc_pool = task.create_rsc_pool();
   rsc_pool.bind(0, buf.view());
@@ -203,11 +200,7 @@ void guarded_main2() {
   scoped::Task task = ctxt.create_graph_task("graph_task",
     "main", art.vert_spv, "main", art.frag_spv, rsc_cfgs);
 
-  scoped::Buffer ubo = ctxt.create_uniform_buf(
-    "ubo",
-    L_MEMORY_ACCESS_WRITE_ONLY,
-    L_MEMORY_ACCESS_READ_ONLY,
-    4 * sizeof(float));
+  scoped::Buffer ubo = ctxt.create_uniform_buf("ubo", 4 * sizeof(float));
   {
     float data[4] {
       0, 1, 0, 1
@@ -220,11 +213,7 @@ void guarded_main2() {
   scoped::ResourcePool rsc_pool = task.create_rsc_pool();
   rsc_pool.bind(0, ubo.view());
 
-  scoped::Buffer verts = ctxt.create_vert_buf(
-    "verts",
-    L_MEMORY_ACCESS_READ_WRITE,
-    L_MEMORY_ACCESS_READ_ONLY,
-    3 * 4 * sizeof(float));
+  scoped::Buffer verts = ctxt.create_vert_buf("verts", 3 * 4 * sizeof(float));
   {
     float data[12] {
        1, -1, 0, 1,
@@ -236,11 +225,7 @@ void guarded_main2() {
     std::memcpy(verts_data, data, sizeof(data));
   }
 
-  scoped::Buffer idxs = ctxt.create_idx_buf(
-    "idxs",
-    L_MEMORY_ACCESS_READ_WRITE,
-    L_MEMORY_ACCESS_READ_ONLY,
-    3 * 4 * sizeof(uint16_t));
+  scoped::Buffer idxs = ctxt.create_idx_buf("idxs", 3 * 4 * sizeof(uint16_t));
   {
     uint16_t data[3] {
       0, 1, 2
@@ -262,10 +247,7 @@ void guarded_main2() {
 
   scoped::Framebuffer framebuf = task.create_framebuf(out_img);
 
-  scoped::Buffer out_buf = ctxt.create_staging_buf(
-    "out_buf",
-    L_MEMORY_ACCESS_READ_ONLY,
-    L_MEMORY_ACCESS_WRITE_ONLY,
+  scoped::Buffer out_buf = ctxt.create_staging_buf("out_buf",
     FRAMEBUF_NCOL * FRAMEBUF_NROW * 4 * sizeof(float));
 
   std::vector<Command> cmds {
