@@ -1163,10 +1163,10 @@ VkCommandBuffer _get_cmdbuf(
   submit_detail.cmdbuf = cmdbuf;
   submit_detail.queue = queue;
   submit_detail.qfam_idx = qfam_idx;
-  submit_detail.pass = VK_NULL_HANDLE;
-  submit_detail.framebuf = VK_NULL_HANDLE;
-  submit_detail.render_area = {};
-  submit_detail.clear_value = {{{ 0.0f, 0.0f, 0.0f, 0.0f }}};
+  submit_detail.pass_detail.pass = VK_NULL_HANDLE;
+  submit_detail.pass_detail.framebuf = VK_NULL_HANDLE;
+  submit_detail.pass_detail.render_area = {};
+  submit_detail.pass_detail.clear_value = {{{ 0.0f, 0.0f, 0.0f, 0.0f }}};
 
   transact.submit_details.emplace_back(std::move(submit_detail));
   return cmdbuf;
@@ -1210,11 +1210,11 @@ void _record_cmd_inline_transact(
     if (submit_detail.submit_ty == L_SUBMIT_TYPE_GRAPHICS) {
       VkRenderPassBeginInfo rpbi {};
       rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-      rpbi.renderPass = submit_detail.pass;
-      rpbi.framebuffer = submit_detail.framebuf;
-      rpbi.renderArea.extent = submit_detail.render_area;
+      rpbi.renderPass = submit_detail.pass_detail.pass;
+      rpbi.framebuffer = submit_detail.pass_detail.framebuf;
+      rpbi.renderArea.extent = submit_detail.pass_detail.render_area;
       rpbi.clearValueCount = 1;
-      rpbi.pClearValues = &submit_detail.clear_value;
+      rpbi.pClearValues = &submit_detail.pass_detail.clear_value;
       vkCmdBeginRenderPass(cmdbuf, &rpbi,
         VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
     }
@@ -1349,9 +1349,9 @@ void _record_cmd_draw(TransactionLike& transact, const Command& cmd) {
 
   // TODO: (penguinliong) Move this to a specialized command.
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    VkImageLayout src_layout = framebuf.img->layout;
+    VkImageLayout src_layout = framebuf.img->sync_state.layout;
     VkImageLayout dst_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    uint32_t src_qfam_idx = framebuf.img->qfam_idx;
+    uint32_t src_qfam_idx = framebuf.img->sync_state.qfam_idx;
     uint32_t dst_qfam_idx = transact.submit_details.back().qfam_idx;
 
     VkImageMemoryBarrier imb {};
@@ -1379,8 +1379,8 @@ void _record_cmd_draw(TransactionLike& transact, const Command& cmd) {
 
     {
       Image& img_mut = *((Image*)(const Image*)&framebuf.img);
-      img_mut.layout = dst_layout;
-      img_mut.qfam_idx = dst_qfam_idx;
+      img_mut.sync_state.layout = dst_layout;
+      img_mut.sync_state.qfam_idx = dst_qfam_idx;
     }
 
     VkRenderPassBeginInfo rpbi {};
@@ -1394,12 +1394,12 @@ void _record_cmd_draw(TransactionLike& transact, const Command& cmd) {
     vkCmdBeginRenderPass(cmdbuf, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
   } else {
     auto& last_submit = transact.submit_details.back();
-    liong::assert(last_submit.pass != VK_NULL_HANDLE,
+    liong::assert(last_submit.pass_detail.pass == VK_NULL_HANDLE,
       "secondary command buffer can only contain one render pass");
-    last_submit.pass = task.pass;
-    last_submit.framebuf = framebuf.framebuf;
-    last_submit.render_area = framebuf.viewport.extent;
-    last_submit.clear_value = framebuf.clear_value;
+    last_submit.pass_detail.pass = task.pass;
+    last_submit.pass_detail.framebuf = framebuf.framebuf;
+    last_submit.pass_detail.render_area = framebuf.viewport.extent;
+    last_submit.pass_detail.clear_value = framebuf.clear_value;
   }
 
   vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, task.pipe);
@@ -1433,9 +1433,9 @@ void _record_cmd_draw_indexed(TransactionLike& transact, const Command& cmd) {
 
   // TODO: (penguinliong) Move this to a specialized command.
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    VkImageLayout src_layout = framebuf.img->layout;
+    VkImageLayout src_layout = framebuf.img->sync_state.layout;
     VkImageLayout dst_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    uint32_t src_qfam_idx = framebuf.img->qfam_idx;
+    uint32_t src_qfam_idx = framebuf.img->sync_state.qfam_idx;
     uint32_t dst_qfam_idx = transact.submit_details.back().qfam_idx;
 
     VkImageMemoryBarrier imb {};
@@ -1463,8 +1463,8 @@ void _record_cmd_draw_indexed(TransactionLike& transact, const Command& cmd) {
 
     {
       Image& img_mut = *((Image*)(const Image*)&framebuf.img);
-      img_mut.layout = dst_layout;
-      img_mut.qfam_idx = dst_qfam_idx;
+      img_mut.sync_state.layout = dst_layout;
+      img_mut.sync_state.qfam_idx = dst_qfam_idx;
     }
 
     VkRenderPassBeginInfo rpbi {};
@@ -1478,12 +1478,12 @@ void _record_cmd_draw_indexed(TransactionLike& transact, const Command& cmd) {
     vkCmdBeginRenderPass(cmdbuf, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
   } else {
     auto& last_submit = transact.submit_details.back();
-    liong::assert(last_submit.pass != VK_NULL_HANDLE,
+    liong::assert(last_submit.pass_detail.pass == VK_NULL_HANDLE,
       "secondary command buffer can only contain one render pass");
-    last_submit.pass = task.pass;
-    last_submit.framebuf = framebuf.framebuf;
-    last_submit.render_area = framebuf.viewport.extent;
-    last_submit.clear_value = framebuf.clear_value;
+    last_submit.pass_detail.pass = task.pass;
+    last_submit.pass_detail.framebuf = framebuf.framebuf;
+    last_submit.pass_detail.render_area = framebuf.viewport.extent;
+    last_submit.pass_detail.clear_value = framebuf.clear_value;
   }
 
   vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, task.pipe);

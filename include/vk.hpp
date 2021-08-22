@@ -82,14 +82,16 @@ struct Buffer {
   BufferConfig buf_cfg;
 };
 
+struct ImageSyncState {
+  VkImageLayout layout;
+  uint32_t qfam_idx;
+};
 struct Image {
   const Context* ctxt; // Lifetime bound.
   VkDeviceMemory devmem;
   VkImage img;
   VkImageView img_view;
-  VkImageLayout layout;
-  // Dynamic properties.
-  uint32_t qfam_idx;
+  ImageSyncState sync_state;
   ImageConfig img_cfg;
 };
 
@@ -125,16 +127,21 @@ struct ResourcePool {
   VkDescriptorSet desc_set;
 };
 
+struct TransactionRenderPassDetail {
+  VkRenderPass pass;
+  VkFramebuffer framebuf;
+  VkExtent2D render_area;
+  VkClearValue clear_value;
+};
 struct TransactionSubmitDetail {
   SubmitType submit_ty;
   VkQueue queue;
   uint32_t qfam_idx;
   VkCommandBuffer cmdbuf;
-  // Only in graphics transactions.
-  VkRenderPass pass;
-  VkFramebuffer framebuf;
-  VkExtent2D render_area;
-  VkClearValue clear_value;
+  // If the `pass` member is not null, then there should be only one submit
+  // detail in `submit_details` containing all the rendering command in the
+  // render pass.
+  TransactionRenderPassDetail pass_detail;
 };
 struct CommandDrain {
   const Context* ctxt;
