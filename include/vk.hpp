@@ -155,6 +155,7 @@ struct CommandDrain {
 };
 
 struct Transaction {
+  std::string label;
   const Context* ctxt;
   std::array<VkCommandPool, L_SUBMIT_TYPE_RANGE_SIZE> cmd_pools;
   std::vector<TransactionSubmitDetail> submit_details;

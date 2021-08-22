@@ -130,7 +130,7 @@ void guarded_main() {
   scoped::ResourcePool rsc_pool = task.create_rsc_pool();
   rsc_pool.bind(0, buf.view());
 
-  scoped::Transaction transact = ctxt.create_transact({
+  scoped::Transaction transact = ctxt.create_transact("transact", {
     cmd_dispatch(task, rsc_pool, { 4, 4, 4 }),
   });
 

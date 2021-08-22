@@ -58,13 +58,22 @@ struct CommandDrain {
 struct Transaction {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Transaction> inner;
 
-  Transaction(const Context& ctxt, const Command* cmds, size_t ncmd);
+  Transaction(
+    const Context& ctxt,
+    const std::string& label,
+    const Command* cmds, size_t ncmd);
   Transaction(HAL_IMPL_NAMESPACE::Transaction&& inner);
   Transaction(Transaction&&) = default;
-  Transaction(const Context& ctxt, const std::vector<Command>& cmds);
+  Transaction(
+    const Context& ctxt,
+    const std::string& label,
+    const std::vector<Command>& cmds);
   template<size_t N>
-  Transaction(const Context& ctxt, const std::array<Command, N>& cmds) :
-    Transaction(ctxt, cmds.data(), N) {}
+  Transaction(
+    const Context& ctxt,
+    const std::string& label,
+    const std::array<Command, N>& cmds
+  ) : Transaction(ctxt, cmds.data(), N) {}
   ~Transaction();
 
   inline operator HAL_IMPL_NAMESPACE::Transaction& () {
@@ -360,7 +369,10 @@ public:
     PixelFormat fmt
   ) const;
 
-  Transaction create_transact(const std::vector<Command>& cmds) const;
+  Transaction create_transact(
+    const std::string& label,
+    const std::vector<Command>& cmds
+  ) const;
 
   CommandDrain create_cmd_drain() const;
 };

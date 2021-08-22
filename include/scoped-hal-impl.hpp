@@ -195,9 +195,11 @@ Image Context::create_attm_img(
 }
 
 Transaction Context::create_transact(
+  const std::string& label,
   const std::vector<Command>& cmds
 ) const {
-  return HAL_IMPL_NAMESPACE::create_transact(*inner, cmds.data(), cmds.size());
+  return HAL_IMPL_NAMESPACE::create_transact(label, *inner, cmds.data(),
+    cmds.size());
 }
 
 CommandDrain Context::create_cmd_drain() const {
@@ -263,16 +265,18 @@ ResourcePool::~ResourcePool() { destroy_rsc_pool(*inner); }
 
 Transaction::Transaction(
   const Context& ctxt,
+  const std::string& label,
   const Command* cmds,
   size_t ncmd
 ) : inner(std::make_unique<HAL_IMPL_NAMESPACE::Transaction>(
-    create_transact(*ctxt.inner, cmds, ncmd))) {}
+    create_transact(label, *ctxt.inner, cmds, ncmd))) {}
 Transaction::Transaction(HAL_IMPL_NAMESPACE::Transaction&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::Transaction>(inner)) {}
 Transaction::Transaction(
   const Context& ctxt,
+  const std::string& label,
   const std::vector<Command>& cmds
-) : Transaction(ctxt, cmds.data(), cmds.size()) {}
+) : Transaction(ctxt, label, cmds.data(), cmds.size()) {}
 Transaction::~Transaction() { destroy_transact(*inner); }
 
 

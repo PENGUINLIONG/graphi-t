@@ -1209,6 +1209,10 @@ void _record_cmd_inline_transact(
       vkCmdEndRenderPass(cmdbuf);
     }
   }
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    liong::log::info("scheduled inline transaction '",
+      cmd.cmd_inline_transact.transact->label, "'");
+  }
 }
 
 void _record_cmd_copy_buf2img(TransactionLike& transact, const Command& cmd) {
@@ -1233,8 +1237,10 @@ void _record_cmd_copy_buf2img(TransactionLike& transact, const Command& cmd) {
 
   vkCmdCopyBufferToImage(cmdbuf, src.buf->buf, dst.img->img,
     VK_IMAGE_LAYOUT_GENERAL, 1, &bic);
-  //liong::log::info("scheduled copy from buffer '", src.buf->buf_cfg.label,
-  //  "' to image '", dst.img->img_cfg.label, "'");
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    liong::log::info("scheduled copy from buffer '", src.buf->buf_cfg.label,
+      "' to image '", dst.img->img_cfg.label, "'");
+  }
 }
 void _record_cmd_copy_img2buf(TransactionLike& transact, const Command& cmd) {
   const auto& in = cmd.cmd_copy_img2buf;
@@ -1258,8 +1264,10 @@ void _record_cmd_copy_img2buf(TransactionLike& transact, const Command& cmd) {
 
   vkCmdCopyImageToBuffer(cmdbuf, src.img->img, VK_IMAGE_LAYOUT_GENERAL,
     dst.buf->buf, 1, &bic);
-  //liong::log::info("scheduled copy from image '", src.img->img_cfg.label,
-  //  "' to buffer '", dst.buf->buf_cfg.label, "'");
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    liong::log::info("scheduled copy from image '", src.img->img_cfg.label,
+      "' to buffer '", dst.buf->buf_cfg.label, "'");
+  }
 }
 void _record_cmd_copy_buf(TransactionLike& transact, const Command& cmd) {
   const auto& in = cmd.cmd_copy_buf;
@@ -1274,8 +1282,10 @@ void _record_cmd_copy_buf(TransactionLike& transact, const Command& cmd) {
   bc.size = dst.size;
 
   vkCmdCopyBuffer(cmdbuf, src.buf->buf, dst.buf->buf, 1, &bc);
-  //liong::log::info("scheduled copy from buffer '", src.buf->buf_cfg.label,
-  //  "' to buffer '", dst.buf->buf_cfg.label, "'");
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    liong::log::info("scheduled copy from buffer '", src.buf->buf_cfg.label,
+      "' to buffer '", dst.buf->buf_cfg.label, "'");
+  }
 }
 void _record_cmd_copy_img(TransactionLike& transact, const Command& cmd) {
   const auto& in = cmd.cmd_copy_img;
@@ -1304,8 +1314,10 @@ void _record_cmd_copy_img(TransactionLike& transact, const Command& cmd) {
 
   vkCmdCopyImage(cmdbuf, src.img->img, VK_IMAGE_LAYOUT_GENERAL,
     dst.img->img, VK_IMAGE_LAYOUT_GENERAL, 1, &ic);
-  //liong::log::info("scheduled copy from image '", src.img->img_cfg.label,
-  //  "' to image '", dst.img->img_cfg.label, "'");
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    liong::log::info("scheduled copy from image '", src.img->img_cfg.label,
+      "' to image '", dst.img->img_cfg.label, "'");
+  }
 }
 
 void _record_cmd_dispatch(TransactionLike& transact, const Command& cmd) {
@@ -1323,51 +1335,61 @@ void _record_cmd_dispatch(TransactionLike& transact, const Command& cmd) {
       task.pipe_layout, 0, 1, &rsc_pool.desc_set, 0, nullptr);
   }
   vkCmdDispatch(cmdbuf, nworkgrp.x, nworkgrp.y, nworkgrp.z);
-  //liong::log::info("scheduled task '", task.label, "' for execution");
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    liong::log::info("scheduled compute task '", task.label, "' for execution");
+  }
 }
 
-void _record_cmd_draw(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_draw;
-  const auto& task = *in.task;
-  const auto& rsc_pool = *in.rsc_pool;
-  const auto& framebuf = *in.framebuf;
+void _apply_img_barrier(TransactionLike& transact, const Image& img) {
+  const auto& cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
+
+  VkImageLayout src_layout = img.sync_state.layout;
+  VkImageLayout dst_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+  uint32_t src_qfam_idx = img.sync_state.qfam_idx;
+  uint32_t dst_qfam_idx = transact.submit_details.back().qfam_idx;
+
+  VkImageMemoryBarrier imb {};
+  imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  imb.image = img.img;
+  imb.srcAccessMask = 0;
+  imb.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+  imb.oldLayout = src_layout;
+  imb.newLayout = dst_layout;
+  imb.srcQueueFamilyIndex = src_qfam_idx;
+  imb.dstQueueFamilyIndex = dst_qfam_idx;
+  imb.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  imb.subresourceRange.baseArrayLayer = 0;
+  imb.subresourceRange.layerCount = 1;
+  imb.subresourceRange.baseMipLevel = 0;
+  imb.subresourceRange.levelCount = 1;
+
+  vkCmdPipelineBarrier(cmdbuf,
+    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+    0,
+    0, nullptr,
+    0, nullptr,
+    1, &imb);
+
+  {
+    Image& img_mut = *((Image*)(const Image*)&img);
+    img_mut.sync_state.layout = dst_layout;
+    img_mut.sync_state.qfam_idx = dst_qfam_idx;
+  }
+}
+
+void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
+  const auto& task = cmd.cmd_ty == L_COMMAND_TYPE_DRAW ?
+    *cmd.cmd_draw.task : *cmd.cmd_draw_indexed.task;
+  const auto& rsc_pool = cmd.cmd_ty == L_COMMAND_TYPE_DRAW ?
+    *cmd.cmd_draw.rsc_pool : *cmd.cmd_draw_indexed.rsc_pool;
+  const auto& framebuf = cmd.cmd_ty == L_COMMAND_TYPE_DRAW ?
+    *cmd.cmd_draw.framebuf : *cmd.cmd_draw_indexed.framebuf;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
 
   // TODO: (penguinliong) Move this to a specialized command.
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    VkImageLayout src_layout = framebuf.img->sync_state.layout;
-    VkImageLayout dst_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    uint32_t src_qfam_idx = framebuf.img->sync_state.qfam_idx;
-    uint32_t dst_qfam_idx = transact.submit_details.back().qfam_idx;
-
-    VkImageMemoryBarrier imb {};
-    imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    imb.image = framebuf.img->img;
-    imb.srcAccessMask = 0;
-    imb.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-    imb.oldLayout = src_layout;
-    imb.newLayout = dst_layout;
-    imb.srcQueueFamilyIndex = src_qfam_idx;
-    imb.dstQueueFamilyIndex = dst_qfam_idx;
-    imb.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    imb.subresourceRange.baseArrayLayer = 0;
-    imb.subresourceRange.layerCount = 1;
-    imb.subresourceRange.baseMipLevel = 0;
-    imb.subresourceRange.levelCount = 1;
-
-    vkCmdPipelineBarrier(cmdbuf,
-      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-      VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-      0,
-      0, nullptr,
-      0, nullptr,
-      1, &imb);
-
-    {
-      Image& img_mut = *((Image*)(const Image*)&framebuf.img);
-      img_mut.sync_state.layout = dst_layout;
-      img_mut.sync_state.qfam_idx = dst_qfam_idx;
-    }
+    _apply_img_barrier(transact, *framebuf.img);
 
     VkRenderPassBeginInfo rpbi {};
     rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1393,7 +1415,6 @@ void _record_cmd_draw(TransactionLike& transact, const Command& cmd) {
     vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
       task.pipe_layout, 0, 1, &rsc_pool.desc_set, 0, nullptr);
   }
-  vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts->buf->buf, &in.verts->offset);
   VkRect2D scissor {};
   scissor.extent = framebuf.viewport.extent;
   vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
@@ -1403,93 +1424,31 @@ void _record_cmd_draw(TransactionLike& transact, const Command& cmd) {
   viewport.minDepth = 0.0f;
   viewport.maxDepth = 1.0f;
   vkCmdSetViewport(cmdbuf, 0, 1, &viewport);
-  vkCmdDraw(cmdbuf, in.nvert, in.ninst, 0, 0);
-  // TODO: (penguinliong) Move this to a specialized command.
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    vkCmdEndRenderPass(cmdbuf);
-  }
-}
-// TODO: (penguinliong) Refactor this.
-void _record_cmd_draw_indexed(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_draw_indexed;
-  const auto& task = *in.task;
-  const auto& rsc_pool = *in.rsc_pool;
-  const auto& framebuf = *in.framebuf;
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
 
-  // TODO: (penguinliong) Move this to a specialized command.
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    VkImageLayout src_layout = framebuf.img->sync_state.layout;
-    VkImageLayout dst_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    uint32_t src_qfam_idx = framebuf.img->sync_state.qfam_idx;
-    uint32_t dst_qfam_idx = transact.submit_details.back().qfam_idx;
+  if (cmd.cmd_ty == L_COMMAND_TYPE_DRAW) {
+    const auto& in = cmd.cmd_draw;
 
-    VkImageMemoryBarrier imb {};
-    imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    imb.image = framebuf.img->img;
-    imb.srcAccessMask = 0;
-    imb.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-    imb.oldLayout = src_layout;
-    imb.newLayout = dst_layout;
-    imb.srcQueueFamilyIndex = src_qfam_idx;
-    imb.dstQueueFamilyIndex = dst_qfam_idx;
-    imb.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    imb.subresourceRange.baseArrayLayer = 0;
-    imb.subresourceRange.layerCount = 1;
-    imb.subresourceRange.baseMipLevel = 0;
-    imb.subresourceRange.levelCount = 1;
+    vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts->buf->buf, &in.verts->offset);
+    vkCmdDraw(cmdbuf, in.nvert, in.ninst, 0, 0);
 
-    vkCmdPipelineBarrier(cmdbuf,
-      VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-      VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-      0,
-      0, nullptr,
-      0, nullptr,
-      1, &imb);
-
-    {
-      Image& img_mut = *((Image*)(const Image*)&framebuf.img);
-      img_mut.sync_state.layout = dst_layout;
-      img_mut.sync_state.qfam_idx = dst_qfam_idx;
+    if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+      liong::log::info("scheduled graphics task '", in.task->label,
+        "' for execution");
     }
-
-    VkRenderPassBeginInfo rpbi {};
-    rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    rpbi.renderPass = task.pass;
-    rpbi.framebuffer = framebuf.framebuf;
-    rpbi.renderArea.extent = framebuf.viewport.extent;
-    rpbi.clearValueCount = 1;
-    rpbi.pClearValues = &framebuf.clear_value;
-
-    vkCmdBeginRenderPass(cmdbuf, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
   } else {
-    auto& last_submit = transact.submit_details.back();
-    liong::assert(last_submit.pass_detail.pass == VK_NULL_HANDLE,
-      "secondary command buffer can only contain one render pass");
-    last_submit.pass_detail.pass = task.pass;
-    last_submit.pass_detail.framebuf = framebuf.framebuf;
-    last_submit.pass_detail.render_area = framebuf.viewport.extent;
-    last_submit.pass_detail.clear_value = framebuf.clear_value;
+    const auto& in = cmd.cmd_draw_indexed;
+
+    vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts->buf->buf, &in.verts->offset);
+    vkCmdBindIndexBuffer(cmdbuf, in.idxs->buf->buf, in.idxs->offset,
+      VK_INDEX_TYPE_UINT16);
+    vkCmdDrawIndexed(cmdbuf, in.nidx, in.ninst, 0, 0, 0);
+
+    if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+      liong::log::info("scheduled graphics task '", in.task->label,
+        "' for execution");
+    }
   }
 
-  vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, task.pipe);
-  if (rsc_pool.desc_set != VK_NULL_HANDLE) {
-    vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-      task.pipe_layout, 0, 1, &rsc_pool.desc_set, 0, nullptr);
-  }
-  vkCmdBindIndexBuffer(cmdbuf, in.idxs->buf->buf, in.idxs->offset,
-    VK_INDEX_TYPE_UINT16);
-  vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts->buf->buf, &in.verts->offset);
-  VkRect2D scissor {};
-  scissor.extent = framebuf.viewport.extent;
-  vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
-  VkViewport viewport {};
-  viewport.width = (float)framebuf.viewport.extent.width;
-  viewport.height = (float)framebuf.viewport.extent.height;
-  viewport.minDepth = 0.0f;
-  viewport.maxDepth = 1.0f;
-  vkCmdSetViewport(cmdbuf, 0, 1, &viewport);
-  vkCmdDrawIndexed(cmdbuf, in.nidx, in.ninst, 0, 0, 0);
   // TODO: (penguinliong) Move this to a specialized command.
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
     vkCmdEndRenderPass(cmdbuf);
@@ -1520,10 +1479,10 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
     _record_cmd_dispatch(transact, cmd);
     break;
   case L_COMMAND_TYPE_DRAW:
-    _record_cmd_draw(transact, cmd);
+    _record_cmd_draw_common(transact, cmd);
     break;
   case L_COMMAND_TYPE_DRAW_INDEXED:
-    _record_cmd_draw_indexed(transact, cmd);
+    _record_cmd_draw_common(transact, cmd);
     break;
   default:
     liong::log::warn("ignored unknown command: ", cmd.cmd_ty);
@@ -1616,6 +1575,7 @@ void wait_cmd_drain(CommandDrain& cmd_drain) {
 
 
 Transaction create_transact(
+  const std::string& label,
   const Context& ctxt,
   const Command* cmds,
   size_t ncmd
@@ -1630,9 +1590,8 @@ Transaction create_transact(
   _seal_transact(transact);
 
   liong::log::info("created transaction");
-  return Transaction {
-    &ctxt, std::move(transact.cmd_pools), std::move(transact.submit_details)
-  };
+  return Transaction { label, &ctxt, std::move(transact.cmd_pools),
+    std::move(transact.submit_details) };
 }
 void destroy_transact(Transaction& transact) {
   for (auto cmd_pool : transact.cmd_pools) {

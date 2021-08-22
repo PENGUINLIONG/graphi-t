@@ -390,6 +390,7 @@ struct Command;
 // transaction MUST NOT inline another transaction in its commands.
 L_IMPL_STRUCT struct Transaction;
 L_IMPL_FN Transaction create_transact(
+  const std::string& label,
   const Context& ctxt,
   const Command* cmds,
   size_t ncmd
