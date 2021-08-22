@@ -202,11 +202,11 @@ Context create_ctxt(const ContextConfig& cfg) {
       // `host_access` is not `L_MEMORY_ACCESS_NONE`.
       if (mem_ty.propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) {
         // Good for host read.
-        host_access = MemoryAccess(host_access | L_MEMORY_ACCESS_READ_ONLY);
+        host_access = MemoryAccess(host_access | L_MEMORY_ACCESS_READ_BIT);
       }
       if (mem_ty.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) {
         // Good for host write.
-        host_access = MemoryAccess(host_access | L_MEMORY_ACCESS_WRITE_ONLY);
+        host_access = MemoryAccess(host_access | L_MEMORY_ACCESS_WRITE_BIT);
       }
     } else {
       // The host cannot access to this type of memory.
@@ -280,35 +280,31 @@ Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg) {
   VkBufferCreateInfo bci {};
   bci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
   bci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  switch (buf_cfg.usage) {
-  case L_BUFFER_USAGE_STAGING:
-    bci.usage =
+  if (buf_cfg.usage & L_BUFFER_USAGE_STAGING_BIT) {
+    bci.usage |=
       VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
       VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    break;
-  case L_BUFFER_USAGE_UNIFORM:
-    bci.usage =
+  }
+  if (buf_cfg.usage & L_BUFFER_USAGE_UNIFORM_BIT) {
+    bci.usage |=
       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT |
       VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    break;
-  case L_BUFFER_USAGE_STORAGE:
+  }
+  if (buf_cfg.usage & L_BUFFER_USAGE_STORAGE_BIT) {
     bci.usage =
       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
       VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
       VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    break;
-  case L_BUFFER_USAGE_VERTEX:
+  }
+  if (buf_cfg.usage & L_BUFFER_USAGE_VERTEX_BIT) {
     bci.usage =
       VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
       VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    break;
-  case L_BUFFER_USAGE_INDEX:
+  }
+  if (buf_cfg.usage & L_BUFFER_USAGE_INDEX_BIT) {
     bci.usage =
       VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
       VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    break;
-  default:
-    liong::unreachable();
   }
   bci.size = buf_cfg.size;
 
@@ -452,8 +448,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   ici.arrayLayers = 1;
   ici.samples = VK_SAMPLE_COUNT_1_BIT;
   ici.tiling = VK_IMAGE_TILING_OPTIMAL;
-  switch (img_cfg.usage) {
-  case L_IMAGE_USAGE_SAMPLED:
+  if (img_cfg.usage & L_IMAGE_USAGE_SAMPLED_BIT) {
     ici.usage =
       VK_IMAGE_USAGE_SAMPLED_BIT |
       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -462,8 +457,8 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
         ctxt.submit_detail_idx_by_submit_ty[L_SUBMIT_TYPE_TRANSFER];
       qfam_idx = ctxt.submit_details[isubmit_detail].qfam_idx;
     }
-    break;
-  case L_IMAGE_USAGE_STORAGE:
+  }
+  if (img_cfg.usage & L_IMAGE_USAGE_STORAGE_BIT) {
     ici.usage =
       VK_IMAGE_USAGE_STORAGE_BIT |
       VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
@@ -473,8 +468,8 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
         ctxt.submit_detail_idx_by_submit_ty[L_SUBMIT_TYPE_TRANSFER];
       qfam_idx = ctxt.submit_details[isubmit_detail].qfam_idx;
     }
-    break;
-  case L_IMAGE_USAGE_ATTACHMENT:
+  }
+  if (img_cfg.usage & L_IMAGE_USAGE_ATTACHMENT_BIT) {
     ici.usage =
       VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
       VK_IMAGE_USAGE_TRANSFER_DST_BIT |
@@ -486,12 +481,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
         ctxt.submit_detail_idx_by_submit_ty[L_SUBMIT_TYPE_GRAPHICS];
       qfam_idx = ctxt.submit_details[isubmit_detail].qfam_idx;
     }
-    break;
-  default:
-    liong::unreachable();
   }
-  ici.usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
-  ici.usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
   ici.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
   ici.initialLayout = layout;
 
@@ -558,36 +548,36 @@ const ImageConfig& get_img_cfg(const Image& img) {
 
 VkDescriptorSetLayout _create_desc_set_layout(
   const Context& ctxt,
-  const ResourceConfig* rsc_cfgs,
-  size_t nrsc_cfg,
+  const ResourceType* rsc_tys,
+  size_t nrsc_ty,
   std::vector<VkDescriptorPoolSize>& desc_pool_sizes
 ) {
   std::vector<VkDescriptorSetLayoutBinding> dslbs;
   std::map<VkDescriptorType, uint32_t> desc_counter;
-  for (auto i = 0; i < nrsc_cfg; ++i) {
-    const auto& rsc_cfg = rsc_cfgs[i];
+  for (auto i = 0; i < nrsc_ty; ++i) {
+    const auto& rsc_ty = rsc_tys[i];
 
     VkDescriptorSetLayoutBinding dslb {};
     dslb.binding = i;
     dslb.descriptorCount = 1;
     dslb.stageFlags =
       VK_SHADER_STAGE_ALL_GRAPHICS | VK_SHADER_STAGE_COMPUTE_BIT;
-    if (rsc_cfg.is_const) {
-      switch (rsc_cfg.rsc_ty) {
-      case L_RESOURCE_TYPE_BUFFER:
-        dslb.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER; break;
-      case L_RESOURCE_TYPE_IMAGE:
-        dslb.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        dslb.pImmutableSamplers = &ctxt.fast_samp;
-        break;
-      }
-    } else {
-      switch (rsc_cfg.rsc_ty) {
-      case L_RESOURCE_TYPE_BUFFER:
-        dslb.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER; break;
-      case L_RESOURCE_TYPE_IMAGE:
-        dslb.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE; break;
-      }
+    switch (rsc_ty) {
+    case L_RESOURCE_TYPE_UNIFORM_BUFFER:
+      dslb.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      break;
+    case L_RESOURCE_TYPE_STORAGE_BUFFER:
+      dslb.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      break;
+    case L_RESOURCE_TYPE_SAMPLED_IMAGE:
+      dslb.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      dslb.pImmutableSamplers = &ctxt.fast_samp;
+      break;
+    case L_RESOURCE_TYPE_STORAGE_IMAGE:
+      dslb.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+      break;
+    default:
+      liong::panic("unexpected resource type");
     }
     desc_counter[dslb.descriptorType] += 1;
 
@@ -648,7 +638,7 @@ Task create_comp_task(
 ) {
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   VkDescriptorSetLayout desc_set_layout = _create_desc_set_layout(ctxt,
-    cfg.rsc_cfgs, cfg.nrsc_cfg, desc_pool_sizes);
+    cfg.rsc_tys, cfg.nrsc_ty, desc_pool_sizes);
   VkPipelineLayout pipe_layout = _create_pipe_layout(ctxt, desc_set_layout);
   VkShaderModule shader_mod = _create_shader_mod(ctxt, cfg.code, cfg.code_size);
 
@@ -739,7 +729,7 @@ Task create_graph_task(
 ) {
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   VkDescriptorSetLayout desc_set_layout =
-    _create_desc_set_layout(ctxt, cfg.rsc_cfgs, cfg.nrsc_cfg, desc_pool_sizes);
+    _create_desc_set_layout(ctxt, cfg.rsc_tys, cfg.nrsc_ty, desc_pool_sizes);
   VkPipelineLayout pipe_layout = _create_pipe_layout(ctxt, desc_set_layout);
   VkShaderModule vert_shader_mod =
     _create_shader_mod(ctxt, cfg.vert_code, cfg.vert_code_size);
@@ -970,15 +960,11 @@ void bind_pool_rsc(
   write_desc_set.dstBinding = idx;
   write_desc_set.dstArrayElement = 0;
   write_desc_set.descriptorCount = 1;
-  switch (buf_view.buf->buf_cfg.usage) {
-  case L_BUFFER_USAGE_UNIFORM:
+  if (buf_view.buf->buf_cfg.usage & L_BUFFER_USAGE_UNIFORM_BIT) {
     write_desc_set.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    break;
-  case L_BUFFER_USAGE_STORAGE:
+  }
+  if (buf_view.buf->buf_cfg.usage & L_BUFFER_USAGE_STORAGE_BIT) {
     write_desc_set.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    break;
-  default:
-    liong::panic("buffer usage doesn't allow binding as descriptor");
   }
   write_desc_set.pBufferInfo = &dbi;
 
@@ -1005,13 +991,13 @@ void bind_pool_rsc(
   write_desc_set.dstArrayElement = 0;
   write_desc_set.descriptorCount = 1;
   switch (img_view.img->img_cfg.usage) {
-  case L_IMAGE_USAGE_SAMPLED:
+  case L_IMAGE_USAGE_SAMPLED_BIT:
     write_desc_set.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
     break;
-  case L_IMAGE_USAGE_STORAGE:
+  case L_IMAGE_USAGE_STORAGE_BIT:
     write_desc_set.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     break;
-  case L_IMAGE_USAGE_ATTACHMENT:
+  case L_IMAGE_USAGE_ATTACHMENT_BIT:
     liong::panic("input attachment is not yet unsupported");
     break;
   default:

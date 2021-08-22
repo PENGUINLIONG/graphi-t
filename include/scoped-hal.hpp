@@ -264,19 +264,19 @@ public:
     const std::string& entry_point,
     const void* code,
     const size_t code_size,
-    const std::vector<ResourceConfig>& rsc_cfgs,
-    const DispatchSize& workgrp_size
+    const DispatchSize& workgrp_size,
+    const std::vector<ResourceType>& rsc_tys
   ) const;
   template<typename T>
   inline Task create_comp_task(
     const std::string& label,
     const std::string& entry_point,
     const std::vector<T>& code,
-    const std::vector<ResourceConfig>& rsc_cfgs,
-    const DispatchSize& workgrp_size
+    const DispatchSize& workgrp_size,
+    const std::vector<ResourceType>& rsc_tys
   ) const {
     return create_comp_task(label, entry_point, code.data(),
-      code.size() * sizeof(T), rsc_cfgs, workgrp_size);
+      code.size() * sizeof(T), workgrp_size, rsc_tys);
   }
   Task create_graph_task(
     const std::string& label,
@@ -286,7 +286,7 @@ public:
     const std::string& frag_entry_point,
     const void* frag_code,
     const size_t frag_code_size,
-    const std::vector<ResourceConfig>& rsc_cfgs
+    const std::vector<ResourceType>& rsc_tys
   ) const;
   template<typename T>
   inline Task create_graph_task(
@@ -295,86 +295,66 @@ public:
     const std::vector<T>& vert_code,
     const std::string& frag_entry_point,
     const std::vector<T>& frag_code,
-    const std::vector<ResourceConfig>& rsc_cfgs
+    const std::vector<ResourceType>& rsc_tys
   ) const {
     return create_graph_task(label, vert_entry_point, vert_code.data(),
       vert_code.size() * sizeof(T), frag_entry_point, frag_code.data(),
-      frag_code.size() * sizeof(T), rsc_cfgs);
+      frag_code.size() * sizeof(T), rsc_tys);
   }
 
   Buffer create_buf(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
+    BufferUsage usage,
     size_t size,
-    size_t align,
-    BufferUsage usage
+    size_t align
   ) const;
   Buffer create_staging_buf(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
     size_t size,
     size_t align = 1
   ) const;
   Buffer create_uniform_buf(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
     size_t size,
     size_t align = 1
   ) const;
   Buffer create_storage_buf(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
     size_t size,
     size_t align = 1
   ) const;
   Buffer create_vert_buf(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
     size_t size,
     size_t align = 1
   ) const;
   Buffer create_idx_buf(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
     size_t size,
     size_t align = 1
   ) const;
 
   Image create_img(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
+    ImageUsage usage,
     size_t nrow,
     size_t ncol,
-    PixelFormat fmt,
-    ImageUsage usage
+    PixelFormat fmt
   ) const;
   Image create_sampled_img(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
     size_t nrow,
     size_t ncol,
     PixelFormat fmt
   ) const;
   Image create_storage_img(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
     size_t nrow,
     size_t ncol,
     PixelFormat fmt
   ) const;
   Image create_attm_img(
     const std::string& label,
-    MemoryAccess host_access,
-    MemoryAccess dev_access,
     size_t nrow,
     size_t ncol,
     PixelFormat fmt
