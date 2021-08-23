@@ -191,7 +191,7 @@ void guarded_main2() {
   };
 
   scoped::Task task = ctxt.create_graph_task("graph_task", "main", art.vert_spv,
-    "main", art.frag_spv, rsc_tys);
+    "main", art.frag_spv, L_TOPOLOGY_TRIANGLE, rsc_tys);
 
   scoped::Buffer ubo = ctxt.create_uniform_buf("ubo", 4 * sizeof(float));
   {

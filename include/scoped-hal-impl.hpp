@@ -43,6 +43,7 @@ Task Context::create_graph_task(
   const std::string& frag_entry_point,
   const void* frag_code,
   const size_t frag_code_size,
+  Topology topo,
   const std::vector<ResourceType>& rsc_tys
 ) const {
   GraphicsTaskConfig graph_task_cfg {};
@@ -53,6 +54,7 @@ Task Context::create_graph_task(
   graph_task_cfg.frag_entry_name = frag_entry_point.c_str();
   graph_task_cfg.frag_code = frag_code;
   graph_task_cfg.frag_code_size = frag_code_size;
+  graph_task_cfg.topo = topo;
   graph_task_cfg.rsc_tys = rsc_tys.data();
   graph_task_cfg.nrsc_ty = rsc_tys.size();
   return HAL_IMPL_NAMESPACE::create_graph_task(*inner, graph_task_cfg);

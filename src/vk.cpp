@@ -772,7 +772,19 @@ Task create_graph_task(
 
   VkPipelineInputAssemblyStateCreateInfo piasci {};
   piasci.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-  piasci.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+  switch (cfg.topo) {
+  case L_TOPOLOGY_POINT:
+    piasci.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+    break;
+  case L_TOPOLOGY_LINE:
+    piasci.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+    break;
+  case L_TOPOLOGY_TRIANGLE:
+    piasci.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    break;
+  default:
+    liong::panic("unexpected topology (", cfg.topo, ")");
+  }
   piasci.primitiveRestartEnable = VK_FALSE;
 
   VkViewport viewport {};

@@ -292,13 +292,6 @@ enum ResourceType {
   L_RESOURCE_TYPE_SAMPLED_IMAGE,
   L_RESOURCE_TYPE_STORAGE_IMAGE,
 };
-struct ResourceConfig {
-  // Type of the resource.
-  ResourceType rsc_ty;
-  // Whether the resource is a readonly (uniform) resource. A constant resource
-  // can have better IO efficiency while must have a fixed size.
-  bool is_const;
-};
 // A device program to be feeded in a `Transaction`.
 struct ComputeTaskConfig {
   // Human-readable label of the task.
@@ -317,6 +310,11 @@ struct ComputeTaskConfig {
   size_t nrsc_ty;
   // Local group size; number of threads in a workgroup.
   DispatchSize workgrp_size;
+};
+enum Topology {
+  L_TOPOLOGY_POINT = 1,
+  L_TOPOLOGY_LINE = 2,
+  L_TOPOLOGY_TRIANGLE = 3,
 };
 struct GraphicsTaskConfig {
   // Human-readable label of the task.
@@ -337,6 +335,8 @@ struct GraphicsTaskConfig {
   const void* frag_code;
   // Size of code of the fragment stage of the task program in bytes.
   size_t frag_code_size;
+  // Topology of vertex inputs to be assembled.
+  Topology topo;
   // Resources to be allocated.
   const ResourceType* rsc_tys;
   // Number of resources allocated.
