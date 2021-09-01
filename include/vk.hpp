@@ -40,15 +40,6 @@ extern std::vector<std::string> physdev_descs;
 
 
 
-enum SubmitType {
-  L_SUBMIT_TYPE_COMPUTE,
-  L_SUBMIT_TYPE_GRAPHICS,
-  L_SUBMIT_TYPE_TRANSFER,
-
-  L_SUBMIT_TYPE_BEGIN_RANGE = L_SUBMIT_TYPE_COMPUTE,
-  L_SUBMIT_TYPE_END_RANGE = L_SUBMIT_TYPE_TRANSFER,
-  L_SUBMIT_TYPE_RANGE_SIZE = (L_SUBMIT_TYPE_TRANSFER - L_SUBMIT_TYPE_BEGIN_RANGE + 1),
-};
 struct ContextSubmitDetail {
   uint32_t qfam_idx;
   VkQueue queue;
@@ -159,6 +150,11 @@ struct Transaction {
   const Context* ctxt;
   std::array<VkCommandPool, L_SUBMIT_TYPE_RANGE_SIZE> cmd_pools;
   std::vector<TransactionSubmitDetail> submit_details;
+};
+
+struct Timestamp {
+  const Context* ctxt;
+  VkQueryPool query_pool;
 };
 
 } // namespace vk

@@ -92,6 +92,11 @@ Context create_ctxt(const ContextConfig& cfg) {
   VkPhysicalDeviceProperties physdev_prop;
   vkGetPhysicalDeviceProperties(physdev, &physdev_prop);
 
+  if (physdev_prop.limits.timestampComputeAndGraphics == VK_FALSE) {
+    liong::log::warn("context '", cfg.label, "' device does not support "
+      "timestamps");
+  }
+
   // Collect queue families and use as few queues as possible (for less sync).
   uint32_t nqfam_prop;
   vkGetPhysicalDeviceQueueFamilyProperties(physdev, &nqfam_prop, nullptr);
@@ -441,8 +446,8 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   ici.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
   ici.imageType = VK_IMAGE_TYPE_2D;
   ici.format = fmt;
-  ici.extent.width = img_cfg.ncol;
-  ici.extent.height = img_cfg.nrow;
+  ici.extent.width = (uint32_t)img_cfg.ncol;
+  ici.extent.height = (uint32_t)img_cfg.nrow;
   ici.extent.depth = 1;
   ici.mipLevels = 1;
   ici.arrayLayers = 1;
@@ -594,7 +599,7 @@ VkDescriptorSetLayout _create_desc_set_layout(
 
   VkDescriptorSetLayoutCreateInfo dslci {};
   dslci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-  dslci.bindingCount = dslbs.size();
+  dslci.bindingCount = (uint32_t)dslbs.size();
   dslci.pBindings = dslbs.data();
 
   VkDescriptorSetLayout desc_set_layout;
@@ -700,7 +705,7 @@ VkRenderPass _create_pass(
     sd.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     sd.inputAttachmentCount = 0;
     sd.pInputAttachments = nullptr;
-    sd.colorAttachmentCount = ars.size();
+    sd.colorAttachmentCount = (uint32_t)ars.size();
     sd.pColorAttachments = ars.data();
     sd.pResolveAttachments = nullptr;
     sd.pDepthStencilAttachment = nullptr;
@@ -709,9 +714,9 @@ VkRenderPass _create_pass(
   }
   VkRenderPassCreateInfo rpci {};
   rpci.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
-  rpci.attachmentCount = ads.size();
+  rpci.attachmentCount = (uint32_t)ads.size();
   rpci.pAttachments = ads.data();
-  rpci.subpassCount = sds.size();
+  rpci.subpassCount = (uint32_t)sds.size();
   rpci.pSubpasses = sds.data();
   // TODO: (penguinliong) Implement subpass dependency resolution in the future.
   rpci.dependencyCount = 0;
@@ -827,7 +832,7 @@ Task create_graph_task(
   }
   VkPipelineColorBlendStateCreateInfo pcbsci {};
   pcbsci.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-  pcbsci.attachmentCount = pcbass.size();
+  pcbsci.attachmentCount = (uint32_t)pcbass.size();
   pcbsci.pAttachments = pcbass.data();
 
   std::array<VkDynamicState, 2> dss {
@@ -836,7 +841,7 @@ Task create_graph_task(
   };
   VkPipelineDynamicStateCreateInfo pdsci {};
   pdsci.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-  pdsci.dynamicStateCount = dss.size();
+  pdsci.dynamicStateCount = (uint32_t)dss.size();
   pdsci.pDynamicStates = dss.data();
 
   VkGraphicsPipelineCreateInfo gpci {};
@@ -894,16 +899,16 @@ Framebuffer create_framebuf(
   fci.renderPass = task.pass;
   fci.attachmentCount = 1;
   fci.pAttachments = &attm.img_view;
-  fci.width = attm.img_cfg.ncol;
-  fci.height = attm.img_cfg.nrow;
+  fci.width = (uint32_t)attm.img_cfg.ncol;
+  fci.height = (uint32_t)attm.img_cfg.nrow;
   fci.layers = 1;
 
   VkFramebuffer framebuf;
   VK_ASSERT << vkCreateFramebuffer(ctxt.dev, &fci, nullptr, &framebuf);
 
   VkRect2D viewport {};
-  viewport.extent.width = attm.img_cfg.ncol;
-  viewport.extent.height = attm.img_cfg.nrow;
+  viewport.extent.width = (uint32_t)attm.img_cfg.ncol;
+  viewport.extent.height = (uint32_t)attm.img_cfg.nrow;
 
   liong::log::info("created framebuffer");
   return { &ctxt, &task, &attm, std::move(viewport), framebuf };
@@ -1231,12 +1236,12 @@ void _record_cmd_copy_buf2img(TransactionLike& transact, const Command& cmd) {
   const auto& in = cmd.cmd_copy_buf2img;
   const auto& src = *in.src;
   const auto& dst = *in.dst;
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_TRANSFER);
+  auto cmdbuf = _get_cmdbuf(transact, cmd.cmd_write_timestamp.submit_ty);
 
   VkBufferImageCopy bic {};
   bic.bufferOffset = src.offset;
   bic.bufferRowLength = 0;
-  bic.bufferImageHeight = dst.img->img_cfg.nrow;
+  bic.bufferImageHeight = (uint32_t)dst.img->img_cfg.nrow;
   bic.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   bic.imageSubresource.mipLevel = 0;
   bic.imageSubresource.baseArrayLayer = 0;
@@ -1467,6 +1472,30 @@ void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
   }
 }
 
+void _record_cmd_write_timestamp(
+  TransactionLike& transact,
+  const Command& cmd
+) {
+  auto submit_ty = cmd.cmd_write_timestamp.submit_ty;
+  auto cmdbuf = _get_cmdbuf(transact, submit_ty);
+
+  auto query_pool = cmd.cmd_write_timestamp.timestamp->query_pool;
+  vkCmdResetQueryPool(cmdbuf, query_pool, 0, 1);
+  vkCmdWriteTimestamp(cmdbuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, query_pool, 0);
+
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    const char* submit_ty_lit = nullptr;
+    switch (submit_ty)
+    {
+    case L_SUBMIT_TYPE_GRAPHICS: submit_ty_lit = "graphics"; break;
+    case L_SUBMIT_TYPE_COMPUTE: submit_ty_lit = "compute"; break;
+    case L_SUBMIT_TYPE_TRANSFER: submit_ty_lit = "transfer"; break;
+    default: liong::panic("unexpected submit type"); break;
+    }
+    liong::log::info("schedule ", submit_ty_lit, " timestamp write");
+  }
+}
+
 // Returns whether the submit queue to submit has changed.
 void _record_cmd(TransactionLike& transact, const Command& cmd) {
   switch (cmd.cmd_ty) {
@@ -1495,6 +1524,9 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
     break;
   case L_COMMAND_TYPE_DRAW_INDEXED:
     _record_cmd_draw_common(transact, cmd);
+    break;
+  case L_COMMAND_TYPE_WRITE_TIMESTAMP:
+    _record_cmd_write_timestamp(transact, cmd);
     break;
   default:
     liong::log::warn("ignored unknown command: ", cmd.cmd_ty);
@@ -1613,6 +1645,36 @@ void destroy_transact(Transaction& transact) {
   transact = {};
   liong::log::info("destroyed transaction");
 }
+
+
+
+Timestamp create_timestamp(const Context& ctxt) {
+  VkQueryPoolCreateInfo qpci {};
+  qpci.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+  qpci.queryCount = 1;
+  qpci.queryType = VK_QUERY_TYPE_TIMESTAMP;
+
+  VkQueryPool query_pool;
+  VK_ASSERT << vkCreateQueryPool(ctxt.dev, &qpci, nullptr, &query_pool);
+
+  liong::log::info("created timestamp");
+  return Timestamp { &ctxt, query_pool };
+}
+void destroy_timestamp(Timestamp& timestamp) {
+  vkDestroyQueryPool(timestamp.ctxt->dev, timestamp.query_pool, nullptr);
+  timestamp = {};
+  liong::log::info("destroyed timestamp");
+}
+double get_timestamp_result_us(const Timestamp& timestamp) {
+  uint64_t t;
+  VK_ASSERT << vkGetQueryPoolResults(timestamp.ctxt->dev, timestamp.query_pool,
+    0, 1, sizeof(uint64_t), &t, sizeof(uint64_t),
+    VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT); // Wait till ready.
+  double ns_per_tick = timestamp.ctxt->physdev_prop.limits.timestampPeriod;
+  return t * ns_per_tick / 1000.0;
+}
+
+
 
 namespace ext {
 

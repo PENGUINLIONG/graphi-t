@@ -399,6 +399,13 @@ L_IMPL_FN void destroy_transact(Transaction& transact);
 
 
 
+// A timestamp object written by the GPU, usually for precise timing.
+L_IMPL_STRUCT struct Timestamp;
+L_IMPL_FN Timestamp create_timestamp(const Context& ctxt);
+L_IMPL_FN void destroy_timestamp(Timestamp& timestamp);
+L_IMPL_FN double get_timestamp_result_us(const Timestamp& timestamp);
+
+
 enum CommandType {
   L_COMMAND_TYPE_INLINE_TRANSACTION,
   L_COMMAND_TYPE_COPY_BUFFER_TO_IMAGE,
@@ -408,6 +415,16 @@ enum CommandType {
   L_COMMAND_TYPE_DISPATCH,
   L_COMMAND_TYPE_DRAW,
   L_COMMAND_TYPE_DRAW_INDEXED,
+  L_COMMAND_TYPE_WRITE_TIMESTAMP,
+};
+enum SubmitType {
+  L_SUBMIT_TYPE_COMPUTE,
+  L_SUBMIT_TYPE_GRAPHICS,
+  L_SUBMIT_TYPE_TRANSFER,
+
+  L_SUBMIT_TYPE_BEGIN_RANGE = L_SUBMIT_TYPE_COMPUTE,
+  L_SUBMIT_TYPE_END_RANGE = L_SUBMIT_TYPE_TRANSFER,
+  L_SUBMIT_TYPE_RANGE_SIZE = (L_SUBMIT_TYPE_TRANSFER - L_SUBMIT_TYPE_BEGIN_RANGE + 1),
 };
 struct Command {
   CommandType cmd_ty;
@@ -453,6 +470,10 @@ struct Command {
       uint32_t nidx;
       uint32_t ninst;
     } cmd_draw_indexed;
+    struct {
+      const Timestamp* timestamp;
+      SubmitType submit_ty;
+    } cmd_write_timestamp;
   };
 };
 
@@ -548,6 +569,17 @@ inline Command cmd_draw_indexed(
   cmd.cmd_draw_indexed.idxs = &idxs;
   cmd.cmd_draw_indexed.nidx = nidx;
   cmd.cmd_draw_indexed.ninst = ninst;
+  return cmd;
+}
+
+inline Command cmd_write_timestamp(
+  const Timestamp& timestamp,
+  SubmitType submit_ty
+) {
+  Command cmd;
+  cmd.cmd_ty = L_COMMAND_TYPE_WRITE_TIMESTAMP;
+  cmd.cmd_write_timestamp.timestamp = &timestamp;
+  cmd.cmd_write_timestamp.submit_ty = submit_ty;
   return cmd;
 }
 

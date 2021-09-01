@@ -240,14 +240,21 @@ void guarded_main2() {
   scoped::Buffer out_buf = ctxt.create_staging_buf("out_buf",
     FRAMEBUF_NCOL * FRAMEBUF_NROW * 4 * sizeof(float));
 
+  scoped::Timestamp tic = ctxt.create_timestamp();
+  scoped::Timestamp toc = ctxt.create_timestamp();
+
   std::vector<Command> cmds {
+    cmd_write_timestamp(tic, L_SUBMIT_TYPE_GRAPHICS),
     cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 3, 1, framebuf),
+    cmd_write_timestamp(toc, L_SUBMIT_TYPE_GRAPHICS),
     cmd_copy_img2buf(out_img.view(), out_buf.view()),
   };
 
   scoped::CommandDrain cmd_drain = ctxt.create_cmd_drain();
   cmd_drain.submit(cmds);
   cmd_drain.wait();
+
+  liong::log::warn("drawing took ", toc.get_result_us() - tic.get_result_us(), "us");
 
   {
     scoped::MappedBuffer mapped = out_buf.map(L_MEMORY_ACCESS_READ_ONLY);

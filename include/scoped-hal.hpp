@@ -55,6 +55,28 @@ struct CommandDrain {
 
 
 
+struct Timestamp {
+  std::unique_ptr<HAL_IMPL_NAMESPACE::Timestamp> inner;
+
+  Timestamp(const Context& ctxt);
+  Timestamp(HAL_IMPL_NAMESPACE::Timestamp&& inner);
+  Timestamp(Timestamp&&) = default;
+  ~Timestamp();
+
+  inline operator HAL_IMPL_NAMESPACE::Timestamp& () {
+    return *inner;
+  }
+  inline operator const HAL_IMPL_NAMESPACE::Timestamp& () const {
+    return *inner;
+  }
+
+  inline double get_result_us() const {
+    return HAL_IMPL_NAMESPACE::get_timestamp_result_us(*inner);
+  }
+};
+
+
+
 struct Transaction {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Transaction> inner;
 
@@ -377,6 +399,8 @@ public:
   ) const;
 
   CommandDrain create_cmd_drain() const;
+
+  Timestamp create_timestamp() const;
 };
 
 } // namespace scoped
