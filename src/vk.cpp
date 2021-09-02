@@ -94,7 +94,7 @@ Context create_ctxt(const ContextConfig& cfg) {
 
   if (physdev_prop.limits.timestampComputeAndGraphics == VK_FALSE) {
     liong::log::warn("context '", cfg.label, "' device does not support "
-      "timestamps");
+      "timestamps, the following command won't be available: WRITE_TIMESTAMP");
   }
 
   // Collect queue families and use as few queues as possible (for less sync).
@@ -105,73 +105,135 @@ Context create_ctxt(const ContextConfig& cfg) {
   vkGetPhysicalDeviceQueueFamilyProperties(physdev,
     &nqfam_prop, qfam_props.data());
 
-  // Sort the queue families by wanted capability.
-  const VkQueueFlags queue_flag_mask =
-    VK_QUEUE_COMPUTE_BIT |
-    VK_QUEUE_GRAPHICS_BIT |
-    VK_QUEUE_TRANSFER_BIT;
-  std::map<VkQueueFlags, uint32_t> qfam_map;
-  for (auto i = 0; i < qfam_props.size(); ++i) {
+  struct QueueFamilyTrait {
+    uint32_t qfam_idx;
+    VkQueueFlags queue_flags;
+  };
+  std::map<uint32_t, std::vector<QueueFamilyTrait>> qfam_map {};
+  for (uint32_t i = 0; i < qfam_props.size(); ++i) {
     const auto& qfam_prop = qfam_props[i];
-    auto queue_flag = qfam_prop.queueFlags & queue_flag_mask;
-    qfam_map[queue_flag] = i;
+    auto queue_flags = qfam_prop.queueFlags;
+    if (qfam_prop.queueCount == 0) {
+      liong::log::warn("ignored queue family #", i, " with zero queue count");
+    }
+
+    std::vector<const char*> qfam_cap_lit{};
+    if ((queue_flags & VK_QUEUE_GRAPHICS_BIT) != 0) {
+      qfam_cap_lit.push_back("GRAPHICS");
+    }
+    if ((queue_flags & VK_QUEUE_COMPUTE_BIT) != 0) {
+      qfam_cap_lit.push_back("COMPUTE");
+    }
+    if ((queue_flags & VK_QUEUE_TRANSFER_BIT) != 0) {
+      qfam_cap_lit.push_back("TRANSFER");
+    }
+    if ((queue_flags & VK_QUEUE_SPARSE_BINDING_BIT) != 0) {
+      qfam_cap_lit.push_back("SPARSE_BINDING");
+    }
+    if ((queue_flags & VK_QUEUE_PROTECTED_BIT) != 0) {
+      qfam_cap_lit.push_back("PROTECTED");
+    }
+    liong::log::info("discovered queue families #", i, ": ",
+      liong::util::join(" | ", qfam_cap_lit));
+
+    uint32_t nset_bit = liong::util::count_set_bits(queue_flags);
+    auto it = qfam_map.find(nset_bit);
+    if (it == qfam_map.end()) {
+      it = qfam_map.emplace_hint(it,
+        std::make_pair(nset_bit, std::vector<QueueFamilyTrait>{}));
+    }
+    it->second.emplace_back(QueueFamilyTrait { i, queue_flags });
+  }
+  liong::assert(!qfam_props.empty(), "cannot find any queue family on device #",
+    cfg.dev_idx);
+
+  struct SubmitTypeQueueRequirement {
+    SubmitType submit_ty;
+    VkQueueFlags queue_flags;
+    const char* submit_ty_name;
+    std::vector<const char*> cmd_names;
+  };
+  std::vector<SubmitTypeQueueRequirement> submit_ty_reqs {
+    SubmitTypeQueueRequirement {
+      L_SUBMIT_TYPE_GRAPHICS,
+      VK_QUEUE_GRAPHICS_BIT,
+      "GRAPHICS",
+      {
+        "DRAW",
+        "DRAW_INDEXED",
+      },
+    },
+    SubmitTypeQueueRequirement {
+      L_SUBMIT_TYPE_COMPUTE,
+      VK_QUEUE_COMPUTE_BIT,
+      "COMPUTE",
+      {
+        "DISPATCH",
+      },
+    },
+    SubmitTypeQueueRequirement {
+      L_SUBMIT_TYPE_TRANSFER,
+      VK_QUEUE_TRANSFER_BIT,
+      "TRANSFER",
+      {
+        "COPY_BUFFER_TO_IMAGE",
+        "COPY_IMAGE_TO_BUFFER",
+        "COPY_BUFFER",
+        "COPY_IMAGE",
+      },
+    },
+  };
+
+  std::map<uint32_t, uint32_t> queue_allocs;
+  for (size_t i = 0; i < submit_ty_reqs.size(); ++i) {
+    const SubmitTypeQueueRequirement& submit_ty_queue_req = submit_ty_reqs[i];
+    VkQueueFlags req_queue_flags = submit_ty_queue_req.queue_flags;
+
+    queue_allocs[submit_ty_queue_req.submit_ty] = VK_QUEUE_FAMILY_IGNORED;
+    uint32_t& qfam_idx_alloc = queue_allocs[submit_ty_queue_req.submit_ty];
+    // Search from a combination of queue traits to queues of a single trait.
+    for (auto it = qfam_map.rbegin(); it != qfam_map.rend(); ++it) {
+      // We have already found a suitable queue family; no need to continue. 
+      if (qfam_idx_alloc != VK_QUEUE_FAMILY_IGNORED) { break; }
+
+      // Otherwise, look for a queue family that could satisfy all the required
+      // flags.
+      for (auto qfam_trait : it->second) {
+        if ((req_queue_flags & qfam_trait.queue_flags) == req_queue_flags) {
+          qfam_idx_alloc = qfam_trait.qfam_idx;
+          break;
+        }
+      }
+    }
+
+    if (qfam_idx_alloc == VK_QUEUE_FAMILY_IGNORED) {
+      liong::log::warn("cannot find a suitable queue family for ",
+        submit_ty_queue_req.submit_ty_name, ", the following commands won't be "
+        "available: ", liong::util::join(", ", submit_ty_queue_req.cmd_names));
+    }
   }
 
-  const float comp_queue_prior = 1.0f;
-  const float trans_queue_prior = 0.5f;
-
+  std::set<uint32_t> allocated_qfam_idxs;
   std::vector<VkDeviceQueueCreateInfo> dqcis;
-  std::array<size_t, L_SUBMIT_TYPE_RANGE_SIZE> dqci_idx_by_submit_ty;
-  auto it = qfam_map.find(queue_flag_mask);
-  if (it != qfam_map.end()) {
-    // It would be great if there exists a single queue family that can serve
-    // both of our requirements.
-    VkDeviceQueueCreateInfo dqci {};
-    dqci.pQueuePriorities = &comp_queue_prior;
-    dqci.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-    dqci.queueCount = 1;
-    dqci.queueFamilyIndex = it->second;
+  const float default_queue_prior = 1.0f;
+  for (const auto& pair : queue_allocs) {
+    uint32_t qfam_idx = pair.second;
+    if (qfam_idx == VK_QUEUE_FAMILY_IGNORED) { continue; }
 
-    dqcis.emplace_back(std::move(dqci));
-
-    dqci_idx_by_submit_ty[L_SUBMIT_TYPE_COMPUTE] = dqcis.size() - 1;
-    dqci_idx_by_submit_ty[L_SUBMIT_TYPE_GRAPHICS] = dqcis.size() - 1;
-    dqci_idx_by_submit_ty[L_SUBMIT_TYPE_TRANSFER] = dqcis.size() - 1;
-  } else {
-    auto comp_it = qfam_map.find(VK_QUEUE_COMPUTE_BIT);
-    if (comp_it != qfam_map.end()) {
+    auto it = allocated_qfam_idxs.find(qfam_idx);
+    if (it == allocated_qfam_idxs.end()) {
+      // The queue family has not been allocated before. Allocate it right now.
       VkDeviceQueueCreateInfo dqci {};
-      dqci.pQueuePriorities = &comp_queue_prior;
       dqci.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
+      dqci.queueFamilyIndex = qfam_idx;
       dqci.queueCount = 1;
-      dqci.queueFamilyIndex = comp_it->second;
+      dqci.pQueuePriorities = &default_queue_prior;
 
       dqcis.emplace_back(std::move(dqci));
-      dqci_idx_by_submit_ty[L_SUBMIT_TYPE_COMPUTE] = dqcis.size() - 1;
-    }
-
-    auto graph_it = qfam_map.find(VK_QUEUE_GRAPHICS_BIT);
-    if (graph_it != qfam_map.end()) {
-      VkDeviceQueueCreateInfo dqci {};
-      dqci.pQueuePriorities = &comp_queue_prior;
-      dqci.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-      dqci.queueCount = 1;
-      dqci.queueFamilyIndex = graph_it->second;
-
-      dqcis.emplace_back(std::move(dqci));
-      dqci_idx_by_submit_ty[L_SUBMIT_TYPE_GRAPHICS] = dqcis.size() - 1;
-    }
-
-    auto trans_it = qfam_map.find(VK_QUEUE_TRANSFER_BIT);
-    if (trans_it != qfam_map.end()) {
-      VkDeviceQueueCreateInfo dqci {};
-      dqci.pQueuePriorities = &comp_queue_prior;
-      dqci.sType = VK_STRUCTURE_TYPE_DEVICE_QUEUE_CREATE_INFO;
-      dqci.queueCount = 1;
-      dqci.queueFamilyIndex = trans_it->second;
-
-      dqcis.emplace_back(std::move(dqci));
-      dqci_idx_by_submit_ty[L_SUBMIT_TYPE_TRANSFER] = dqcis.size() - 1;
+      allocated_qfam_idxs.emplace_hint(it, qfam_idx);
+    } else {
+      // The queue family already has an instance of queue allocated. Reuse that
+      // queue.
     }
   }
 
@@ -185,12 +247,12 @@ Context create_ctxt(const ContextConfig& cfg) {
   VK_ASSERT << vkCreateDevice(physdev, &dci, nullptr, &dev);
 
   std::vector<ContextSubmitDetail> submit_details;
-  for (auto i = 0; i < dqcis.size(); ++i) {
-    const auto& dqci = dqcis[i];
+  for (const auto& pair : queue_allocs) {
+    uint32_t qfam_idx = pair.second;
     ContextSubmitDetail submit_detail {};
-    submit_detail.qfam_idx = dqci.queueFamilyIndex;
-    vkGetDeviceQueue(dev, dqci.queueFamilyIndex, 0, &submit_detail.queue);
-    submit_details.push_back(submit_detail);
+    submit_detail.qfam_idx = qfam_idx;
+    vkGetDeviceQueue(dev, qfam_idx, 0, &submit_detail.queue);
+    submit_details.emplace_back(std::move(submit_detail));
   }
 
   // DO NOT CHANGE THE FOLLOWING.
@@ -265,7 +327,7 @@ Context create_ctxt(const ContextConfig& cfg) {
     cfg.dev_idx, ": ", physdev_descs[cfg.dev_idx]);
   return Context {
     dev, std::move(physdev_prop), std::move(submit_details),
-    std::move(dqci_idx_by_submit_ty), std::move(mem_ty_idxs_by_host_access),
+    std::move(queue_allocs), std::move(mem_ty_idxs_by_host_access),
     fast_samp, cfg
   };
 }
@@ -458,8 +520,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
       VK_IMAGE_USAGE_SAMPLED_BIT |
       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     {
-      auto isubmit_detail =
-        ctxt.submit_detail_idx_by_submit_ty[L_SUBMIT_TYPE_TRANSFER];
+      auto isubmit_detail = ctxt.get_queue_rsc_idx(L_SUBMIT_TYPE_TRANSFER);
       qfam_idx = ctxt.submit_details[isubmit_detail].qfam_idx;
     }
   }
@@ -469,8 +530,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
       VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     {
-      auto isubmit_detail =
-        ctxt.submit_detail_idx_by_submit_ty[L_SUBMIT_TYPE_TRANSFER];
+      auto isubmit_detail = ctxt.get_queue_rsc_idx(L_SUBMIT_TYPE_TRANSFER);
       qfam_idx = ctxt.submit_details[isubmit_detail].qfam_idx;
     }
   }
@@ -482,8 +542,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
       VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
     {
-      auto isubmit_detail =
-        ctxt.submit_detail_idx_by_submit_ty[L_SUBMIT_TYPE_GRAPHICS];
+      auto isubmit_detail = ctxt.get_queue_rsc_idx(L_SUBMIT_TYPE_GRAPHICS);
       qfam_idx = ctxt.submit_details[isubmit_detail].qfam_idx;
     }
   }

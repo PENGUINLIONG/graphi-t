@@ -2,6 +2,7 @@
 // @PENGUINLIONG
 #pragma once
 #include <array>
+#include <map>
 #include <chrono>
 #include <vulkan/vulkan.h>
 #define HAL_IMPL_NAMESPACE vk
@@ -48,14 +49,17 @@ struct Context {
   VkDevice dev;
   VkPhysicalDeviceProperties physdev_prop;
   std::vector<ContextSubmitDetail> submit_details;
-  std::array<size_t, L_SUBMIT_TYPE_RANGE_SIZE> submit_detail_idx_by_submit_ty;
+  std::map<uint32_t, uint32_t> submit_detail_idx_by_submit_ty;
   std::array<std::vector<uint32_t>, 4> mem_ty_idxs_by_host_access;
   // Costless sampler to utilize L1 cache on old mobile platform.
   VkSampler fast_samp;
   ContextConfig ctxt_cfg;
 
   inline size_t get_queue_rsc_idx(SubmitType submit_ty) const {
-    return submit_detail_idx_by_submit_ty[submit_ty];
+    auto it = submit_detail_idx_by_submit_ty.find((uint32_t)submit_ty);
+    liong::assert(it != submit_detail_idx_by_submit_ty.end(),
+      "submit type ", submit_ty, " is not available");
+    return it->second;
   }
   inline const ContextSubmitDetail& get_submit_detail(
     SubmitType submit_ty

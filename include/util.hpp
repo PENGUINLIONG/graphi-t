@@ -28,7 +28,11 @@ struct format_impl_t<T> {
 };
 template<typename T, typename ... TArgs>
 struct format_impl_t<T, TArgs ...> {
-  static inline void format_impl(std::stringstream& ss, const T& x, const TArgs& ... others) {
+  static inline void format_impl(
+    std::stringstream& ss,
+    const T& x,
+    const TArgs& ... others
+  ) {
     format_impl_t<T>::format_impl(ss, x);
     format_impl_t<TArgs...>::format_impl(ss, others...);
   }
@@ -36,13 +40,40 @@ struct format_impl_t<T, TArgs ...> {
 
 } // namespace
 
+template<typename T, size_t N>
+std::string join(const std::string& sep, const std::array<T, N>& strs) {
+  std::stringstream ss {};
+  bool first = true;
+  for (const auto& str : strs) {
+    if (first) {
+      first = false;
+    } else {
+      ss << sep;
+    }
+    ss << str;
+  }
+  return ss.str();
+}
+template<typename T>
+std::string join(const std::string& sep, const std::vector<T>& strs) {
+  std::stringstream ss {};
+  bool first = true;
+  for (const auto& str : strs) {
+    if (first) {
+      first = false;
+    } else {
+      ss << sep;
+    }
+    ss << str;
+  }
+  return ss.str();
+}
 template<typename ... TArgs>
 inline std::string format(const TArgs& ... args) {
   std::stringstream ss {};
   format_impl_t<TArgs...>::format_impl(ss, args...);
   return ss.str();
 }
-
 
 
 extern std::vector<uint8_t> load_file(const char* path);
@@ -61,6 +92,28 @@ void save_bmp(
   uint32_t h,
   const char* path
 );
+
+
+template<typename T>
+T count_set_bits(T bitset) {
+  T count = 0;
+  for (T i = 0; i < sizeof(T) * 8; ++i) {
+    if (((bitset >> i) & 1) != 0) {
+      ++count;
+    }
+  }
+  return count;
+}
+template<typename T>
+T count_clear_bits(T bitset) {
+  T count = 0;
+  for (T i = 0; i < sizeof(T) * 8; ++i) {
+    if (((bitset >> i) & 1) == 0) {
+      ++count;
+    }
+  }
+  return count;
+}
 
 } // namespace util
 
