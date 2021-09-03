@@ -237,12 +237,12 @@ struct BufferView {
   size_t size;
 };
 
-L_IMPL_FN void map_mem(
+L_IMPL_FN void map_buf_mem(
   const BufferView& dst,
-  void*& mapped,
-  MemoryAccess map_access
+  MemoryAccess map_access,
+  void*& mapped
 );
-L_IMPL_FN void unmap_mem(
+L_IMPL_FN void unmap_buf_mem(
   const BufferView& buf,
   void* mapped
 );

@@ -415,7 +415,7 @@ const BufferConfig& get_buf_cfg(const Buffer& buf) {
 
 
 
-void map_mem(
+void map_buf_mem(
   const BufferView& buf,
   void*& mapped,
   MemoryAccess map_access
@@ -425,7 +425,7 @@ void map_mem(
   liong::log::info("mapped buffer '", buf.buf->buf_cfg.label, "' from ",
     buf.offset, " to ", buf.offset + buf.size);
 }
-void unmap_mem(
+void unmap_buf_mem(
   const BufferView& buf,
   void* mapped
 ) {

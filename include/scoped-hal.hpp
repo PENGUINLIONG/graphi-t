@@ -215,11 +215,11 @@ inline MappedBuffer(const BufferView& view, MemoryAccess map_access) :
   mapped(nullptr),
   view(view)
 {
-  map_mem(view, mapped, map_access);
+  map_buf_mem(view, mapped, map_access);
 }
 MappedBuffer(MappedBuffer&&) = default;
 inline ~MappedBuffer() {
-  unmap_mem(view, mapped);
+  unmap_buf_mem(view, mapped);
 }
 
 template<typename T, typename _ = std::enable_if_t<std::is_pointer<T>::value>>
