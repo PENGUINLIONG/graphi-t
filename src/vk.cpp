@@ -417,8 +417,8 @@ const BufferConfig& get_buf_cfg(const Buffer& buf) {
 
 void map_buf_mem(
   const BufferView& buf,
-  void*& mapped,
-  MemoryAccess map_access
+  MemoryAccess map_access,
+  void*& mapped
 ) {
   VK_ASSERT << vkMapMemory(buf.buf->ctxt->dev, buf.buf->devmem, buf.offset,
     buf.size, 0, &mapped);
@@ -502,7 +502,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
 
   VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-  uint32_t qfam_idx;
+  uint32_t qfam_idx = VK_QUEUE_FAMILY_IGNORED;
 
   VkImageCreateInfo ici {};
   ici.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -515,6 +515,17 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   ici.arrayLayers = 1;
   ici.samples = VK_SAMPLE_COUNT_1_BIT;
   ici.tiling = VK_IMAGE_TILING_OPTIMAL;
+  if (img_cfg.usage & L_IMAGE_USAGE_STAGING_BIT) {
+    ici.usage |=
+      VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+      VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    // The only one case that the optimal tiling MUST be disabled.
+    ici.tiling = VK_IMAGE_TILING_LINEAR;
+    {
+      auto isubmit_detail = ctxt.get_queue_rsc_idx(L_SUBMIT_TYPE_TRANSFER);
+      qfam_idx = ctxt.submit_details[isubmit_detail].qfam_idx;
+    }
+  }
   if (img_cfg.usage & L_IMAGE_USAGE_SAMPLED_BIT) {
     ici.usage =
       VK_IMAGE_USAGE_SAMPLED_BIT |
@@ -593,7 +604,9 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   VK_ASSERT << vkCreateImageView(ctxt.dev, &ivci, nullptr, &img_view);
 
   liong::log::info("created image '", img_cfg.label, "'");
-  return Image { &ctxt, devmem, img, img_view, layout, qfam_idx, img_cfg };
+  return Image {
+    &ctxt, devmem, mr.size, img, img_view, layout, qfam_idx, img_cfg
+  };
 }
 void destroy_img(Image& img) {
   vkDestroyImageView(img.ctxt->dev, img.img_view, nullptr);
@@ -605,6 +618,39 @@ void destroy_img(Image& img) {
 }
 const ImageConfig& get_img_cfg(const Image& img) {
   return img.img_cfg;
+}
+
+
+void map_img_mem(
+  const ImageView& img,
+  MemoryAccess map_access,
+  void*& mapped,
+  size_t& row_pitch
+) {
+  VkImageSubresource is {};
+  is.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  is.arrayLayer = 0;
+  is.mipLevel = 0;
+
+  VkSubresourceLayout sl {};
+  vkGetImageSubresourceLayout(img.img->ctxt->dev, img.img->img, &is, &sl);
+  size_t offset = sl.offset;
+  size_t size = sl.size;
+
+  VK_ASSERT << vkMapMemory(img.img->ctxt->dev, img.img->devmem, sl.offset,
+    sl.size, 0, &mapped);
+  row_pitch = sl.rowPitch;
+
+  liong::log::info("mapped image '", img.img->img_cfg.label, "' from (",
+    img.col_offset, ", ", img.row_offset, ") to (", img.col_offset + img.ncol,
+    ", ", img.row_offset + img.nrow, ")");
+}
+void unmap_img_mem(
+  const ImageView& img,
+  void* mapped
+) {
+  vkUnmapMemory(img.img->ctxt->dev, img.img->devmem);
+  liong::log::info("unmapped image '", img.img->img_cfg.label, "'");
 }
 
 

@@ -172,6 +172,31 @@ struct Task {
 
 
 
+struct MappedImage {
+  void* mapped;
+  size_t row_pitch;
+  ImageView view;
+
+  void* buf;
+  size_t buf_size;
+
+  MappedImage(const ImageView& view, MemoryAccess map_access);
+  inline MappedImage(MappedImage&& x) :
+    mapped(std::exchange(x.mapped, nullptr)),
+    row_pitch(std::exchange(x.row_pitch, 0)),
+    view(std::exchange(x.view, {})) {}
+  ~MappedImage();
+
+  template<typename T, typename _ = std::enable_if_t<std::is_pointer<T>::value>>
+  inline operator T() const {
+    if (buf == nullptr) {
+      return (T)mapped;
+    } else {
+      return (T)buf;
+    }
+  }
+};
+
 struct Image {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Image> inner;
 
@@ -192,16 +217,29 @@ struct Image {
   }
 
   inline ImageView view(
-    uint32_t nrow_offset,
-    uint32_t ncol_offset,
+    uint32_t row_offset,
+    uint32_t col_offset,
     uint32_t nrow,
     uint32_t ncol
   ) const {
-    return ImageView { &*inner, nrow_offset, ncol_offset, nrow, ncol };
+    return ImageView { &*inner, row_offset, col_offset, nrow, ncol };
   }
   inline ImageView view() const {
     auto& img_cfg = cfg();
     return view(0, 0, (uint32_t)img_cfg.nrow, (uint32_t)img_cfg.ncol);
+  }
+
+  inline MappedImage map(
+    uint32_t row_offset,
+    uint32_t col_offset,
+    uint32_t ncol,
+    uint32_t nrow,
+    MemoryAccess map_access
+  ) const {
+    return MappedImage(view(row_offset, col_offset, nrow, ncol), map_access);
+  }
+  inline MappedImage map(MemoryAccess map_access) const {
+    return MappedImage(view(), map_access);
   }
 };
 
@@ -211,21 +249,23 @@ struct MappedBuffer {
   void* mapped;
   BufferView view;
 
-inline MappedBuffer(const BufferView& view, MemoryAccess map_access) :
-  mapped(nullptr),
-  view(view)
-{
-  map_buf_mem(view, mapped, map_access);
-}
-MappedBuffer(MappedBuffer&&) = default;
-inline ~MappedBuffer() {
-  unmap_buf_mem(view, mapped);
-}
+  inline MappedBuffer(const BufferView& view, MemoryAccess map_access) :
+    mapped(nullptr),
+    view(view)
+  {
+    map_buf_mem(view, map_access, mapped);
+  }
+  MappedBuffer(MappedBuffer&& x) :
+    mapped(std::exchange(x.mapped, nullptr)),
+    view(std::exchange(x.view, {})) {}
+  inline ~MappedBuffer() {
+    unmap_buf_mem(view, mapped);
+  }
 
-template<typename T, typename _ = std::enable_if_t<std::is_pointer<T>::value>>
-inline operator T() const {
-  return (T)mapped;
-}
+  template<typename T, typename _ = std::enable_if_t<std::is_pointer<T>::value>>
+  inline operator T() const {
+    return (T)mapped;
+  }
 };
 struct Buffer {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Buffer> inner;
@@ -370,6 +410,12 @@ public:
   Image create_img(
     const std::string& label,
     ImageUsage usage,
+    size_t nrow,
+    size_t ncol,
+    PixelFormat fmt
+  ) const;
+  Image create_staging_img(
+    const std::string& label,
     size_t nrow,
     size_t ncol,
     PixelFormat fmt

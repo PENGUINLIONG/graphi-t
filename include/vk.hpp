@@ -84,6 +84,7 @@ struct ImageSyncState {
 struct Image {
   const Context* ctxt; // Lifetime bound.
   VkDeviceMemory devmem;
+  size_t devmem_size;
   VkImage img;
   VkImageView img_view;
   ImageSyncState sync_state;

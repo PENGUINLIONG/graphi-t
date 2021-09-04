@@ -141,24 +141,20 @@ Image Context::create_img(
   size_t ncol,
   PixelFormat fmt
 ) const {
-  MemoryAccess host_access = 0;
-  MemoryAccess dev_access = 0;
-  switch (usage)
-  {
-  case L_IMAGE_USAGE_SAMPLED_BIT:
-    host_access |= L_MEMORY_ACCESS_NONE;
+  MemoryAccess host_access = L_MEMORY_ACCESS_NONE;
+  MemoryAccess dev_access = L_MEMORY_ACCESS_NONE;
+  if (usage & L_IMAGE_USAGE_STAGING_BIT) {
+    host_access |= L_MEMORY_ACCESS_READ_WRITE;
+    dev_access |= L_MEMORY_ACCESS_READ_BIT; 
+  }
+  if (usage & L_IMAGE_USAGE_SAMPLED_BIT) {
     dev_access |= L_MEMORY_ACCESS_READ_BIT;
-    break;
-  case L_IMAGE_USAGE_STORAGE_BIT:
-    host_access |= L_MEMORY_ACCESS_NONE;
+  }
+  if (usage & L_IMAGE_USAGE_STORAGE_BIT) {
     dev_access |= L_MEMORY_ACCESS_READ_WRITE;
-    break;
-  case L_IMAGE_USAGE_ATTACHMENT_BIT:
-    host_access |= L_MEMORY_ACCESS_NONE;
+  }
+  if (usage & L_IMAGE_USAGE_ATTACHMENT_BIT) {
     dev_access |= L_MEMORY_ACCESS_WRITE_BIT;
-    break;
-  default:
-    liong::panic("unexpected image usage");
   }
 
   ImageConfig img_cfg {};
@@ -170,6 +166,14 @@ Image Context::create_img(
   img_cfg.fmt = fmt;
   img_cfg.usage = usage;
   return HAL_IMPL_NAMESPACE::create_img(*inner, img_cfg);
+}
+Image Context::create_staging_img(
+  const std::string& label,
+  size_t nrow,
+  size_t ncol,
+  PixelFormat fmt
+) const {
+  return create_img(label, L_IMAGE_USAGE_STAGING_BIT, nrow, ncol, fmt);
 }
 Image Context::create_sampled_img(
   const std::string& label,
@@ -194,6 +198,83 @@ Image Context::create_attm_img(
   PixelFormat fmt
 ) const {
   return create_img(label, L_IMAGE_USAGE_ATTACHMENT_BIT, nrow, ncol, fmt);
+}
+
+void _copy_img_tile(
+  void* dst,
+  size_t dst_row_pitch,
+  size_t dst_row_offset,
+  size_t dst_local_offset, // Offset starting from base of each row.
+  void* src,
+  size_t src_row_pitch,
+  size_t src_row_offset,
+  size_t src_local_offset,
+  size_t nrow,
+  size_t row_size
+) {
+  uint8_t* dst_typed = (uint8_t*)dst;
+  uint8_t* src_typed = (uint8_t*)src;
+
+  for (size_t row = 0; row < nrow; ++row) {
+    size_t dst_offset =
+      (dst_row_offset + row) * dst_row_pitch + dst_local_offset;
+    size_t src_offset =
+      (src_row_offset + row) * src_row_pitch + src_local_offset;
+    std::memcpy(
+      (uint8_t*)dst_typed + dst_offset,
+      (uint8_t*)src_typed + src_offset,
+      row_size);
+  }
+}
+MappedImage::MappedImage(const ImageView& view, MemoryAccess map_access) :
+  mapped(nullptr),
+  row_pitch(0),
+  view(view)
+{
+  map_img_mem(view, map_access, mapped, row_pitch);
+
+  const auto& img_cfg = view.img->img_cfg;
+  size_t fmt_size = img_cfg.fmt.get_fmt_size();
+  size_t expected_pitch = fmt_size * img_cfg.ncol;
+
+  bool need_stage_buf = false;
+  if (view.ncol != img_cfg.ncol || view.nrow != img_cfg.nrow) {
+    liong::log::warn("only a portion of the image is mapped; staging buffer "
+      "will be used to relayout data on the host side");
+    need_stage_buf = true;
+  } else if (row_pitch != expected_pitch) {
+    liong::log::warn("image allocation size is not aligned to required "
+      "pitch (expect=", expected_pitch, ", actual=", row_pitch, "); staging "
+      "buffer will be used to relayout data on the host side");
+    need_stage_buf = true;
+  }
+  if (need_stage_buf) {
+    buf_size = expected_pitch * img_cfg.nrow;
+    buf = new uint8_t[buf_size];
+  }
+
+  // Copy the image on device to the staging buffer if the user wants to read
+  // the content.
+  if (buf != nullptr && (map_access & L_MEMORY_ACCESS_READ_BIT)) {
+    size_t buf_row_pitch = expected_pitch;
+    _copy_img_tile(buf, expected_pitch, 0, 0, mapped, row_pitch,
+      view.row_offset, view.col_offset * fmt_size, view.nrow, expected_pitch);
+  }
+}
+MappedImage::~MappedImage() {
+  if (buf != nullptr) {
+    const auto& img_cfg = view.img->img_cfg;
+    size_t fmt_size = img_cfg.fmt.get_fmt_size();
+    size_t buf_row_pitch = view.ncol * fmt_size;
+
+    _copy_img_tile(mapped, row_pitch, view.row_offset,
+      view.col_offset * fmt_size, buf, buf_row_pitch, 0, 0, view.nrow,
+      buf_row_pitch);
+
+    delete [] (uint8_t*)buf;
+    buf = nullptr;
+  }
+  unmap_img_mem(view, mapped);
 }
 
 Transaction Context::create_transact(

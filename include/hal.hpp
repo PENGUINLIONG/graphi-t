@@ -250,9 +250,10 @@ L_IMPL_FN void unmap_buf_mem(
 
 
 enum ImageUsageBits {
-  L_IMAGE_USAGE_SAMPLED_BIT = (1 << 0),
-  L_IMAGE_USAGE_STORAGE_BIT = (1 << 1),
-  L_IMAGE_USAGE_ATTACHMENT_BIT = (1 << 2),
+  L_IMAGE_USAGE_STAGING_BIT = (1 << 0),
+  L_IMAGE_USAGE_SAMPLED_BIT = (1 << 1),
+  L_IMAGE_USAGE_STORAGE_BIT = (1 << 2),
+  L_IMAGE_USAGE_ATTACHMENT_BIT = (1 << 3),
 };
 typedef uint32_t ImageUsage;
 // Describe a row-major 2D image.
@@ -282,6 +283,19 @@ struct ImageView {
   uint32_t nrow;
   uint32_t ncol;
 };
+
+L_IMPL_FN void map_img_mem(
+  const ImageView& img,
+  MemoryAccess map_access,
+  void*& mapped,
+  size_t& row_pitch
+);
+L_IMPL_FN void unmap_img_mem(
+  const ImageView& img,
+  void* mapped
+);
+
+
 
 struct DispatchSize {
   uint32_t x, y, z;

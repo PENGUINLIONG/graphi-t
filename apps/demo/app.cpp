@@ -152,6 +152,26 @@ void guarded_main() {
   for (auto i = 0; i < dbuf.size(); ++i) {
     liong::log::info("dbuf[", i, "] = ", dbuf[i]);
   }
+
+  scoped::Image map_test_img = ctxt.create_staging_img("map_test_img", 7, 7, L_FORMAT_R32G32B32A32_SFLOAT);
+  {
+    scoped::MappedImage mapped = map_test_img.map(L_MEMORY_ACCESS_WRITE_ONLY);
+    float* in_data = (float*)mapped;
+    for (int i = 0; i < 7; ++i) {
+      for (int j = i; j < 7; ++j) {
+        in_data[(i * 7 + j) * 4 + 0] = 1.0f;
+        in_data[(i * 7 + j) * 4 + 1] = 0.0f;
+        in_data[(i * 7 + j) * 4 + 2] = 1.0f;
+        in_data[(i * 7 + j) * 4 + 3] = 1.0f;
+      }
+    }
+  }
+  {
+    scoped::MappedImage mapped = map_test_img.map(L_MEMORY_ACCESS_READ_ONLY);
+    const float* out_data = (const float*)mapped;
+    liong::util::save_bmp(out_data, 7, 7, "map_test.bmp");
+  }
+
 }
 
 void guarded_main2() {
@@ -259,8 +279,6 @@ void guarded_main2() {
   {
     scoped::MappedBuffer mapped = out_buf.map(L_MEMORY_ACCESS_READ_ONLY);
     const float* out_data = (const float*)mapped;
-    std::stringstream ss;
-
     liong::util::save_bmp(out_data, FRAMEBUF_NCOL, FRAMEBUF_NROW, "out_img.bmp");
   }
 }
