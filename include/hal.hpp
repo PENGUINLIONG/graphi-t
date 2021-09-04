@@ -421,6 +421,7 @@ L_IMPL_FN double get_timestamp_result_us(const Timestamp& timestamp);
 
 
 enum CommandType {
+  L_COMMAND_TYPE_SET_SUBMIT_TYPE,
   L_COMMAND_TYPE_INLINE_TRANSACTION,
   L_COMMAND_TYPE_COPY_BUFFER_TO_IMAGE,
   L_COMMAND_TYPE_COPY_IMAGE_TO_BUFFER,
@@ -434,15 +435,14 @@ enum CommandType {
 enum SubmitType {
   L_SUBMIT_TYPE_COMPUTE,
   L_SUBMIT_TYPE_GRAPHICS,
-  L_SUBMIT_TYPE_TRANSFER,
-
-  L_SUBMIT_TYPE_BEGIN_RANGE = L_SUBMIT_TYPE_COMPUTE,
-  L_SUBMIT_TYPE_END_RANGE = L_SUBMIT_TYPE_TRANSFER,
-  L_SUBMIT_TYPE_RANGE_SIZE = (L_SUBMIT_TYPE_TRANSFER - L_SUBMIT_TYPE_BEGIN_RANGE + 1),
+  L_SUBMIT_TYPE_ANY = ~((uint32_t)0),
 };
 struct Command {
   CommandType cmd_ty;
   union {
+    struct {
+      SubmitType submit_ty;
+    } cmd_set_submit_ty;
     struct {
       const Transaction* transact;
     } cmd_inline_transact;
@@ -486,7 +486,6 @@ struct Command {
     } cmd_draw_indexed;
     struct {
       const Timestamp* timestamp;
-      SubmitType submit_ty;
     } cmd_write_timestamp;
   };
 };
@@ -586,14 +585,17 @@ inline Command cmd_draw_indexed(
   return cmd;
 }
 
-inline Command cmd_write_timestamp(
-  const Timestamp& timestamp,
-  SubmitType submit_ty
-) {
+inline Command cmd_write_timestamp(const Timestamp& timestamp) {
   Command cmd;
   cmd.cmd_ty = L_COMMAND_TYPE_WRITE_TIMESTAMP;
   cmd.cmd_write_timestamp.timestamp = &timestamp;
-  cmd.cmd_write_timestamp.submit_ty = submit_ty;
+  return cmd;
+}
+
+inline Command cmd_set_submit_ty(SubmitType submit_ty) {
+  Command cmd;
+  cmd.cmd_ty = L_COMMAND_TYPE_SET_SUBMIT_TYPE;
+  cmd.cmd_set_submit_ty.submit_ty = submit_ty;
   return cmd;
 }
 

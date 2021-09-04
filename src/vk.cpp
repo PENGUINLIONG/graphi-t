@@ -260,17 +260,6 @@ Context create_ctxt(const ContextConfig& cfg) {
         "DISPATCH",
       },
     },
-    SubmitTypeQueueRequirement {
-      L_SUBMIT_TYPE_TRANSFER,
-      VK_QUEUE_TRANSFER_BIT,
-      "TRANSFER",
-      {
-        "COPY_BUFFER_TO_IMAGE",
-        "COPY_IMAGE_TO_BUFFER",
-        "COPY_BUFFER",
-        "COPY_IMAGE",
-      },
-    },
   };
 
   std::map<uint32_t, uint32_t> queue_allocs;
@@ -558,21 +547,21 @@ VkFormat _make_img_fmt(PixelFormat fmt) {
 Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   VkFormat fmt = _make_img_fmt(img_cfg.fmt);
   VkImageUsageFlags usage = 0;
-  SubmitType init_submit_ty = L_SUBMIT_TYPE_TRANSFER;
+  SubmitType init_submit_ty = L_SUBMIT_TYPE_ANY;
   bool is_staging_img = false;
 
   if (img_cfg.usage & L_IMAGE_USAGE_SAMPLED_BIT) {
     usage |=
       VK_IMAGE_USAGE_SAMPLED_BIT |
       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    init_submit_ty = L_SUBMIT_TYPE_TRANSFER;
+    init_submit_ty = L_SUBMIT_TYPE_ANY;
   }
   if (img_cfg.usage & L_IMAGE_USAGE_STORAGE_BIT) {
     usage |=
       VK_IMAGE_USAGE_STORAGE_BIT |
       VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    init_submit_ty = L_SUBMIT_TYPE_TRANSFER;
+    init_submit_ty = L_SUBMIT_TYPE_ANY;
   }
   // KEEP THIS AFTER DESCRIPTOR RESOURCE USAGES.
   if (img_cfg.usage & L_IMAGE_USAGE_ATTACHMENT_BIT) {
@@ -591,7 +580,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
     usage |=
       VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    init_submit_ty = L_SUBMIT_TYPE_TRANSFER;
+    init_submit_ty = L_SUBMIT_TYPE_ANY;
     // The only one case that we can feed the image with our data directly by
     // memory mapping.
     is_staging_img = true;
@@ -1240,10 +1229,10 @@ VkCommandPool _create_cmd_pool(const Context& ctxt, uint32_t qfam_idx) {
 
   return cmd_pool;
 }
-std::array<VkCommandPool, L_SUBMIT_TYPE_RANGE_SIZE> _collect_cmd_pools(
+std::array<VkCommandPool, 2> _collect_cmd_pools(
   const Context& ctxt
 ) {
-  std::array<VkCommandPool, L_SUBMIT_TYPE_RANGE_SIZE> cmd_pools {};
+  std::array<VkCommandPool, 2> cmd_pools {};
   for (auto i = 0; i < ctxt.submit_details.size(); ++i) {
     const auto& submit_detail = ctxt.submit_details[i];
     cmd_pools[i] = _create_cmd_pool(ctxt, submit_detail.qfam_idx);
@@ -1272,16 +1261,55 @@ VkCommandBuffer _alloc_cmdbuf(
 
 struct TransactionLike {
   const Context* ctxt;
-  std::array<VkCommandPool, L_SUBMIT_TYPE_RANGE_SIZE> cmd_pools;
+  std::array<VkCommandPool, 2> cmd_pools;
   std::vector<TransactionSubmitDetail> submit_details;
   std::vector<VkSemaphore> semas;
   VkFence fence;
   VkCommandBufferLevel level;
 };
+VkCommandBuffer _start_cmdbuf(
+  TransactionLike& transact,
+  SubmitType submit_ty
+) {
+  auto icmd_pool = transact.ctxt->get_queue_rsc_idx(submit_ty);
+  auto queue = transact.ctxt->submit_details[icmd_pool].queue;
+  auto qfam_idx = transact.ctxt->submit_details[icmd_pool].qfam_idx;
+  auto cmd_pool = transact.cmd_pools[icmd_pool];
+  auto cmdbuf = _alloc_cmdbuf(*transact.ctxt, cmd_pool, transact.level);
+
+  VkCommandBufferInheritanceInfo cbii {};
+  cbii.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
+
+  VkCommandBufferBeginInfo cbbi {};
+  cbbi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+  if (submit_ty == L_SUBMIT_TYPE_GRAPHICS) {
+    cbbi.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
+  }
+  cbbi.pInheritanceInfo = &cbii;
+  VK_ASSERT << vkBeginCommandBuffer(cmdbuf, &cbbi);
+
+  TransactionSubmitDetail submit_detail;
+  submit_detail.submit_ty = submit_ty;
+  submit_detail.cmdbuf = cmdbuf;
+  submit_detail.queue = queue;
+  submit_detail.qfam_idx = qfam_idx;
+  submit_detail.pass_detail.pass = VK_NULL_HANDLE;
+  submit_detail.pass_detail.framebuf = VK_NULL_HANDLE;
+  submit_detail.pass_detail.render_area = {};
+  submit_detail.pass_detail.clear_value = {{{ 0.0f, 0.0f, 0.0f, 0.0f }}};
+
+  transact.submit_details.emplace_back(std::move(submit_detail));
+  return cmdbuf;
+}
 VkCommandBuffer _get_cmdbuf(
   TransactionLike& transact,
   SubmitType submit_ty
 ) {
+  if (submit_ty == L_SUBMIT_TYPE_ANY) {
+    liong::assert(!transact.submit_details.empty(),
+      "cannot infer submit type for submit-type-independent command");
+    submit_ty = transact.submit_details.back().submit_ty;
+  }
   auto isubmit_detail = transact.ctxt->get_queue_rsc_idx(submit_ty);
   auto queue = transact.ctxt->submit_details[isubmit_detail].queue;
   auto qfam_idx = transact.ctxt->submit_details[isubmit_detail].qfam_idx;
@@ -1317,33 +1345,7 @@ VkCommandBuffer _get_cmdbuf(
       }
     }
   }
-  auto icmd_pool = transact.ctxt->get_queue_rsc_idx(submit_ty);
-  auto cmd_pool = transact.cmd_pools[icmd_pool];
-  auto cmdbuf = _alloc_cmdbuf(*transact.ctxt, cmd_pool, transact.level);
-
-  VkCommandBufferInheritanceInfo cbii {};
-  cbii.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
-
-  VkCommandBufferBeginInfo cbbi {};
-  cbbi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  if (submit_ty == L_SUBMIT_TYPE_GRAPHICS) {
-    cbbi.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
-  }
-  cbbi.pInheritanceInfo = &cbii;
-  VK_ASSERT << vkBeginCommandBuffer(cmdbuf, &cbbi);
-
-  TransactionSubmitDetail submit_detail;
-  submit_detail.submit_ty = submit_ty;
-  submit_detail.cmdbuf = cmdbuf;
-  submit_detail.queue = queue;
-  submit_detail.qfam_idx = qfam_idx;
-  submit_detail.pass_detail.pass = VK_NULL_HANDLE;
-  submit_detail.pass_detail.framebuf = VK_NULL_HANDLE;
-  submit_detail.pass_detail.render_area = {};
-  submit_detail.pass_detail.clear_value = {{{ 0.0f, 0.0f, 0.0f, 0.0f }}};
-
-  transact.submit_details.emplace_back(std::move(submit_detail));
-  return cmdbuf;
+  return _start_cmdbuf(transact, submit_ty);
 }
 void _seal_transact(TransactionLike& transact) {
   const auto& last_submit = transact.submit_details.back();
@@ -1369,6 +1371,13 @@ void _seal_transact(TransactionLike& transact) {
   }
 }
 
+void _record_cmd_set_submit_ty(
+  TransactionLike& transact,
+  const Command& cmd
+) {
+  SubmitType submit_ty = cmd.cmd_set_submit_ty.submit_ty;
+  _get_cmdbuf(transact, submit_ty);
+}
 void _record_cmd_inline_transact(
   TransactionLike& transact,
   const Command& cmd
@@ -1407,7 +1416,7 @@ void _record_cmd_copy_buf2img(TransactionLike& transact, const Command& cmd) {
   const auto& in = cmd.cmd_copy_buf2img;
   const auto& src = *in.src;
   const auto& dst = *in.dst;
-  auto cmdbuf = _get_cmdbuf(transact, cmd.cmd_write_timestamp.submit_ty);
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
 
   VkBufferImageCopy bic {};
   bic.bufferOffset = src.offset;
@@ -1434,7 +1443,7 @@ void _record_cmd_copy_img2buf(TransactionLike& transact, const Command& cmd) {
   const auto& in = cmd.cmd_copy_img2buf;
   const auto& src = *in.src;
   const auto& dst = *in.dst;
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_TRANSFER);
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
 
   VkBufferImageCopy bic {};
   bic.bufferOffset = dst.offset;
@@ -1462,7 +1471,7 @@ void _record_cmd_copy_buf(TransactionLike& transact, const Command& cmd) {
   const auto& src = *in.src;
   const auto& dst = *in.dst;
   assert(src.size == dst.size, "buffer copy size mismatched");
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_TRANSFER);
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
 
   VkBufferCopy bc {};
   bc.srcOffset = src.offset;
@@ -1481,7 +1490,7 @@ void _record_cmd_copy_img(TransactionLike& transact, const Command& cmd) {
   const auto& dst = *in.dst;
   assert(src.ncol == dst.ncol && src.nrow == dst.nrow,
     "image copy size mismatched");
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_TRANSFER);
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
 
   VkImageCopy ic {};
   ic.srcOffset.x = src.col_offset;
@@ -1647,29 +1656,23 @@ void _record_cmd_write_timestamp(
   TransactionLike& transact,
   const Command& cmd
 ) {
-  auto submit_ty = cmd.cmd_write_timestamp.submit_ty;
-  auto cmdbuf = _get_cmdbuf(transact, submit_ty);
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
 
   auto query_pool = cmd.cmd_write_timestamp.timestamp->query_pool;
   vkCmdResetQueryPool(cmdbuf, query_pool, 0, 1);
   vkCmdWriteTimestamp(cmdbuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, query_pool, 0);
 
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    const char* submit_ty_lit = nullptr;
-    switch (submit_ty)
-    {
-    case L_SUBMIT_TYPE_GRAPHICS: submit_ty_lit = "graphics"; break;
-    case L_SUBMIT_TYPE_COMPUTE: submit_ty_lit = "compute"; break;
-    case L_SUBMIT_TYPE_TRANSFER: submit_ty_lit = "transfer"; break;
-    default: liong::panic("unexpected submit type"); break;
-    }
-    liong::log::info("schedule ", submit_ty_lit, " timestamp write");
+    liong::log::info("schedule timestamp write");
   }
 }
 
 // Returns whether the submit queue to submit has changed.
 void _record_cmd(TransactionLike& transact, const Command& cmd) {
   switch (cmd.cmd_ty) {
+  case L_COMMAND_TYPE_SET_SUBMIT_TYPE:
+    _record_cmd_set_submit_ty(transact, cmd);
+    break;
   case L_COMMAND_TYPE_INLINE_TRANSACTION:
     assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY,
       "nested inline transaction is not allowed");

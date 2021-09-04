@@ -131,16 +131,19 @@ void guarded_main() {
   rsc_pool.bind(0, buf.view());
 
   scoped::Transaction transact = ctxt.create_transact("transact", {
+    cmd_set_submit_ty(L_SUBMIT_TYPE_COMPUTE),
     cmd_dispatch(task, rsc_pool, { 4, 4, 4 }),
   });
 
   scoped::CommandDrain cmd_drain(ctxt);
   cmd_drain.submit({
+    cmd_set_submit_ty(L_SUBMIT_TYPE_COMPUTE),
     cmd_inline_transact(transact),
   });
   cmd_drain.wait();
 
   cmd_drain.submit({
+    cmd_set_submit_ty(L_SUBMIT_TYPE_COMPUTE),
     cmd_inline_transact(transact),
   });
   cmd_drain.wait();
@@ -264,9 +267,10 @@ void guarded_main2() {
   scoped::Timestamp toc = ctxt.create_timestamp();
 
   std::vector<Command> cmds {
-    cmd_write_timestamp(tic, L_SUBMIT_TYPE_GRAPHICS),
+    cmd_set_submit_ty(L_SUBMIT_TYPE_GRAPHICS),
+    cmd_write_timestamp(tic),
     cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 3, 1, framebuf),
-    cmd_write_timestamp(toc, L_SUBMIT_TYPE_GRAPHICS),
+    cmd_write_timestamp(toc),
     cmd_copy_img2buf(out_img.view(), out_buf.view()),
   };
 

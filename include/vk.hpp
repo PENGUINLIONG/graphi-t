@@ -69,6 +69,9 @@ struct Context {
     return submit_details[i];
   }
   inline uint32_t get_submit_ty_qfam_idx(SubmitType submit_ty) const {
+    if (submit_ty == L_SUBMIT_TYPE_ANY) {
+      return VK_QUEUE_FAMILY_IGNORED;
+    }
     auto isubmit_detail = get_queue_rsc_idx(submit_ty);
     return submit_details[isubmit_detail].qfam_idx;
   }
@@ -146,7 +149,7 @@ struct TransactionSubmitDetail {
 };
 struct CommandDrain {
   const Context* ctxt;
-  std::array<VkCommandPool, L_SUBMIT_TYPE_RANGE_SIZE> cmd_pools;
+  std::array<VkCommandPool, 2> cmd_pools;
   std::vector<VkSemaphore> semas;
   VkFence fence;
   // The time command buffer is written with any command.
@@ -158,7 +161,7 @@ struct CommandDrain {
 struct Transaction {
   std::string label;
   const Context* ctxt;
-  std::array<VkCommandPool, L_SUBMIT_TYPE_RANGE_SIZE> cmd_pools;
+  std::array<VkCommandPool, 2> cmd_pools;
   std::vector<TransactionSubmitDetail> submit_details;
 };
 
