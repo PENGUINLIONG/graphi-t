@@ -7,6 +7,7 @@
 #include <string>
 #include <sstream>
 #include <fstream>
+#include <functional>
 
 namespace liong {
 
@@ -113,6 +114,33 @@ T count_clear_bits(T bitset) {
     }
   }
   return count;
+}
+
+template<typename T>
+std::vector<T> arrange(T a, T b, T step) {
+  std::vector<T> out;
+  for (T i = a; i < b; i += step) {
+    out.emplace_back(i);
+  }
+  return out;
+}
+template<typename T>
+std::vector<T> arrange(T a, T b) {
+  return arrange<T>(a, b, 1);
+}
+template<typename T>
+std::vector<T> arrange(T b) {
+  return arrange<T>(0, b);
+}
+
+template<typename T, typename U>
+std::vector<U> map(const std::vector<T>& xs, const std::function<U(const T&)>& f) {
+  std::vector<U> out;
+  out.reserve(xs.size());
+  for (const auto& x : xs) {
+    out.emplace_back(f(x));
+  }
+  return out;
 }
 
 } // namespace util

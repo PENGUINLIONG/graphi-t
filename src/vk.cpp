@@ -1,5 +1,6 @@
 #include <map>
 #include <set>
+#include <algorithm>
 #include "vk.hpp"
 #include "assert.hpp"
 #include "util.hpp"
@@ -83,6 +84,94 @@ std::string desc_dev(uint32_t idx) {
 }
 
 
+// Get memory type priority based on the host access pattern. Higher the better.
+uint32_t _get_mem_prior(
+  MemoryAccess host_access,
+  VkMemoryPropertyFlags mem_prop
+) {
+  if (host_access == L_MEMORY_ACCESS_NONE) {
+    if (mem_prop & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+      return 1;
+    } else {
+      return 0;
+    }
+  } else if (host_access == L_MEMORY_ACCESS_READ_ONLY) {
+    static const std::vector<VkMemoryPropertyFlags> PRIORITY_LUT {
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_CACHED_BIT |
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_CACHED_BIT |
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+    };
+    for (int i = 0; i < PRIORITY_LUT.size(); ++i) {
+      if (mem_prop == PRIORITY_LUT[i]) { return PRIORITY_LUT.size() - i; }
+    }
+    return 0;
+  } else if (host_access == L_MEMORY_ACCESS_WRITE_ONLY) {
+    static const std::vector<VkMemoryPropertyFlags> PRIORITY_LUT {
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_CACHED_BIT |
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_CACHED_BIT |
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+    };
+    for (int i = 0; i < PRIORITY_LUT.size(); ++i) {
+      if (mem_prop == PRIORITY_LUT[i]) { return PRIORITY_LUT.size() - i; }
+    }
+    return 0;
+  } else if (host_access == L_MEMORY_ACCESS_READ_WRITE) {
+    static const std::vector<VkMemoryPropertyFlags> PRIORITY_LUT {
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_CACHED_BIT |
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
+        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_CACHED_BIT |
+        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
+      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+        VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
+    };
+    for (int i = 0; i < PRIORITY_LUT.size(); ++i) {
+      if (mem_prop == PRIORITY_LUT[i]) { return PRIORITY_LUT.size() - i; }
+    }
+    return 0;
+  } else {
+    liong::panic("unexpected host access pattern");
+    return 0;
+  }
+}
 Context create_ctxt(const ContextConfig& cfg) {
   auto physdev = physdevs[cfg.dev_idx];
 
@@ -255,60 +344,29 @@ Context create_ctxt(const ContextConfig& cfg) {
     submit_details.emplace_back(std::move(submit_detail));
   }
 
-  // DO NOT CHANGE THE FOLLOWING.
-
   VkPhysicalDeviceMemoryProperties mem_prop;
   vkGetPhysicalDeviceMemoryProperties(physdev, &mem_prop);
-  // Host access -> memory type.
-  std::array<std::set<uint32_t>, 4> mem_ty_idx_set_by_host_access {};
-  for (uint32_t i = 0; i < mem_prop.memoryTypeCount; ++i) {
-    const auto& mem_ty = mem_prop.memoryTypes[i];
-    MemoryAccess host_access {};
-    if (mem_ty.propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
-      // It's preferred for host accessible memory allocation, i.e., when
-      // `host_access` is not `L_MEMORY_ACCESS_NONE`.
-      if (mem_ty.propertyFlags & VK_MEMORY_PROPERTY_HOST_CACHED_BIT) {
-        // Good for host read.
-        host_access = MemoryAccess(host_access | L_MEMORY_ACCESS_READ_BIT);
-      }
-      if (mem_ty.propertyFlags & VK_MEMORY_PROPERTY_HOST_COHERENT_BIT) {
-        // Good for host write.
-        host_access = MemoryAccess(host_access | L_MEMORY_ACCESS_WRITE_BIT);
-      }
-    } else {
-      // The host cannot access to this type of memory.
-      host_access = L_MEMORY_ACCESS_NONE;
-    }
-    for (uint32_t j = 0; j < 4; ++j) {
-      if (j == (j & host_access)) {
-        mem_ty_idx_set_by_host_access[j].insert(i);
-      }
-    }
-  }
-  // Fallback memory types.
-  mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_NONE].insert(
-    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_READ_ONLY].begin(),
-    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_READ_ONLY].end());
-  mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_NONE].insert(
-    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_WRITE_ONLY].begin(),
-    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_WRITE_ONLY].end());
-  mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_NONE].insert(
-    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_READ_WRITE].begin(),
-    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_READ_WRITE].end());
-  mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_READ_ONLY].insert(
-    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_READ_WRITE].begin(),
-    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_READ_WRITE].end());
-  mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_WRITE_ONLY].insert(
-    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_READ_WRITE].begin(),
-    mem_ty_idx_set_by_host_access[L_MEMORY_ACCESS_READ_WRITE].end());
-  std::array<std::vector<uint32_t>, 4> mem_ty_idxs_by_host_access {};
-  for (uint32_t i = 0; i < 4; ++i) {
-    mem_ty_idxs_by_host_access[i] = std::vector<uint32_t>(
-      mem_ty_idx_set_by_host_access[i].begin(),
-      mem_ty_idx_set_by_host_access[i].end());
-  }
 
-  // DO NOT CHANGE THE ABOVE.
+  // Priority -> memory type.
+  std::array<std::vector<uint32_t>, 4> mem_ty_idxs_by_host_access {
+    liong::util::arrange(mem_prop.memoryTypeCount),
+    liong::util::arrange(mem_prop.memoryTypeCount),
+    liong::util::arrange(mem_prop.memoryTypeCount),
+    liong::util::arrange(mem_prop.memoryTypeCount),
+  };
+  for (int host_access = 0; host_access < 4; ++host_access) {
+    auto& mem_ty_idxs = mem_ty_idxs_by_host_access[host_access];
+    std::vector<uint32_t> priors = liong::util::map<uint32_t, uint32_t>(
+      mem_ty_idxs,
+      [&](const uint32_t& i) -> uint32_t {
+        const auto& mem_ty = mem_prop.memoryTypes[i];
+        return _get_mem_prior(host_access, mem_ty.propertyFlags);
+      });
+    std::sort(mem_ty_idxs.begin(), mem_ty_idxs.end(),
+      [&](uint32_t ilhs, uint32_t irhs) {
+        return priors[ilhs] > priors[irhs];
+      });
+  }
 
   VkSamplerCreateInfo sci {};
   sci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
@@ -499,10 +557,54 @@ VkFormat _make_img_fmt(PixelFormat fmt) {
 }
 Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   VkFormat fmt = _make_img_fmt(img_cfg.fmt);
+  VkImageUsageFlags usage = 0;
+  SubmitType init_submit_ty = L_SUBMIT_TYPE_TRANSFER;
+  bool is_staging_img = false;
 
-  VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  if (img_cfg.usage & L_IMAGE_USAGE_SAMPLED_BIT) {
+    usage |=
+      VK_IMAGE_USAGE_SAMPLED_BIT |
+      VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    init_submit_ty = L_SUBMIT_TYPE_TRANSFER;
+  }
+  if (img_cfg.usage & L_IMAGE_USAGE_STORAGE_BIT) {
+    usage |=
+      VK_IMAGE_USAGE_STORAGE_BIT |
+      VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+      VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    init_submit_ty = L_SUBMIT_TYPE_TRANSFER;
+  }
+  // KEEP THIS AFTER DESCRIPTOR RESOURCE USAGES.
+  if (img_cfg.usage & L_IMAGE_USAGE_ATTACHMENT_BIT) {
+    usage |=
+      VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+      VK_IMAGE_USAGE_TRANSFER_DST_BIT |
+      VK_IMAGE_USAGE_SAMPLED_BIT |
+      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
+      VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+    init_submit_ty = L_SUBMIT_TYPE_GRAPHICS;
+  }
+  // KEEP THIS AT THE END.
+  if (img_cfg.usage & L_IMAGE_USAGE_STAGING_BIT) {
+    liong::assert((img_cfg.usage & (~L_IMAGE_USAGE_STAGING_BIT)) == 0,
+      "staging image can only be used for transfer");
+    usage |=
+      VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+      VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    init_submit_ty = L_SUBMIT_TYPE_TRANSFER;
+    // The only one case that we can feed the image with our data directly by
+    // memory mapping.
+    is_staging_img = true;
+  }
 
-  uint32_t qfam_idx = VK_QUEUE_FAMILY_IGNORED;
+  // Check whether the device support our use case.
+  VkImageFormatProperties ifp;
+  VK_ASSERT << vkGetPhysicalDeviceImageFormatProperties(
+    physdevs[ctxt.ctxt_cfg.dev_idx], fmt, VK_IMAGE_TYPE_2D,
+    VK_IMAGE_TILING_OPTIMAL, usage, 0, &ifp);
+
+  VkImageLayout layout = is_staging_img ?
+    VK_IMAGE_LAYOUT_PREINITIALIZED : VK_IMAGE_LAYOUT_UNDEFINED;
 
   VkImageCreateInfo ici {};
   ici.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -514,49 +616,9 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   ici.mipLevels = 1;
   ici.arrayLayers = 1;
   ici.samples = VK_SAMPLE_COUNT_1_BIT;
-  ici.tiling = VK_IMAGE_TILING_OPTIMAL;
-  if (img_cfg.usage & L_IMAGE_USAGE_STAGING_BIT) {
-    ici.usage |=
-      VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-      VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    // The only one case that the optimal tiling MUST be disabled.
-    ici.tiling = VK_IMAGE_TILING_LINEAR;
-    {
-      auto isubmit_detail = ctxt.get_queue_rsc_idx(L_SUBMIT_TYPE_TRANSFER);
-      qfam_idx = ctxt.submit_details[isubmit_detail].qfam_idx;
-    }
-  }
-  if (img_cfg.usage & L_IMAGE_USAGE_SAMPLED_BIT) {
-    ici.usage =
-      VK_IMAGE_USAGE_SAMPLED_BIT |
-      VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    {
-      auto isubmit_detail = ctxt.get_queue_rsc_idx(L_SUBMIT_TYPE_TRANSFER);
-      qfam_idx = ctxt.submit_details[isubmit_detail].qfam_idx;
-    }
-  }
-  if (img_cfg.usage & L_IMAGE_USAGE_STORAGE_BIT) {
-    ici.usage =
-      VK_IMAGE_USAGE_STORAGE_BIT |
-      VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-      VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    {
-      auto isubmit_detail = ctxt.get_queue_rsc_idx(L_SUBMIT_TYPE_TRANSFER);
-      qfam_idx = ctxt.submit_details[isubmit_detail].qfam_idx;
-    }
-  }
-  if (img_cfg.usage & L_IMAGE_USAGE_ATTACHMENT_BIT) {
-    ici.usage =
-      VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-      VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-      VK_IMAGE_USAGE_SAMPLED_BIT |
-      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-      VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
-    {
-      auto isubmit_detail = ctxt.get_queue_rsc_idx(L_SUBMIT_TYPE_GRAPHICS);
-      qfam_idx = ctxt.submit_details[isubmit_detail].qfam_idx;
-    }
-  }
+  ici.tiling = is_staging_img ?
+    VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL;
+  ici.usage = usage;
   ici.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
   ici.initialLayout = layout;
 
@@ -585,27 +647,31 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
 
   VK_ASSERT << vkBindImageMemory(ctxt.dev, img, devmem, 0);
 
-  VkImageViewCreateInfo ivci {};
-  ivci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-  ivci.image = img;
-  ivci.viewType = VK_IMAGE_VIEW_TYPE_2D;
-  ivci.format = fmt;
-  ivci.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-  ivci.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-  ivci.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-  ivci.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-  ivci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  ivci.subresourceRange.baseArrayLayer = 0;
-  ivci.subresourceRange.layerCount = 1;
-  ivci.subresourceRange.baseMipLevel = 0;
-  ivci.subresourceRange.levelCount = 1;
+  VkImageView img_view = VK_NULL_HANDLE;
+  if (!is_staging_img) {
+    VkImageViewCreateInfo ivci {};
+    ivci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    ivci.image = img;
+    ivci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    ivci.format = fmt;
+    ivci.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+    ivci.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+    ivci.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+    ivci.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+    ivci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    ivci.subresourceRange.baseArrayLayer = 0;
+    ivci.subresourceRange.layerCount = 1;
+    ivci.subresourceRange.baseMipLevel = 0;
+    ivci.subresourceRange.levelCount = 1;
 
-  VkImageView img_view;
-  VK_ASSERT << vkCreateImageView(ctxt.dev, &ivci, nullptr, &img_view);
+    VK_ASSERT << vkCreateImageView(ctxt.dev, &ivci, nullptr, &img_view);
+  }
 
   liong::log::info("created image '", img_cfg.label, "'");
+  uint32_t qfam_idx = ctxt.get_submit_ty_qfam_idx(init_submit_ty);
   return Image {
-    &ctxt, devmem, mr.size, img, img_view, layout, qfam_idx, img_cfg
+    &ctxt, devmem, mr.size, img, img_view, layout, qfam_idx, img_cfg,
+    is_staging_img
   };
 }
 void destroy_img(Image& img) {

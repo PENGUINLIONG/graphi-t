@@ -68,6 +68,10 @@ struct Context {
     assert(i < submit_details.size(), "unsupported submit type");
     return submit_details[i];
   }
+  inline uint32_t get_submit_ty_qfam_idx(SubmitType submit_ty) const {
+    auto isubmit_detail = get_queue_rsc_idx(submit_ty);
+    return submit_details[isubmit_detail].qfam_idx;
+  }
 };
 
 struct Buffer {
@@ -89,6 +93,7 @@ struct Image {
   VkImageView img_view;
   ImageSyncState sync_state;
   ImageConfig img_cfg;
+  bool is_staging_img;
 };
 
 struct WorkgroupSizeSpecializationDetail {
