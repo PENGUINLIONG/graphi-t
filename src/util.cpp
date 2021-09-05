@@ -1,5 +1,7 @@
 #include "util.hpp"
 #include "assert.hpp"
+#include <chrono>
+#include <thread>
 
 namespace liong {
 
@@ -83,6 +85,10 @@ void save_bmp(
     packed_pxs[i] = (r << 0) | (g << 8) | (b << 16) | (a << 24);
   }
   save_bmp(packed_pxs.data(), w, h, path);
+}
+
+void sleep_for_us(uint64_t t) {
+  std::this_thread::sleep_for(std::chrono::microseconds(t));
 }
 
 } // namespace util

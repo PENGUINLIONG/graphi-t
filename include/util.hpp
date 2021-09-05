@@ -143,6 +143,8 @@ std::vector<U> map(const std::vector<T>& xs, const std::function<U(const T&)>& f
   return out;
 }
 
+void sleep_for_us(uint64_t t);
+
 } // namespace util
 
 } // namespace liong
