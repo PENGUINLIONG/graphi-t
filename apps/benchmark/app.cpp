@@ -1,6 +1,8 @@
 #include "log.hpp"
 #include "vk.hpp"
 #include "glslang.hpp"
+#include "json.hpp"
+#include "args.hpp"
 
 using namespace liong;
 using namespace vk;
@@ -26,6 +28,72 @@ void log_cb(liong::log::LogLevel lv, const std::string& msg) {
 }
 
 } // namespace
+
+struct AppConfig {
+  std::string frag_src;
+  std::string frag_entry_name;
+  uint32_t frag_nin;
+
+  uint32_t width;
+  uint32_t height;
+
+  uint32_t nrepeat = 10;
+} CFG;
+
+void initialize(int argc, const char** argv) {
+  using namespace liong::args;
+
+  std::string cfg_json_path = "./cfg.json";
+  init_arg_parse("Benchmark", "Measure shader execution time on GPU.");
+  args::reg_arg<StringParser>("", "--config", cfg_json_path,
+    "Path to configuration json file. If the specified file doesn't exists, a "
+    "template json will be emitted. (Default=./cfg.json)");
+  args::reg_arg<UintParser>("-n", "--nrepeat", CFG.nrepeat,
+    "Number of times to repeat execution and timing, the final output will be "
+    "the average of all timing iterations (Default=10)");
+  parse_args(argc, argv);
+
+  liong::assert(!cfg_json_path.empty(), "configuration json must be specified");
+
+  std::string cfg_json_txt;
+  try {
+    cfg_json_txt = liong::util::load_text(cfg_json_path.c_str());
+  } catch (...) {
+    json::JsonValue cfg_json = json::JsonObject {
+      { "FragmentShader", json::JsonObject {
+          { "HlslSource", json::JsonValue(R"(
+float4 DummyFactor;
+half4 frag(in float4 InColor: TEXCOORD0) : SV_TARGET {
+  return half4(1, 0, 1, 1) + DummyFactor;
+}
+            )")
+          },
+          { "EntryPointName", json::JsonValue("frag") },
+          { "InputCount", json::JsonValue(1), },
+        },
+      },
+      { "Framebuffer", json::JsonObject {
+          { "Width", json::JsonValue(256) },
+          { "Height", json::JsonValue(256) },
+        },
+      },
+    };
+    cfg_json_txt = json::print(cfg_json);
+    liong::util::save_text(cfg_json_path.c_str(), cfg_json_txt);
+  }
+  liong::json::JsonValue cfg_json = liong::json::parse(cfg_json_txt);
+  liong::json::JsonValue frag_cfg_json = cfg_json["FragmentShader"];
+  CFG.frag_src = (std::string)frag_cfg_json["HlslSource"];
+  CFG.frag_entry_name = (std::string)frag_cfg_json["EntryPointName"];
+  CFG.frag_nin = frag_cfg_json["InputCount"];
+  liong::json::JsonValue framebuf_cfg_json = cfg_json["Framebuffer"];
+  CFG.width = framebuf_cfg_json["Width"];
+  CFG.height = framebuf_cfg_json["Height"];
+
+  vk::initialize();
+  glslang::initialize();
+}
+
 
 
 
@@ -93,30 +161,30 @@ void dbg_dump_spv_art(
 
 
 void guarded_main() {
-  vk::initialize();
-  glslang::initialize();
-
   dbg_enum_dev_descs();
 
-  std::string vert_glsl = R"(
+  std::string vert_hlsl = liong::util::format(R"(
     void vert(
-      in float4 InPosition: ATTRIBUTE0,
-      out float4 OutColor: TEXCOORD0,
+      in float4 InPosition: ATTRIBUTE0,)", []{
+        std::stringstream ss;
+        for (auto i = 0; i < CFG.frag_nin; ++i) {
+          ss << "out float4 " << "TexCoord" << i << ": TEXCOORD" << i << ",";
+        }
+        return ss.str();
+      }(), R"(
       out float4 OutPosition: SV_POSITION
     ) {
-      OutColor = float4(1.0f, 1.0f, 0.0f, 1.0f);
-      OutPosition = float4(InPosition.xy, 0.0f, 1.0f);
+      OutPosition = float4(InPosition.xy, 0.0f, 1.0f);)", []{
+        std::stringstream ss;
+        for (auto i = 0; i < CFG.frag_nin; ++i) {
+          ss << "TexCoord" << i << " = OutPosition;";
+        }
+        return ss.str();
+      }(), R"(
     }
-    float4 ColorMultiplier;
-
-    half4 frag(
-      in float4 InColor: TEXCOORD
-    ) : SV_TARGET {
-      return half4(1, 0, 1, 1) + ColorMultiplier;
-    }
-  )";
-  glslang::GraphicsSpirvArtifact art =
-    glslang::compile_graph_hlsl(vert_glsl, "vert", vert_glsl, "frag");
+  )");
+  glslang::GraphicsSpirvArtifact art = glslang::compile_graph_hlsl(vert_hlsl,
+    "vert", CFG.frag_src, CFG.frag_entry_name);
   dbg_dump_spv_art("out", art);
 
   scoped::Context ctxt("ctxt", 0);
@@ -127,6 +195,7 @@ void guarded_main() {
   scoped::Task task = ctxt.create_graph_task("graph_task", "main", art.vert_spv,
     "main", art.frag_spv, L_TOPOLOGY_TRIANGLE, rsc_tys);
 
+  // 16 is just a random non-zero number.
   scoped::Buffer ubo = ctxt.create_uniform_buf("ubo",
     std::max(art.ubo_size, (size_t)16));
 
@@ -157,47 +226,56 @@ void guarded_main() {
     std::memcpy(idxs_data, data, sizeof(data));
   }
 
+  auto bench = [&] {
+    scoped::Image out_img = ctxt.create_attm_img("attm", CFG.height, CFG.width,
+      L_FORMAT_R32G32B32A32_SFLOAT);
 
-  constexpr uint32_t FRAMEBUF_NCOL = 4;
-  constexpr uint32_t FRAMEBUF_NROW = 4;
+    scoped::Framebuffer framebuf = task.create_framebuf(out_img);
 
-  scoped::Image out_img = ctxt.create_attm_img("attm", 4, 4,
-    L_FORMAT_R32G32B32A32_SFLOAT);
+    scoped::Buffer out_buf = ctxt.create_staging_buf("out_buf",
+      CFG.width * CFG.height * 4 * sizeof(float));
 
-  scoped::Framebuffer framebuf = task.create_framebuf(out_img);
+    scoped::Timestamp tic = ctxt.create_timestamp();
+    scoped::Timestamp toc = ctxt.create_timestamp();
 
-  scoped::Buffer out_buf = ctxt.create_staging_buf("out_buf",
-    FRAMEBUF_NCOL * FRAMEBUF_NROW * 4 * sizeof(float));
+    std::vector<Command> cmds {
+      cmd_set_submit_ty(L_SUBMIT_TYPE_GRAPHICS),
+      cmd_write_timestamp(tic),
+      cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 6, 1, framebuf),
+      cmd_write_timestamp(toc),
+      cmd_copy_img2buf(out_img.view(), out_buf.view()),
+    };
 
-  scoped::Timestamp tic = ctxt.create_timestamp();
-  scoped::Timestamp toc = ctxt.create_timestamp();
+    scoped::CommandDrain cmd_drain = ctxt.create_cmd_drain();
+    cmd_drain.submit(cmds);
+    cmd_drain.wait();
 
-  std::vector<Command> cmds {
-    cmd_set_submit_ty(L_SUBMIT_TYPE_GRAPHICS),
-    cmd_write_timestamp(tic),
-    cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 6, 1, framebuf),
-    cmd_write_timestamp(toc),
-    cmd_copy_img2buf(out_img.view(), out_buf.view()),
+    double dt = toc.get_result_us() - tic.get_result_us();
+    liong::log::warn("drawing took ", dt, "us");
+
+    // Dump output image.
+    {
+      scoped::MappedBuffer mapped = out_buf.map(L_MEMORY_ACCESS_READ_ONLY);
+      const float* out_data = (const float*)mapped;
+      liong::util::save_bmp(out_data, CFG.width, CFG.height, "out_img.bmp");
+    }
+
+    return dt;
   };
 
-  scoped::CommandDrain cmd_drain = ctxt.create_cmd_drain();
-  cmd_drain.submit(cmds);
-  cmd_drain.wait();
-
-  double dt = toc.get_result_us() - tic.get_result_us();
-  liong::log::warn("drawing took ", dt, "us");
-
-  {
-    scoped::MappedBuffer mapped = out_buf.map(L_MEMORY_ACCESS_READ_ONLY);
-    const float* out_data = (const float*)mapped;
-    liong::util::save_bmp(out_data, FRAMEBUF_NCOL, FRAMEBUF_NROW, "out_img.bmp");
+  double mean_dt = 0.0f;
+  for (auto i = 0; i < CFG.nrepeat; ++i) {
+    mean_dt += bench();
   }
+  mean_dt /= CFG.nrepeat;
+  liong::log::warn("drawing took ", mean_dt, "us (", CFG.nrepeat,
+    " times average)");
 }
 
-
-int main(int argc, char** argv) {
+int main(int argc, const char** argv) {
   liong::log::set_log_callback(log_cb);
   try {
+    initialize(argc, argv);
     guarded_main();
   } catch (const std::exception& e) {
     liong::log::error("application threw an exception");

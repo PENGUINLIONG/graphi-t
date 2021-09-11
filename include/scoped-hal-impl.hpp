@@ -374,7 +374,7 @@ Timestamp::Timestamp(
   create_timestamp(*ctxt.inner))) {}
 Timestamp::Timestamp(HAL_IMPL_NAMESPACE::Timestamp&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::Timestamp>(inner)) {}
-Timestamp::~Timestamp() { destroy_timestamp(*inner); }
+Timestamp::~Timestamp() { if (inner) { destroy_timestamp(*inner); } }
 
 
 

@@ -36,6 +36,12 @@ void save_file(const char* path, const void* data, size_t size) {
   f.write((const char*)data, size);
   f.close();
 }
+void save_text(const char* path, const std::string& txt) {
+  std::ofstream f(path, std::ios::trunc | std::ios::out);
+  assert(f.is_open(), "unable to open file: ", path);
+  f.write(txt.c_str(), txt.size());
+  f.close();
+}
 
 // Save an array of 8-bit unsigned int colors with RGBA channels packed from LSB
 // to MSB in a 32-bit unsigned int into a bitmap file.

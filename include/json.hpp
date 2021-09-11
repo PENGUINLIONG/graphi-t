@@ -101,6 +101,14 @@ struct JsonValue {
   JsonValue(JsonObject&& obj);
   JsonValue(JsonArray&& arr);
 
+  inline JsonValue& operator[](const char* key) {
+    if (!is_obj()) { throw JsonException("value is not an object"); }
+    return obj.at(key);
+  }
+  inline const JsonValue& operator[](const char* key) const {
+    if (!is_obj()) { throw JsonException("value is not an object"); }
+    return obj.at(key);
+  }
   inline JsonValue& operator[](const std::string& key) {
     if (!is_obj()) { throw JsonException("value is not an object"); }
     return obj.at(key);
@@ -117,35 +125,35 @@ struct JsonValue {
     if (!is_arr()) { throw JsonException("value is not an array"); }
     return arr.at(i);
   }
-  explicit inline operator bool() const {
+  inline operator bool() const {
     if (!is_bool()) { throw JsonException("value is not a bool"); }
     return b;
   }
-  explicit inline operator double() const {
+  inline operator double() const {
     if (!is_num()) { throw JsonException("value is not a number"); }
     return num;
   }
-  explicit inline operator float() const {
+  inline operator float() const {
     if (!is_num()) { throw JsonException("value is not a number"); }
     return (float)num;
   }
-  explicit inline operator int() const {
+  inline operator int() const {
     if (!is_num()) { throw JsonException("value is not a number"); }
     return (int)num;
   }
-  explicit inline operator unsigned int() const {
+  inline operator unsigned int() const {
     if (!is_num()) { throw JsonException("value is not a number"); }
     return (unsigned int)num;
   }
-  explicit inline operator long() const {
+  inline operator long() const {
     if (!is_num()) { throw JsonException("value is not a number"); }
     return (long)num;
   }
-  explicit inline operator unsigned long() const {
+  inline operator unsigned long() const {
     if (!is_num()) { throw JsonException("value is not a number"); }
     return (unsigned long)num;
   }
-  explicit inline operator std::string() const {
+  inline operator std::string() const {
     if (!is_str()) { throw JsonException("value is not a string"); }
     return str;
   }

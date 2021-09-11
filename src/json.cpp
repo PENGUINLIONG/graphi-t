@@ -303,6 +303,9 @@ bool try_parse_impl(
 
 
 JsonValue parse(const std::string& json_lit) {
+  if (json_lit.empty()) {
+    throw JsonException("json text is empty");
+  }
   JsonValue rv;
   Tokenizer tokenizer(json_lit);
   if (!try_parse_impl(tokenizer, rv)) {
