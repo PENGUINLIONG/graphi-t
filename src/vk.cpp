@@ -1632,7 +1632,7 @@ void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
       liong::log::info("scheduled graphics task '", in.task->label,
         "' for execution");
     }
-  } else {
+  } else if (cmd.cmd_ty == L_COMMAND_TYPE_DRAW_INDEXED) {
     const auto& in = cmd.cmd_draw_indexed;
 
     vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts->buf->buf, &in.verts->offset);
@@ -1644,6 +1644,8 @@ void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
       liong::log::info("scheduled graphics task '", in.task->label,
         "' for execution");
     }
+  } else {
+    liong::panic("unexpected command type ", cmd.cmd_ty);
   }
 
   // TODO: (penguinliong) Move this to a specialized command.
@@ -1714,7 +1716,7 @@ CommandDrain create_cmd_drain(const Context& ctxt) {
   auto fence = _create_fence(ctxt);
   auto cmd_pools = _collect_cmd_pools(ctxt);
   liong::log::info("created command drain");
-  return CommandDrain { &ctxt, std::move(cmd_pools), {}, fence };
+  return CommandDrain { &ctxt, std::move(cmd_pools), {}, fence, {}, {} };
 }
 void destroy_cmd_drain(CommandDrain& cmd_drain) {
   for (auto cmd_pool : cmd_drain.cmd_pools) {

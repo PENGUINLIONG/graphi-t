@@ -38,6 +38,7 @@ struct AppConfig {
   uint32_t height;
 
   uint32_t nrepeat = 10;
+  bool dump_framebuf = true;
 } CFG;
 
 void initialize(int argc, const char** argv) {
@@ -51,6 +52,8 @@ void initialize(int argc, const char** argv) {
   args::reg_arg<UintParser>("-n", "--nrepeat", CFG.nrepeat,
     "Number of times to repeat execution and timing, the final output will be "
     "the average of all timing iterations (Default=10)");
+  args::reg_arg<SwitchParser>("", "--dump-framebuf", CFG.dump_framebuf,
+    "Dump framebuffer content to image file.");
   parse_args(argc, argv);
 
   liong::assert(!cfg_json_path.empty(), "configuration json must be specified");
@@ -188,6 +191,9 @@ void guarded_main() {
   dbg_dump_spv_art("out", art);
 
   scoped::Context ctxt("ctxt", 0);
+  // DO NOT create command drain after command vector declaration. That leads to
+  //segfault. (??? WTF)
+  scoped::CommandDrain cmd_drain = ctxt.create_cmd_drain();
 
   std::vector<ResourceType> rsc_tys {
     L_RESOURCE_TYPE_UNIFORM_BUFFER,
@@ -202,7 +208,7 @@ void guarded_main() {
   scoped::ResourcePool rsc_pool = task.create_rsc_pool();
   rsc_pool.bind(0, ubo.view());
 
-  scoped::Buffer verts = ctxt.create_vert_buf("verts", 4 * 4 * sizeof(float));
+  scoped::Buffer verts = ctxt.create_vert_buf("verts", 16 * sizeof(float));
   {
     float data[16] {
        1, -1, 0, 1,
@@ -215,7 +221,7 @@ void guarded_main() {
     std::memcpy(verts_data, data, sizeof(data));
   }
 
-  scoped::Buffer idxs = ctxt.create_idx_buf("idxs", 6 * 4 * sizeof(uint16_t));
+  scoped::Buffer idxs = ctxt.create_idx_buf("idxs", 6 * sizeof(uint16_t));
   {
     uint16_t data[6] {
       0, 1, 2,
@@ -226,7 +232,8 @@ void guarded_main() {
     std::memcpy(idxs_data, data, sizeof(data));
   }
 
-  auto bench = [&] {
+
+  auto bench = [&](bool dump_framebuf) {
     scoped::Image out_img = ctxt.create_attm_img("attm", CFG.height, CFG.width,
       L_FORMAT_R32G32B32A32_SFLOAT);
 
@@ -246,7 +253,6 @@ void guarded_main() {
       cmd_copy_img2buf(out_img.view(), out_buf.view()),
     };
 
-    scoped::CommandDrain cmd_drain = ctxt.create_cmd_drain();
     cmd_drain.submit(cmds);
     cmd_drain.wait();
 
@@ -263,9 +269,13 @@ void guarded_main() {
     return dt;
   };
 
+
+  bench(CFG.dump_framebuf);
+  bench(false);
+
   double mean_dt = 0.0f;
   for (auto i = 0; i < CFG.nrepeat; ++i) {
-    mean_dt += bench();
+    mean_dt += bench(false);
   }
   mean_dt /= CFG.nrepeat;
   liong::log::warn("drawing took ", mean_dt, "us (", CFG.nrepeat,
