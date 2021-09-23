@@ -659,8 +659,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   liong::log::info("created image '", img_cfg.label, "'");
   uint32_t qfam_idx = ctxt.get_submit_ty_qfam_idx(init_submit_ty);
   return Image {
-    &ctxt, devmem, mr.size, img, img_view, layout, qfam_idx, img_cfg,
-    is_staging_img
+    &ctxt, devmem, mr.size, img, img_view, img_cfg, is_staging_img
   };
 }
 void destroy_img(Image& img) {
@@ -1537,43 +1536,6 @@ void _record_cmd_dispatch(TransactionLike& transact, const Command& cmd) {
   }
 }
 
-void _apply_img_barrier(TransactionLike& transact, const Image& img) {
-  const auto& cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
-
-  VkImageLayout src_layout = img.sync_state.layout;
-  VkImageLayout dst_layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-  uint32_t src_qfam_idx = img.sync_state.qfam_idx;
-  uint32_t dst_qfam_idx = transact.submit_details.back().qfam_idx;
-
-  VkImageMemoryBarrier imb {};
-  imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  imb.image = img.img;
-  imb.srcAccessMask = 0;
-  imb.dstAccessMask = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-  imb.oldLayout = src_layout;
-  imb.newLayout = dst_layout;
-  imb.srcQueueFamilyIndex = src_qfam_idx;
-  imb.dstQueueFamilyIndex = dst_qfam_idx;
-  imb.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  imb.subresourceRange.baseArrayLayer = 0;
-  imb.subresourceRange.layerCount = 1;
-  imb.subresourceRange.baseMipLevel = 0;
-  imb.subresourceRange.levelCount = 1;
-
-  vkCmdPipelineBarrier(cmdbuf,
-    VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
-    VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
-    0,
-    0, nullptr,
-    0, nullptr,
-    1, &imb);
-
-  {
-    Image& img_mut = *((Image*)(const Image*)&img);
-    img_mut.sync_state.layout = dst_layout;
-    img_mut.sync_state.qfam_idx = dst_qfam_idx;
-  }
-}
 
 void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
   const auto& task = cmd.cmd_ty == L_COMMAND_TYPE_DRAW ?
@@ -1586,8 +1548,6 @@ void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
 
   // TODO: (penguinliong) Move this to a specialized command.
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    _apply_img_barrier(transact, *framebuf.img);
-
     VkRenderPassBeginInfo rpbi {};
     rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     rpbi.renderPass = task.pass;
@@ -1669,6 +1629,310 @@ void _record_cmd_write_timestamp(
   }
 }
 
+
+
+
+
+
+
+
+
+
+
+
+
+void _make_buf_barrier_params(
+  BufferUsage usage,
+  MemoryAccess dev_access,
+  VkAccessFlags& access,
+  VkPipelineStageFlags stage
+) {
+  if (dev_access == L_MEMORY_ACCESS_NONE) { return; }
+
+  if (usage == L_BUFFER_USAGE_STAGING_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      // Transfer source.
+      access = VK_ACCESS_TRANSFER_READ_BIT;
+      stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    } else if (dev_access == L_MEMORY_ACCESS_WRITE_ONLY) {
+      // Transfer destination.
+      access = VK_ACCESS_TRANSFER_WRITE_BIT;
+      stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    } else {
+      return;
+    }
+  } else if (usage == L_BUFFER_USAGE_VERTEX_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      access = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+      stage = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+    } else {
+      return;
+    }
+  } else if (usage == L_BUFFER_USAGE_INDEX_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      access = VK_ACCESS_INDEX_READ_BIT;
+      stage = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+    } else {
+      return;
+    }
+  } else if (usage == L_BUFFER_USAGE_UNIFORM_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      access = VK_ACCESS_UNIFORM_READ_BIT;
+      stage =
+        VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    } else {
+      return;
+    }
+  } else if (usage == L_BUFFER_USAGE_STORAGE_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      access = VK_ACCESS_SHADER_READ_BIT;
+      stage =
+        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    } else if (dev_access == L_MEMORY_ACCESS_WRITE_BIT) {
+      access = VK_ACCESS_SHADER_WRITE_BIT;
+      stage =
+        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    } else {
+      access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+      stage =
+        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    }
+  }
+}
+
+void _make_img_barrier_src_params(
+  ImageUsage usage,
+  MemoryAccess dev_access,
+  VkAccessFlags& access,
+  VkPipelineStageFlags& stage,
+  VkImageLayout& layout
+) {
+  if (dev_access == L_MEMORY_ACCESS_NONE) { return; }
+
+  if (usage == L_IMAGE_USAGE_STAGING_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      // Transfer source.
+      access = VK_ACCESS_TRANSFER_READ_BIT;
+      stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+      layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    } else if (dev_access == L_MEMORY_ACCESS_WRITE_ONLY) {
+      // Transfer destination.
+      access = VK_ACCESS_TRANSFER_WRITE_BIT;
+      stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+      layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    } else {
+      return;
+    }
+  } else if (usage == L_IMAGE_USAGE_ATTACHMENT_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      // Input attachment.
+      access = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+      stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+      layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    } else {
+      // Fragment output.
+      access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; // Note: This is different.
+      stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+      layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    }
+  } else if (usage == L_IMAGE_USAGE_SAMPLED_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      // Sampled image.
+      access = VK_ACCESS_SHADER_READ_BIT;
+      stage =
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+      layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    } else {
+      return;
+    }
+  } else if (usage == L_IMAGE_USAGE_STORAGE_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      // Read-only storage image.
+      access = VK_ACCESS_SHADER_READ_BIT;
+      stage =
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+      layout = VK_IMAGE_LAYOUT_GENERAL;
+    } else if (dev_access == L_MEMORY_ACCESS_WRITE_ONLY) {
+      // Write-only storage image.
+      access = VK_ACCESS_SHADER_WRITE_BIT;
+      stage =
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+      layout = VK_IMAGE_LAYOUT_GENERAL;
+    } else {
+      // Read-write storage image.
+      access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+      stage =
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+      layout = VK_IMAGE_LAYOUT_GENERAL;
+    }
+  }
+}
+void _make_img_barrier_dst_params(
+  ImageUsage usage,
+  MemoryAccess dev_access,
+  VkAccessFlags& access,
+  VkPipelineStageFlags& stage,
+  VkImageLayout& layout
+) {
+  if (dev_access == L_MEMORY_ACCESS_NONE) { return; }
+
+  if (usage == L_IMAGE_USAGE_STAGING_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      // Transfer source.
+      access = VK_ACCESS_TRANSFER_READ_BIT;
+      stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+      layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    } else if (dev_access == L_MEMORY_ACCESS_WRITE_ONLY) {
+      // Transfer destination.
+      access = VK_ACCESS_TRANSFER_WRITE_BIT;
+      stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+      layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    } else {
+      return;
+    }
+  } else if (usage == L_IMAGE_USAGE_ATTACHMENT_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      // Input attachment.
+      access = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+      stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+      layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    } else {
+      // Fragment output.
+      access = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
+      stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+      layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    }
+  } else if (usage == L_IMAGE_USAGE_SAMPLED_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      // Sampled image.
+      access = VK_ACCESS_SHADER_READ_BIT;
+      stage =
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+      layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    } else {
+      return;
+    }
+  } else if (usage == L_IMAGE_USAGE_STORAGE_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      // Read-only storage image.
+      access = VK_ACCESS_SHADER_READ_BIT;
+      stage =
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+      layout = VK_IMAGE_LAYOUT_GENERAL;
+    } else if (dev_access == L_MEMORY_ACCESS_WRITE_ONLY) {
+      // Write-only storage image.
+      access = VK_ACCESS_SHADER_WRITE_BIT;
+      stage =
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+      layout = VK_IMAGE_LAYOUT_GENERAL;
+    } else {
+      // Read-write storage image.
+      access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+      stage =
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+      layout = VK_IMAGE_LAYOUT_GENERAL;
+    }
+  }
+}
+void _record_cmd_buf_barrier(
+  TransactionLike& transact,
+  const Command& cmd
+) {
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
+
+  BufferUsage src_usage = cmd.cmd_buf_barrier.src_usage;
+  BufferUsage dst_usage = cmd.cmd_buf_barrier.dst_usage;
+  MemoryAccess src_dev_access = cmd.cmd_buf_barrier.src_dev_access;
+  MemoryAccess dst_dev_access = cmd.cmd_buf_barrier.dst_dev_access;
+
+  VkAccessFlags src_access = 0;
+  VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+  _make_buf_barrier_params(src_usage, src_dev_access, src_access, src_stage);
+
+  VkAccessFlags dst_access = 0;
+  VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+  _make_buf_barrier_params(dst_usage, dst_dev_access, dst_access, dst_stage);
+
+  VkBufferMemoryBarrier bmb {};
+  bmb.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+  bmb.buffer = cmd.cmd_buf_barrier.buf->buf;
+  bmb.srcAccessMask = src_access;
+  bmb.dstAccessMask = dst_access;
+  bmb.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  bmb.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  bmb.offset = 0;
+  bmb.size = VK_WHOLE_SIZE;
+
+  vkCmdPipelineBarrier(
+    cmdbuf,
+    src_stage,
+    dst_stage,
+    0,
+    0, nullptr,
+    1, &bmb,
+    0, nullptr);
+}
+void _record_cmd_img_barrier(
+  TransactionLike& transact,
+  const Command& cmd
+) {
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
+
+  ImageUsage src_usage = cmd.cmd_img_barrier.src_usage;
+  ImageUsage dst_usage = cmd.cmd_img_barrier.dst_usage;
+  MemoryAccess src_dev_access = cmd.cmd_img_barrier.src_dev_access;
+  MemoryAccess dst_dev_access = cmd.cmd_img_barrier.dst_dev_access;
+
+  VkAccessFlags src_access = 0;
+  VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+  VkImageLayout src_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  _make_img_barrier_src_params(src_usage, src_dev_access,
+    src_access, src_stage, src_layout);
+
+  VkAccessFlags dst_access = 0;
+  VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+  VkImageLayout dst_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  _make_img_barrier_dst_params(dst_usage, dst_dev_access,
+    dst_access, dst_stage, dst_layout);
+
+  VkImageMemoryBarrier imb {};
+  imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  imb.image = cmd.cmd_img_barrier.img->img;
+  imb.srcAccessMask = src_access;
+  imb.dstAccessMask = dst_access;
+  imb.oldLayout = src_layout;
+  imb.newLayout = dst_layout;
+  imb.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  imb.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  imb.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  imb.subresourceRange.baseArrayLayer = 0;
+  imb.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+  imb.subresourceRange.baseMipLevel = 0;
+  imb.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+
+  vkCmdPipelineBarrier(
+    cmdbuf,
+    src_stage,
+    dst_stage,
+    0,
+    0, nullptr,
+    0, nullptr,
+    1, &imb);
+}
+
 // Returns whether the submit queue to submit has changed.
 void _record_cmd(TransactionLike& transact, const Command& cmd) {
   switch (cmd.cmd_ty) {
@@ -1703,6 +1967,12 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
     break;
   case L_COMMAND_TYPE_WRITE_TIMESTAMP:
     _record_cmd_write_timestamp(transact, cmd);
+    break;
+  case L_COMMAND_TYPE_BUFFER_BARRIER:
+    _record_cmd_buf_barrier(transact, cmd);
+    break;
+  case L_COMMAND_TYPE_IMAGE_BARRIER:
+    _record_cmd_img_barrier(transact, cmd);
     break;
   default:
     liong::log::warn("ignored unknown command: ", cmd.cmd_ty);
