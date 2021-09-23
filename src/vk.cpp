@@ -1259,6 +1259,68 @@ VkCommandBuffer _alloc_cmdbuf(
 
 
 
+struct ImageTrackState {
+  VkImage img;
+  uint32_t qfam_idx;
+  VkPipelineStageFlags stage;
+  VkAccessFlags access;
+  VkImageLayout layout;
+
+  ImageTrackState(const Image& img) : img(img.img),
+    qfam_idx(VK_QUEUE_FAMILY_IGNORED), stage(0), access(0),
+    layout(img.sync_state.layout) {}
+};
+struct BufferTrackState {
+  VkBuffer buf;
+  uint32_t qfam_idx;
+  VkPipelineStageFlags stage;
+  VkAccessFlags access;
+  BufferTrackState(const Buffer& buf) : buf(buf.buf),
+    qfam_idx(VK_QUEUE_FAMILY_IGNORED), stage(0), access(0) {}
+};
+struct ResourceTrackState {
+  uint32_t cur_qfam_idx;
+  std::map<VkImage, ImageTrackState> img_track_states;
+  std::map<VkBuffer, BufferTrackState> buf_track_states;
+
+  void set_qfam_idx(uint32_t qfam_idx) {
+    cur_qfam_idx = qfam_idx;
+  }
+
+  ImageTrackState& track_img(const Image& img) {
+    auto it = img_track_states.find(img.img);
+    if (it == img_track_states.end()) {
+      img_track_states.emplace(img);
+    }
+    return img_track_states[img.img];
+  }
+  BufferTrackState& track_buf(const Buffer& buf) {
+    auto it = buf_track_states.find(buf.buf);
+    if (it == buf_track_states.end()) {
+      buf_track_states.emplace(buf);
+    }
+    return buf_track_states[buf.buf];
+  }
+
+  void trans_vert_buf(const Buffer& buf) {
+    auto& track_state = track_buf(buf);
+    track_state.access = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+    track_state.qfam_idx = cur_qfam_idx;
+    track_state.stage = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+  }
+  void trans_idx_buf(const Buffer& buf) {
+    auto& track_state = track_buf(buf);
+    track_state.access = VK_ACCESS_INDEX_READ_BIT;
+    track_state.qfam_idx = cur_qfam_idx;
+    track_state.stage = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+  }
+  void trans_(const Buffer& buf) {
+
+  }
+};
+
+
+
 struct TransactionLike {
   const Context* ctxt;
   std::array<VkCommandPool, 2> cmd_pools;
