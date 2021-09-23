@@ -1641,7 +1641,69 @@ void _record_cmd_write_timestamp(
 
 
 
+void _make_buf_barrier_params(
+  BufferUsage usage,
+  MemoryAccess dev_access,
+  VkAccessFlags& access,
+  VkPipelineStageFlags stage
+) {
+  if (dev_access == L_MEMORY_ACCESS_NONE) { return; }
 
+  if (usage == L_BUFFER_USAGE_STAGING_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      // Transfer source.
+      access = VK_ACCESS_TRANSFER_READ_BIT;
+      stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    } else if (dev_access == L_MEMORY_ACCESS_WRITE_ONLY) {
+      // Transfer destination.
+      access = VK_ACCESS_TRANSFER_WRITE_BIT;
+      stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    } else {
+      return;
+    }
+  } else if (usage == L_BUFFER_USAGE_VERTEX_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      access = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+      stage = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+    } else {
+      return;
+    }
+  } else if (usage == L_BUFFER_USAGE_INDEX_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      access = VK_ACCESS_INDEX_READ_BIT;
+      stage = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+    } else {
+      return;
+    }
+  } else if (usage == L_BUFFER_USAGE_UNIFORM_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      access = VK_ACCESS_UNIFORM_READ_BIT;
+      stage =
+        VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    } else {
+      return;
+    }
+  } else if (usage == L_BUFFER_USAGE_STORAGE_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      access = VK_ACCESS_SHADER_READ_BIT;
+      stage =
+        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    } else if (dev_access == L_MEMORY_ACCESS_WRITE_BIT) {
+      access = VK_ACCESS_SHADER_WRITE_BIT;
+      stage =
+        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    } else {
+      access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+      stage =
+        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
+        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    }
+  }
+}
 
 void _make_img_barrier_src_params(
   ImageUsage usage,
@@ -1663,6 +1725,8 @@ void _make_img_barrier_src_params(
       access = VK_ACCESS_TRANSFER_WRITE_BIT;
       stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
       layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    } else {
+      return;
     }
   } else if (usage == L_IMAGE_USAGE_ATTACHMENT_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
@@ -1731,6 +1795,8 @@ void _make_img_barrier_dst_params(
       access = VK_ACCESS_TRANSFER_WRITE_BIT;
       stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
       layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    } else {
+      return;
     }
   } else if (usage == L_IMAGE_USAGE_ATTACHMENT_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
@@ -1778,6 +1844,44 @@ void _make_img_barrier_dst_params(
       layout = VK_IMAGE_LAYOUT_GENERAL;
     }
   }
+}
+void _record_cmd_buf_barrier(
+  TransactionLike& transact,
+  const Command& cmd
+) {
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
+
+  BufferUsage src_usage = cmd.cmd_buf_barrier.src_usage;
+  BufferUsage dst_usage = cmd.cmd_buf_barrier.dst_usage;
+  MemoryAccess src_dev_access = cmd.cmd_buf_barrier.src_dev_access;
+  MemoryAccess dst_dev_access = cmd.cmd_buf_barrier.dst_dev_access;
+
+  VkAccessFlags src_access = 0;
+  VkPipelineStageFlags src_stage = 0;
+  _make_buf_barrier_params(src_usage, src_dev_access, src_access, src_stage);
+
+  VkAccessFlags dst_access = 0;
+  VkPipelineStageFlags dst_stage = 0;
+  _make_buf_barrier_params(dst_usage, dst_dev_access, dst_access, dst_stage);
+
+  VkBufferMemoryBarrier bmb {};
+  bmb.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+  bmb.buffer = cmd.cmd_buf_barrier.buf->buf;
+  bmb.srcAccessMask = src_access;
+  bmb.dstAccessMask = dst_access;
+  bmb.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  bmb.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  bmb.offset = 0;
+  bmb.size = VK_WHOLE_SIZE;
+
+  vkCmdPipelineBarrier(
+    cmdbuf,
+    src_stage,
+    dst_stage,
+    0,
+    0, nullptr,
+    1, &bmb,
+    0, nullptr);
 }
 void _record_cmd_img_barrier(
   TransactionLike& transact,
@@ -1863,7 +1967,7 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
     _record_cmd_write_timestamp(transact, cmd);
     break;
   case L_COMMAND_TYPE_BUFFER_BARRIER:
-    unreachable("not implemented");
+    _record_cmd_buf_barrier(transact, cmd);
     break;
   case L_COMMAND_TYPE_IMAGE_BARRIER:
     _record_cmd_img_barrier(transact, cmd);
