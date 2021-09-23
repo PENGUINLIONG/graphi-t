@@ -431,6 +431,8 @@ enum CommandType {
   L_COMMAND_TYPE_DRAW,
   L_COMMAND_TYPE_DRAW_INDEXED,
   L_COMMAND_TYPE_WRITE_TIMESTAMP,
+  L_COMMAND_TYPE_BUFFER_BARRIER,
+  L_COMMAND_TYPE_IMAGE_BARRIER,
 };
 enum SubmitType {
   L_SUBMIT_TYPE_COMPUTE,
@@ -487,6 +489,20 @@ struct Command {
     struct {
       const Timestamp* timestamp;
     } cmd_write_timestamp;
+    struct {
+      const Buffer* buf;
+      MemoryAccess src_dev_access;
+      MemoryAccess dst_dev_access;
+      ImageUsage src_usage;
+      ImageUsage dst_usage;
+    } cmd_buf_barrier;
+    struct {
+      const Image* img;
+      MemoryAccess src_dev_access;
+      MemoryAccess dst_dev_access;
+      ImageUsage src_usage;
+      ImageUsage dst_usage;
+    } cmd_img_barrier;
   };
 };
 
@@ -596,6 +612,39 @@ inline Command cmd_set_submit_ty(SubmitType submit_ty) {
   Command cmd;
   cmd.cmd_ty = L_COMMAND_TYPE_SET_SUBMIT_TYPE;
   cmd.cmd_set_submit_ty.submit_ty = submit_ty;
+  return cmd;
+}
+
+inline Command cmd_buf_barrier(
+  const Buffer& buf,
+  BufferUsage src_usage,
+  BufferUsage dst_usage,
+  MemoryAccess src_dev_access,
+  MemoryAccess dst_dev_access
+) {
+  Command cmd;
+  cmd.cmd_ty = L_COMMAND_TYPE_BUFFER_BARRIER;
+  cmd.cmd_buf_barrier.buf = &buf;
+  cmd.cmd_buf_barrier.src_dev_access = src_dev_access;
+  cmd.cmd_buf_barrier.dst_dev_access = dst_dev_access;
+  cmd.cmd_buf_barrier.src_usage = src_usage;
+  cmd.cmd_buf_barrier.dst_usage = dst_usage;
+  return cmd;
+}
+inline Command cmd_img_barrier(
+  const Image& img,
+  ImageUsage src_usage,
+  ImageUsage dst_usage,
+  MemoryAccess src_dev_access,
+  MemoryAccess dst_dev_access
+) {
+  Command cmd;
+  cmd.cmd_ty = L_COMMAND_TYPE_IMAGE_BARRIER;
+  cmd.cmd_img_barrier.img = &img;
+  cmd.cmd_img_barrier.src_dev_access = src_dev_access;
+  cmd.cmd_img_barrier.dst_dev_access = dst_dev_access;
+  cmd.cmd_img_barrier.src_usage = src_usage;
+  cmd.cmd_img_barrier.dst_usage = dst_usage;
   return cmd;
 }
 

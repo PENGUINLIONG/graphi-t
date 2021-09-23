@@ -84,17 +84,12 @@ struct Buffer {
   BufferConfig buf_cfg;
 };
 
-struct ImageSyncState {
-  VkImageLayout layout;
-  uint32_t qfam_idx;
-};
 struct Image {
   const Context* ctxt; // Lifetime bound.
   VkDeviceMemory devmem;
   size_t devmem_size;
   VkImage img;
   VkImageView img_view;
-  ImageSyncState sync_state;
   ImageConfig img_cfg;
   bool is_staging_img;
 };

@@ -269,6 +269,11 @@ void guarded_main2() {
   std::vector<Command> cmds {
     cmd_set_submit_ty(L_SUBMIT_TYPE_GRAPHICS),
     cmd_write_timestamp(tic),
+    cmd_img_barrier(out_img,
+      L_IMAGE_USAGE_ATTACHMENT_BIT,
+      L_IMAGE_USAGE_ATTACHMENT_BIT,
+      L_MEMORY_ACCESS_NONE,
+      L_MEMORY_ACCESS_WRITE_ONLY),
     cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 3, 1, framebuf),
     cmd_write_timestamp(toc),
     cmd_copy_img2buf(out_img.view(), out_buf.view()),
