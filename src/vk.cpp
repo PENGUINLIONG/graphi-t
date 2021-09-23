@@ -1650,6 +1650,8 @@ void _make_img_barrier_src_params(
   VkPipelineStageFlags& stage,
   VkImageLayout& layout
 ) {
+  if (dev_access == L_MEMORY_ACCESS_NONE) { return; }
+
   if (usage == L_IMAGE_USAGE_STAGING_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
       // Transfer source.
@@ -1668,7 +1670,7 @@ void _make_img_barrier_src_params(
       access = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
       stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
       layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    } else if (dev_access == L_MEMORY_ACCESS_WRITE_ONLY) {
+    } else {
       // Fragment output.
       access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; // Note: This is different.
       stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -1682,6 +1684,8 @@ void _make_img_barrier_src_params(
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
       layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    } else {
+      return;
     }
   } else if (usage == L_IMAGE_USAGE_STORAGE_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
@@ -1698,7 +1702,7 @@ void _make_img_barrier_src_params(
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
       layout = VK_IMAGE_LAYOUT_GENERAL;
-    } else if (dev_access == L_MEMORY_ACCESS_READ_WRITE) {
+    } else {
       access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
       stage =
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
@@ -1714,6 +1718,8 @@ void _make_img_barrier_dst_params(
   VkPipelineStageFlags& stage,
   VkImageLayout& layout
 ) {
+  if (dev_access == L_MEMORY_ACCESS_NONE) { return; }
+
   if (usage == L_IMAGE_USAGE_STAGING_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
       // Transfer source.
@@ -1732,7 +1738,7 @@ void _make_img_barrier_dst_params(
       access = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
       stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
       layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    } else if (dev_access == L_MEMORY_ACCESS_WRITE_ONLY) {
+    } else {
       // Fragment output.
       access = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
       stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
@@ -1746,6 +1752,8 @@ void _make_img_barrier_dst_params(
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
       layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    } else {
+      return;
     }
   } else if (usage == L_IMAGE_USAGE_STORAGE_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
@@ -1762,7 +1770,7 @@ void _make_img_barrier_dst_params(
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
       layout = VK_IMAGE_LAYOUT_GENERAL;
-    } else if (dev_access == L_MEMORY_ACCESS_READ_WRITE) {
+    } else {
       access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
       stage =
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
