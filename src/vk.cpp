@@ -1767,6 +1767,7 @@ void _make_img_barrier_src_params(
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
       layout = VK_IMAGE_LAYOUT_GENERAL;
     } else {
+      // Read-write storage image.
       access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
       stage =
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
@@ -1837,6 +1838,7 @@ void _make_img_barrier_dst_params(
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
       layout = VK_IMAGE_LAYOUT_GENERAL;
     } else {
+      // Read-write storage image.
       access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
       stage =
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
@@ -1857,11 +1859,11 @@ void _record_cmd_buf_barrier(
   MemoryAccess dst_dev_access = cmd.cmd_buf_barrier.dst_dev_access;
 
   VkAccessFlags src_access = 0;
-  VkPipelineStageFlags src_stage = 0;
+  VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
   _make_buf_barrier_params(src_usage, src_dev_access, src_access, src_stage);
 
   VkAccessFlags dst_access = 0;
-  VkPipelineStageFlags dst_stage = 0;
+  VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
   _make_buf_barrier_params(dst_usage, dst_dev_access, dst_access, dst_stage);
 
   VkBufferMemoryBarrier bmb {};
@@ -1895,13 +1897,13 @@ void _record_cmd_img_barrier(
   MemoryAccess dst_dev_access = cmd.cmd_img_barrier.dst_dev_access;
 
   VkAccessFlags src_access = 0;
-  VkPipelineStageFlags src_stage = 0;
+  VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
   VkImageLayout src_layout = VK_IMAGE_LAYOUT_UNDEFINED;
   _make_img_barrier_src_params(src_usage, src_dev_access,
     src_access, src_stage, src_layout);
 
   VkAccessFlags dst_access = 0;
-  VkPipelineStageFlags dst_stage = 0;
+  VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
   VkImageLayout dst_layout = VK_IMAGE_LAYOUT_UNDEFINED;
   _make_img_barrier_dst_params(dst_usage, dst_dev_access,
     dst_access, dst_stage, dst_layout);
