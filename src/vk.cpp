@@ -659,7 +659,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   liong::log::info("created image '", img_cfg.label, "'");
   uint32_t qfam_idx = ctxt.get_submit_ty_qfam_idx(init_submit_ty);
   return Image {
-    &ctxt, devmem, mr.size, img, img_view, img_cfg, is_staging_img
+    &ctxt, devmem, img, img_view, img_cfg, is_staging_img
   };
 }
 void destroy_img(Image& img) {
@@ -831,8 +831,8 @@ Task create_comp_task(
   cpci.layout = pipe_layout;
 
   VkPipeline pipe;
-  VK_ASSERT <<
-    vkCreateComputePipelines(ctxt.dev, nullptr, 1, &cpci, nullptr, &pipe);
+  VK_ASSERT << vkCreateComputePipelines(ctxt.dev, VK_NULL_HANDLE, 1, &cpci,
+    nullptr, &pipe);
 
   liong::log::info("created compute task '", cfg.label, "'");
   return Task {
@@ -1021,8 +1021,8 @@ Task create_graph_task(
   gpci.subpass = 0;
 
   VkPipeline pipe;
-  VK_ASSERT <<
-    vkCreateGraphicsPipelines(ctxt.dev, nullptr, 1, &gpci, nullptr, &pipe);
+  VK_ASSERT << vkCreateGraphicsPipelines(ctxt.dev, VK_NULL_HANDLE, 1, &gpci,
+    nullptr, &pipe);
 
   liong::log::info("created graphics task '", cfg.label, "'");
   return Task {
@@ -1074,7 +1074,7 @@ Framebuffer create_framebuf(
 }
 void destroy_framebuf(Framebuffer& framebuf) {
   vkDestroyFramebuffer(framebuf.ctxt->dev, framebuf.framebuf, nullptr);
-  framebuf.framebuf = nullptr;
+  framebuf.framebuf = VK_NULL_HANDLE;
   liong::log::info("destroyed framebuffer");
 }
 
@@ -1585,7 +1585,8 @@ void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
   if (cmd.cmd_ty == L_COMMAND_TYPE_DRAW) {
     const auto& in = cmd.cmd_draw;
 
-    vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts->buf->buf, &in.verts->offset);
+    VkDeviceSize offset = in.verts->offset;
+    vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts->buf->buf, &offset);
     vkCmdDraw(cmdbuf, in.nvert, in.ninst, 0, 0);
 
     if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
@@ -1595,7 +1596,8 @@ void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
   } else if (cmd.cmd_ty == L_COMMAND_TYPE_DRAW_INDEXED) {
     const auto& in = cmd.cmd_draw_indexed;
 
-    vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts->buf->buf, &in.verts->offset);
+    VkDeviceSize offset = in.verts->offset;
+    vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts->buf->buf, &offset);
     vkCmdBindIndexBuffer(cmdbuf, in.idxs->buf->buf, in.idxs->offset,
       VK_INDEX_TYPE_UINT16);
     vkCmdDrawIndexed(cmdbuf, in.nidx, in.ninst, 0, 0, 0);
@@ -2027,7 +2029,7 @@ void _reset_cmd_drain(CommandDrain& cmd_drain) {
   }
   cmd_drain.semas.clear();
   for (auto cmd_pool : cmd_drain.cmd_pools) {
-    if (cmd_pool == nullptr) { break; }
+    if (cmd_pool == VK_NULL_HANDLE) { break; }
     VK_ASSERT << vkResetCommandPool(cmd_drain.ctxt->dev, cmd_pool, 0);
   }
   VK_ASSERT << vkResetFences(cmd_drain.ctxt->dev, 1, &cmd_drain.fence);
