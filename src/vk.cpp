@@ -659,7 +659,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   liong::log::info("created image '", img_cfg.label, "'");
   uint32_t qfam_idx = ctxt.get_submit_ty_qfam_idx(init_submit_ty);
   return Image {
-    &ctxt, devmem, mr.size, img, img_view, img_cfg, is_staging_img
+    &ctxt, devmem, img, img_view, img_cfg, is_staging_img
   };
 }
 void destroy_img(Image& img) {
@@ -831,8 +831,8 @@ Task create_comp_task(
   cpci.layout = pipe_layout;
 
   VkPipeline pipe;
-  VK_ASSERT <<
-    vkCreateComputePipelines(ctxt.dev, nullptr, 1, &cpci, nullptr, &pipe);
+  VK_ASSERT << vkCreateComputePipelines(ctxt.dev, VK_NULL_HANDLE, 1, &cpci,
+    nullptr, &pipe);
 
   liong::log::info("created compute task '", cfg.label, "'");
   return Task {
@@ -1021,8 +1021,8 @@ Task create_graph_task(
   gpci.subpass = 0;
 
   VkPipeline pipe;
-  VK_ASSERT <<
-    vkCreateGraphicsPipelines(ctxt.dev, nullptr, 1, &gpci, nullptr, &pipe);
+  VK_ASSERT << vkCreateGraphicsPipelines(ctxt.dev, VK_NULL_HANDLE, 1, &gpci,
+    nullptr, &pipe);
 
   liong::log::info("created graphics task '", cfg.label, "'");
   return Task {
@@ -1074,7 +1074,7 @@ Framebuffer create_framebuf(
 }
 void destroy_framebuf(Framebuffer& framebuf) {
   vkDestroyFramebuffer(framebuf.ctxt->dev, framebuf.framebuf, nullptr);
-  framebuf.framebuf = nullptr;
+  framebuf.framebuf = VK_NULL_HANDLE;
   liong::log::info("destroyed framebuffer");
 }
 
@@ -1376,6 +1376,9 @@ void _record_cmd_set_submit_ty(
 ) {
   SubmitType submit_ty = cmd.cmd_set_submit_ty.submit_ty;
   _get_cmdbuf(transact, submit_ty);
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    liong::log::info("submit type is set");
+  }
 }
 void _record_cmd_inline_transact(
   TransactionLike& transact,
@@ -1413,8 +1416,8 @@ void _record_cmd_inline_transact(
 
 void _record_cmd_copy_buf2img(TransactionLike& transact, const Command& cmd) {
   const auto& in = cmd.cmd_copy_buf2img;
-  const auto& src = *in.src;
-  const auto& dst = *in.dst;
+  const auto& src = in.src;
+  const auto& dst = in.dst;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
 
   VkBufferImageCopy bic {};
@@ -1440,8 +1443,8 @@ void _record_cmd_copy_buf2img(TransactionLike& transact, const Command& cmd) {
 }
 void _record_cmd_copy_img2buf(TransactionLike& transact, const Command& cmd) {
   const auto& in = cmd.cmd_copy_img2buf;
-  const auto& src = *in.src;
-  const auto& dst = *in.dst;
+  const auto& src = in.src;
+  const auto& dst = in.dst;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
 
   VkBufferImageCopy bic {};
@@ -1467,8 +1470,8 @@ void _record_cmd_copy_img2buf(TransactionLike& transact, const Command& cmd) {
 }
 void _record_cmd_copy_buf(TransactionLike& transact, const Command& cmd) {
   const auto& in = cmd.cmd_copy_buf;
-  const auto& src = *in.src;
-  const auto& dst = *in.dst;
+  const auto& src = in.src;
+  const auto& dst = in.dst;
   assert(src.size == dst.size, "buffer copy size mismatched");
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
 
@@ -1485,8 +1488,8 @@ void _record_cmd_copy_buf(TransactionLike& transact, const Command& cmd) {
 }
 void _record_cmd_copy_img(TransactionLike& transact, const Command& cmd) {
   const auto& in = cmd.cmd_copy_img;
-  const auto& src = *in.src;
-  const auto& dst = *in.dst;
+  const auto& src = in.src;
+  const auto& dst = in.dst;
   assert(src.ncol == dst.ncol && src.nrow == dst.nrow,
     "image copy size mismatched");
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
@@ -1585,7 +1588,8 @@ void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
   if (cmd.cmd_ty == L_COMMAND_TYPE_DRAW) {
     const auto& in = cmd.cmd_draw;
 
-    vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts->buf->buf, &in.verts->offset);
+    VkDeviceSize offset = in.verts.offset;
+    vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts.buf->buf, &offset);
     vkCmdDraw(cmdbuf, in.nvert, in.ninst, 0, 0);
 
     if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
@@ -1595,8 +1599,10 @@ void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
   } else if (cmd.cmd_ty == L_COMMAND_TYPE_DRAW_INDEXED) {
     const auto& in = cmd.cmd_draw_indexed;
 
-    vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts->buf->buf, &in.verts->offset);
-    vkCmdBindIndexBuffer(cmdbuf, in.idxs->buf->buf, in.idxs->offset,
+    VkDeviceSize offset = in.verts.offset;
+    vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts.buf->buf, &offset);
+
+    vkCmdBindIndexBuffer(cmdbuf, in.idxs.buf->buf, in.idxs.offset,
       VK_INDEX_TYPE_UINT16);
     vkCmdDrawIndexed(cmdbuf, in.nidx, in.ninst, 0, 0, 0);
 
@@ -1884,6 +1890,9 @@ void _record_cmd_buf_barrier(
     0, nullptr,
     1, &bmb,
     0, nullptr);
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    liong::log::info("scheduled buffer barrier");
+  }
 }
 void _record_cmd_img_barrier(
   TransactionLike& transact,
@@ -1931,6 +1940,9 @@ void _record_cmd_img_barrier(
     0, nullptr,
     0, nullptr,
     1, &imb);
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    liong::log::info("scheduled image barrier");
+  }
 }
 
 // Returns whether the submit queue to submit has changed.
@@ -2009,6 +2021,7 @@ void submit_cmds(
   transact.fence = cmd_drain.fence;
   transact.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
   for (auto i = 0; i < ncmd; ++i) {
+    liong::log::debug("recording ", i, "th command");
     _record_cmd(transact, cmds[i]);
   }
   _seal_transact(transact);
@@ -2027,7 +2040,7 @@ void _reset_cmd_drain(CommandDrain& cmd_drain) {
   }
   cmd_drain.semas.clear();
   for (auto cmd_pool : cmd_drain.cmd_pools) {
-    if (cmd_pool == nullptr) { break; }
+    if (cmd_pool == VK_NULL_HANDLE) { break; }
     VK_ASSERT << vkResetCommandPool(cmd_drain.ctxt->dev, cmd_pool, 0);
   }
   VK_ASSERT << vkResetFences(cmd_drain.ctxt->dev, 1, &cmd_drain.fence);

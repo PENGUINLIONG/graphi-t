@@ -1,4 +1,4 @@
-﻿cmake_minimum_required (VERSION 3.12)
+﻿cmake_minimum_required (VERSION 3.10)
 
 project ("GraphiT" LANGUAGES CXX)
 
@@ -35,6 +35,7 @@ set(INC_DIRS
 )
 
 # Runtime compilation support.
+set(BUILD_EXTERNAL OFF CACHE BOOL "" FORCE)
 add_subdirectory(third/glslang)
 
 # Used to inline kernel/shaders.
