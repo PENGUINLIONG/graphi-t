@@ -449,20 +449,20 @@ struct Command {
       const Transaction* transact;
     } cmd_inline_transact;
     struct {
-      const BufferView* src;
-      const ImageView* dst;
+      BufferView src;
+      ImageView dst;
     } cmd_copy_buf2img;
     struct {
-      const ImageView* src;
-      const BufferView* dst;
+      ImageView src;
+      BufferView dst;
     } cmd_copy_img2buf;
     struct {
-      const BufferView* src;
-      const BufferView* dst;
+      BufferView src;
+      BufferView dst;
     } cmd_copy_buf;
     struct {
-      const ImageView* src;
-      const ImageView* dst;
+      ImageView src;
+      ImageView dst;
     } cmd_copy_img;
     struct {
       const Task* task;
@@ -473,7 +473,7 @@ struct Command {
       const Task* task;
       const ResourcePool* rsc_pool;
       const Framebuffer* framebuf;
-      const BufferView* verts;
+      BufferView verts;
       uint32_t nvert;
       uint32_t ninst;
     } cmd_draw;
@@ -481,8 +481,8 @@ struct Command {
       const Task* task;
       const ResourcePool* rsc_pool;
       const Framebuffer* framebuf;
-      const BufferView* verts;
-      const BufferView* idxs;
+      BufferView verts;
+      BufferView idxs;
       uint32_t nidx;
       uint32_t ninst;
     } cmd_draw_indexed;
@@ -507,7 +507,7 @@ struct Command {
 };
 
 inline Command cmd_inline_transact(const Transaction& transact) {
-  Command cmd;
+  Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_INLINE_TRANSACTION;
   cmd.cmd_inline_transact.transact = &transact;
   return cmd;
@@ -515,34 +515,34 @@ inline Command cmd_inline_transact(const Transaction& transact) {
 
 // Copy data from a buffer to an image.
 inline Command cmd_copy_buf2img(const BufferView& src, const ImageView& dst) {
-  Command cmd;
+  Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_COPY_BUFFER_TO_IMAGE;
-  cmd.cmd_copy_buf2img.src = &src;
-  cmd.cmd_copy_buf2img.dst = &dst;
+  cmd.cmd_copy_buf2img.src = src;
+  cmd.cmd_copy_buf2img.dst = dst;
   return cmd;
 }
 // Copy data from an image to a buffer.
 inline Command cmd_copy_img2buf(const ImageView& src, const BufferView& dst) {
-  Command cmd;
+  Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_COPY_IMAGE_TO_BUFFER;
-  cmd.cmd_copy_img2buf.src = &src;
-  cmd.cmd_copy_img2buf.dst = &dst;
+  cmd.cmd_copy_img2buf.src = src;
+  cmd.cmd_copy_img2buf.dst = dst;
   return cmd;
 }
 // Copy data from a buffer to another buffer.
 inline Command cmd_copy_buf(const BufferView& src, const BufferView& dst) {
-  Command cmd;
+  Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_COPY_BUFFER;
-  cmd.cmd_copy_buf.src = &src;
-  cmd.cmd_copy_buf.dst = &dst;
+  cmd.cmd_copy_buf.src = src;
+  cmd.cmd_copy_buf.dst = dst;
   return cmd;
 }
 // Copy data from an image to another image.
 inline Command cmd_copy_img(const ImageView& src, const ImageView& dst) {
-  Command cmd;
+  Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_COPY_IMAGE;
-  cmd.cmd_copy_img.src = &src;
-  cmd.cmd_copy_img.dst = &dst;
+  cmd.cmd_copy_img.src = src;
+  cmd.cmd_copy_img.dst = dst;
   return cmd;
 }
 
@@ -552,7 +552,7 @@ inline Command cmd_dispatch(
   const ResourcePool& rsc_pool,
   DispatchSize nworkgrp
 ) {
-  Command cmd;
+  Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_DISPATCH;
   cmd.cmd_dispatch.task = &task;
   cmd.cmd_dispatch.rsc_pool = &rsc_pool;
@@ -569,12 +569,12 @@ inline Command cmd_draw(
   uint32_t ninst,
   const Framebuffer& framebuf
 ) {
-  Command cmd;
+  Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_DRAW;
   cmd.cmd_draw.task = &task;
   cmd.cmd_draw.rsc_pool = &rsc_pool;
   cmd.cmd_draw.framebuf = &framebuf;
-  cmd.cmd_draw.verts = &verts;
+  cmd.cmd_draw.verts = verts;
   cmd.cmd_draw.nvert = nvert;
   cmd.cmd_draw.ninst = ninst;
   return cmd;
@@ -589,27 +589,27 @@ inline Command cmd_draw_indexed(
   uint32_t ninst,
   const Framebuffer& framebuf
 ) {
-  Command cmd;
+  Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_DRAW_INDEXED;
   cmd.cmd_draw_indexed.task = &task;
   cmd.cmd_draw_indexed.rsc_pool = &rsc_pool;
   cmd.cmd_draw_indexed.framebuf = &framebuf;
-  cmd.cmd_draw_indexed.verts = &verts;
-  cmd.cmd_draw_indexed.idxs = &idxs;
+  cmd.cmd_draw_indexed.verts = verts;
+  cmd.cmd_draw_indexed.idxs = idxs;
   cmd.cmd_draw_indexed.nidx = nidx;
   cmd.cmd_draw_indexed.ninst = ninst;
   return cmd;
 }
 
 inline Command cmd_write_timestamp(const Timestamp& timestamp) {
-  Command cmd;
+  Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_WRITE_TIMESTAMP;
   cmd.cmd_write_timestamp.timestamp = &timestamp;
   return cmd;
 }
 
 inline Command cmd_set_submit_ty(SubmitType submit_ty) {
-  Command cmd;
+  Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_SET_SUBMIT_TYPE;
   cmd.cmd_set_submit_ty.submit_ty = submit_ty;
   return cmd;
@@ -622,7 +622,7 @@ inline Command cmd_buf_barrier(
   MemoryAccess src_dev_access,
   MemoryAccess dst_dev_access
 ) {
-  Command cmd;
+  Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_BUFFER_BARRIER;
   cmd.cmd_buf_barrier.buf = &buf;
   cmd.cmd_buf_barrier.src_dev_access = src_dev_access;
@@ -638,7 +638,7 @@ inline Command cmd_img_barrier(
   MemoryAccess src_dev_access,
   MemoryAccess dst_dev_access
 ) {
-  Command cmd;
+  Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_IMAGE_BARRIER;
   cmd.cmd_img_barrier.img = &img;
   cmd.cmd_img_barrier.src_dev_access = src_dev_access;
