@@ -35,9 +35,9 @@ const char* VkException::what() const noexcept { return msg.c_str(); }
 
 namespace vk {
 
-VkInstance inst;
-std::vector<VkPhysicalDevice> physdevs;
-std::vector<std::string> physdev_descs;
+VkInstance inst = nullptr;
+std::vector<VkPhysicalDevice> physdevs {};
+std::vector<std::string> physdev_descs {};
 
 
 
@@ -50,9 +50,26 @@ void initialize() {
   app_info.pEngineName = "GraphiT";
   app_info.engineVersion = VK_MAKE_VERSION(0, 1, 0);
 
+  uint32_t ninst_ext = 0;
+  VK_ASSERT << vkEnumerateInstanceExtensionProperties(nullptr, &ninst_ext, nullptr);
+
+  std::vector<VkExtensionProperties> inst_exts;
+  inst_exts.resize(ninst_ext);
+  VK_ASSERT << vkEnumerateInstanceExtensionProperties(nullptr, &ninst_ext, inst_exts.data());
+
+  // Enable all extensions by default.
+  std::vector<const char*> inst_ext_names;
+  inst_ext_names.reserve(ninst_ext);
+  for (const auto& inst_ext : inst_exts) {
+    inst_ext_names.emplace_back(inst_ext.extensionName);
+  }
+  liong::log::info("enabled instance extensions: ", liong::util::join(", ", inst_ext_names));
+
   VkInstanceCreateInfo ici {};
   ici.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
   ici.pApplicationInfo = &app_info;
+  ici.enabledExtensionCount = inst_ext_names.size();
+  ici.ppEnabledExtensionNames = inst_ext_names.data();
 
   VK_ASSERT << vkCreateInstance(&ici, nullptr, &inst);
 
@@ -315,11 +332,27 @@ Context create_ctxt(const ContextConfig& cfg) {
     }
   }
 
+  uint32_t ndev_ext = 0;
+  VK_ASSERT << vkEnumerateDeviceExtensionProperties(physdev, nullptr, &ndev_ext, nullptr);
+
+  std::vector<VkExtensionProperties> dev_exts;
+  dev_exts.resize(ndev_ext);
+  VK_ASSERT << vkEnumerateDeviceExtensionProperties(physdev, nullptr, &ndev_ext, dev_exts.data());
+
+  std::vector<const char*> dev_ext_names;
+  dev_ext_names.reserve(ndev_ext);
+  for (const auto& dev_ext : dev_exts) {
+    dev_ext_names.emplace_back(dev_ext.extensionName);
+  }
+  liong::log::info("enabled device extensions: ", liong::util::join(", ", dev_ext_names));
+
   VkDeviceCreateInfo dci {};
   dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
   dci.pEnabledFeatures = &feat;
   dci.queueCreateInfoCount = static_cast<uint32_t>(dqcis.size());
   dci.pQueueCreateInfos = dqcis.data();
+  dci.enabledExtensionCount = dev_ext_names.size();
+  dci.ppEnabledExtensionNames = dev_ext_names.data();
 
   VkDevice dev;
   VK_ASSERT << vkCreateDevice(physdev, &dci, nullptr, &dev);
@@ -373,7 +406,7 @@ Context create_ctxt(const ContextConfig& cfg) {
   liong::log::info("created vulkan context '", cfg.label, "' on device #",
     cfg.dev_idx, ": ", physdev_descs[cfg.dev_idx]);
   return Context {
-    dev, std::move(physdev_prop), std::move(submit_details),
+    dev, physdev, std::move(physdev_prop), std::move(submit_details),
     std::move(queue_allocs), std::move(mem_ty_idxs_by_host_access),
     fast_samp, cfg
   };
@@ -849,7 +882,7 @@ VkRenderPass _create_pass(
   std::array<VkAttachmentDescription, 1> ads {};
   {
     VkAttachmentDescription& ad = ads[0];
-    ad.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+    ad.format = VK_FORMAT_R8G8B8A8_UNORM;
     ad.samples = VK_SAMPLE_COUNT_1_BIT;
     ad.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     ad.storeOp = VK_ATTACHMENT_STORE_OP_STORE;

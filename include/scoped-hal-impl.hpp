@@ -300,7 +300,11 @@ Buffer::Buffer(const Context& ctxt, const BufferConfig& cfg) :
     create_buf(*ctxt.inner, cfg))) {}
 Buffer::Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner) :
     inner(std::make_unique<HAL_IMPL_NAMESPACE::Buffer>(inner)) {}
-Buffer::~Buffer() { HAL_IMPL_NAMESPACE::destroy_buf(*inner); }
+Buffer::~Buffer() {
+  if (!dont_destroy) {
+    HAL_IMPL_NAMESPACE::destroy_buf(*inner);
+  }
+}
 
 
 
@@ -309,7 +313,11 @@ Image::Image(const Context& ctxt, const ImageConfig& cfg) :
     create_img(*ctxt.inner, cfg))) {}
 Image::Image(HAL_IMPL_NAMESPACE::Image&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::Image>(inner)) {}
-Image::~Image() { HAL_IMPL_NAMESPACE::destroy_img(*inner); }
+Image::~Image() {
+  if (!dont_destroy) {
+    HAL_IMPL_NAMESPACE::destroy_img(*inner);
+  }
+}
 
 
 

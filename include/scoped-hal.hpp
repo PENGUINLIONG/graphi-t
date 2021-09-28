@@ -199,6 +199,7 @@ struct MappedImage {
 
 struct Image {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Image> inner;
+  bool dont_destroy;
 
   Image(const Context& ctxt, const ImageConfig& cfg);
   Image(HAL_IMPL_NAMESPACE::Image&& inner);
@@ -269,6 +270,7 @@ struct MappedBuffer {
 };
 struct Buffer {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Buffer> inner;
+  bool dont_destroy;
 
   Buffer(const Context& ctxt, const BufferConfig& cfg);
   Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner);
