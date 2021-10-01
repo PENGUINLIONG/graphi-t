@@ -277,9 +277,11 @@ Timestamp Context::create_timestamp() const {
 
 Buffer::Buffer(const Context& ctxt, const BufferConfig& cfg) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::Buffer>(
-    create_buf(*ctxt.inner, cfg))) {}
+    create_buf(*ctxt.inner, cfg))),
+  dont_destroy(false) {}
 Buffer::Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner) :
-    inner(std::make_unique<HAL_IMPL_NAMESPACE::Buffer>(inner)) {}
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::Buffer>(inner)),
+  dont_destroy(false) {}
 Buffer::~Buffer() {
   if (!dont_destroy) {
     HAL_IMPL_NAMESPACE::destroy_buf(*inner);
@@ -290,9 +292,11 @@ Buffer::~Buffer() {
 
 Image::Image(const Context& ctxt, const ImageConfig& cfg) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::Image>(
-    create_img(*ctxt.inner, cfg))) {}
+    create_img(*ctxt.inner, cfg))),
+  dont_destroy(false) {}
 Image::Image(HAL_IMPL_NAMESPACE::Image&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Image>(inner)) {}
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::Image>(inner)),
+  dont_destroy(false) {}
 Image::~Image() {
   if (!dont_destroy) {
     HAL_IMPL_NAMESPACE::destroy_img(*inner);
