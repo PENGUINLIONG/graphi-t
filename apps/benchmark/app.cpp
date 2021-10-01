@@ -195,6 +195,11 @@ void guarded_main() {
   //segfault. (??? WTF)
   scoped::CommandDrain cmd_drain = ctxt.create_cmd_drain();
 
+  scoped::Image out_img = ctxt.create_attm_img("attm", CFG.height, CFG.width,
+    L_FORMAT_R32G32B32A32_SFLOAT);
+
+  scoped::RenderPass pass = ctxt.create_pass(out_img);
+
   std::vector<ResourceType> rsc_tys {
     L_RESOURCE_TYPE_UNIFORM_BUFFER,
   };
@@ -234,11 +239,6 @@ void guarded_main() {
 
 
   auto bench = [&](bool dump_framebuf) {
-    scoped::Image out_img = ctxt.create_attm_img("attm", CFG.height, CFG.width,
-      L_FORMAT_R32G32B32A32_SFLOAT);
-
-    scoped::Framebuffer framebuf = task.create_framebuf(out_img);
-
     scoped::Buffer out_buf = ctxt.create_staging_buf("out_buf",
       CFG.width * CFG.height * 4 * sizeof(float));
 
@@ -248,7 +248,9 @@ void guarded_main() {
     std::vector<Command> cmds {
       cmd_set_submit_ty(L_SUBMIT_TYPE_GRAPHICS),
       cmd_write_timestamp(tic),
-      cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 6, 1, framebuf),
+      cmd_begin_pass(pass, true),
+      cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 6, 1),
+      cmd_end_pass(pass),
       cmd_write_timestamp(toc),
       cmd_copy_img2buf(out_img.view(), out_buf.view()),
     };

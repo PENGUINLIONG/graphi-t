@@ -590,8 +590,7 @@ inline Command cmd_draw_indexed(
   const BufferView& idxs,
   const BufferView& verts,
   uint32_t nidx,
-  uint32_t ninst,
-  const RenderPass& pass
+  uint32_t ninst
 ) {
   Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_DRAW_INDEXED;
