@@ -273,7 +273,7 @@ void guarded_main2() {
       L_IMAGE_USAGE_ATTACHMENT_BIT,
       L_MEMORY_ACCESS_NONE,
       L_MEMORY_ACCESS_WRITE_ONLY),
-    cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 3, 1, pass),
+    cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 3, 1),
     cmd_end_pass(pass),
     dev_timer.cmd_toc(),
     cmd_copy_img2buf(out_img.view(), out_buf.view()),
