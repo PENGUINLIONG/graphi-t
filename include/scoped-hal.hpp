@@ -15,7 +15,7 @@ struct Context;
 struct Buffer;
 struct Image;
 struct Task;
-struct Framebuffer;
+struct RenderPass;
 struct ResourcePool;
 struct Transaction;
 struct CommandDrain;
@@ -133,18 +133,18 @@ struct ResourcePool {
 
 
 
-struct Framebuffer {
-  std::unique_ptr<HAL_IMPL_NAMESPACE::Framebuffer> inner;
+struct RenderPass {
+  std::unique_ptr<HAL_IMPL_NAMESPACE::RenderPass> inner;
 
-  Framebuffer(const Context& ctxt, const Task& task, const Image& attm);
-  Framebuffer(HAL_IMPL_NAMESPACE::Framebuffer&& inner);
-  Framebuffer(Framebuffer&&) = default;
-  ~Framebuffer();
+  RenderPass(const Context& ctxt, const Task& task, const Image& attm);
+  RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner);
+  RenderPass(RenderPass&&) = default;
+  ~RenderPass();
 
-  inline operator HAL_IMPL_NAMESPACE::Framebuffer& () {
+  inline operator HAL_IMPL_NAMESPACE::RenderPass& () {
     return *inner;
   }
-  inline operator const HAL_IMPL_NAMESPACE::Framebuffer& () const {
+  inline operator const HAL_IMPL_NAMESPACE::RenderPass& () const {
     return *inner;
   }
 };
@@ -167,7 +167,7 @@ struct Task {
   }
 
   ResourcePool create_rsc_pool() const;
-  Framebuffer create_framebuf(const Image& attm) const;
+  RenderPass create_pass(const Image& attm) const;
 };
 
 

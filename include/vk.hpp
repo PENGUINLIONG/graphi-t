@@ -111,7 +111,7 @@ struct Task {
   WorkgroupSizeSpecializationDetail workgrp_spec_detail;
 };
 
-struct Framebuffer {
+struct RenderPass {
   const Context* ctxt;
   const Task* task;
   const Image* img;

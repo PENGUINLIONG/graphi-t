@@ -1081,7 +1081,7 @@ void destroy_task(Task& task) {
 
 
 
-Framebuffer create_framebuf(
+RenderPass create_pass(
   const Context& ctxt,
   const Task& task,
   const Image& attm
@@ -1105,9 +1105,9 @@ Framebuffer create_framebuf(
   liong::log::info("created framebuffer");
   return { &ctxt, &task, &attm, std::move(viewport), framebuf };
 }
-void destroy_framebuf(Framebuffer& framebuf) {
-  vkDestroyFramebuffer(framebuf.ctxt->dev, framebuf.framebuf, nullptr);
-  framebuf.framebuf = VK_NULL_HANDLE;
+void destroy_pass(RenderPass& pass) {
+  vkDestroyFramebuffer(pass.ctxt->dev, pass.framebuf, nullptr);
+  pass.framebuf = VK_NULL_HANDLE;
   liong::log::info("destroyed framebuffer");
 }
 
@@ -1326,7 +1326,7 @@ VkCommandBuffer _start_cmdbuf(
   submit_detail.queue = queue;
   submit_detail.qfam_idx = qfam_idx;
   submit_detail.pass_detail.pass = VK_NULL_HANDLE;
-  submit_detail.pass_detail.framebuf = VK_NULL_HANDLE;
+  submit_detail.pass_detail.pass = VK_NULL_HANDLE;
   submit_detail.pass_detail.render_area = {};
   submit_detail.pass_detail.clear_value = {{{ 0.0f, 0.0f, 0.0f, 0.0f }}};
 
@@ -1578,8 +1578,8 @@ void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
     *cmd.cmd_draw.task : *cmd.cmd_draw_indexed.task;
   const auto& rsc_pool = cmd.cmd_ty == L_COMMAND_TYPE_DRAW ?
     *cmd.cmd_draw.rsc_pool : *cmd.cmd_draw_indexed.rsc_pool;
-  const auto& framebuf = cmd.cmd_ty == L_COMMAND_TYPE_DRAW ?
-    *cmd.cmd_draw.framebuf : *cmd.cmd_draw_indexed.framebuf;
+  const auto& pass = cmd.cmd_ty == L_COMMAND_TYPE_DRAW ?
+    *cmd.cmd_draw.pass : *cmd.cmd_draw_indexed.pass;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
 
   // TODO: (penguinliong) Move this to a specialized command.
@@ -1587,10 +1587,10 @@ void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
     VkRenderPassBeginInfo rpbi {};
     rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     rpbi.renderPass = task.pass;
-    rpbi.framebuffer = framebuf.framebuf;
-    rpbi.renderArea.extent = framebuf.viewport.extent;
+    rpbi.framebuffer = pass.framebuf;
+    rpbi.renderArea.extent = pass.viewport.extent;
     rpbi.clearValueCount = 1;
-    rpbi.pClearValues = &framebuf.clear_value;
+    rpbi.pClearValues = &pass.clear_value;
 
     vkCmdBeginRenderPass(cmdbuf, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
   } else {
@@ -1598,9 +1598,9 @@ void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
     liong::assert(last_submit.pass_detail.pass == VK_NULL_HANDLE,
       "secondary command buffer can only contain one render pass");
     last_submit.pass_detail.pass = task.pass;
-    last_submit.pass_detail.framebuf = framebuf.framebuf;
-    last_submit.pass_detail.render_area = framebuf.viewport.extent;
-    last_submit.pass_detail.clear_value = framebuf.clear_value;
+    last_submit.pass_detail.framebuf = pass.framebuf;
+    last_submit.pass_detail.render_area = pass.viewport.extent;
+    last_submit.pass_detail.clear_value = pass.clear_value;
   }
 
   vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, task.pipe);
@@ -1609,11 +1609,11 @@ void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
       task.pipe_layout, 0, 1, &rsc_pool.desc_set, 0, nullptr);
   }
   VkRect2D scissor {};
-  scissor.extent = framebuf.viewport.extent;
+  scissor.extent = pass.viewport.extent;
   vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
   VkViewport viewport {};
-  viewport.width = (float)framebuf.viewport.extent.width;
-  viewport.height = (float)framebuf.viewport.extent.height;
+  viewport.width = (float)pass.viewport.extent.width;
+  viewport.height = (float)pass.viewport.extent.height;
   viewport.minDepth = 0.0f;
   viewport.maxDepth = 1.0f;
   vkCmdSetViewport(cmdbuf, 0, 1, &viewport);

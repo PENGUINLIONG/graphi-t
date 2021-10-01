@@ -369,13 +369,13 @@ L_IMPL_FN void destroy_task(Task& task);
 
 
 
-L_IMPL_STRUCT struct Framebuffer;
-L_IMPL_FN Framebuffer create_framebuf(
+L_IMPL_STRUCT struct RenderPass;
+L_IMPL_FN RenderPass create_pass(
   const Context& ctxt,
   const Task& task,
   const Image& img
 );
-L_IMPL_FN void destroy_framebuf(Framebuffer& framebuf);
+L_IMPL_FN void destroy_pass(RenderPass& pass);
 
 
 
@@ -472,7 +472,7 @@ struct Command {
     struct {
       const Task* task;
       const ResourcePool* rsc_pool;
-      const Framebuffer* framebuf;
+      const RenderPass* pass;
       BufferView verts;
       uint32_t nvert;
       uint32_t ninst;
@@ -480,7 +480,7 @@ struct Command {
     struct {
       const Task* task;
       const ResourcePool* rsc_pool;
-      const Framebuffer* framebuf;
+      const RenderPass* pass;
       BufferView verts;
       BufferView idxs;
       uint32_t nidx;
@@ -567,13 +567,13 @@ inline Command cmd_draw(
   const BufferView& verts,
   uint32_t nvert,
   uint32_t ninst,
-  const Framebuffer& framebuf
+  const RenderPass& pass
 ) {
   Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_DRAW;
   cmd.cmd_draw.task = &task;
   cmd.cmd_draw.rsc_pool = &rsc_pool;
-  cmd.cmd_draw.framebuf = &framebuf;
+  cmd.cmd_draw.pass = &pass;
   cmd.cmd_draw.verts = verts;
   cmd.cmd_draw.nvert = nvert;
   cmd.cmd_draw.ninst = ninst;
@@ -587,13 +587,13 @@ inline Command cmd_draw_indexed(
   const BufferView& verts,
   uint32_t nidx,
   uint32_t ninst,
-  const Framebuffer& framebuf
+  const RenderPass& pass
 ) {
   Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_DRAW_INDEXED;
   cmd.cmd_draw_indexed.task = &task;
   cmd.cmd_draw_indexed.rsc_pool = &rsc_pool;
-  cmd.cmd_draw_indexed.framebuf = &framebuf;
+  cmd.cmd_draw_indexed.pass = &pass;
   cmd.cmd_draw_indexed.verts = verts;
   cmd.cmd_draw_indexed.idxs = idxs;
   cmd.cmd_draw_indexed.nidx = nidx;

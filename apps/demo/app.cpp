@@ -258,7 +258,7 @@ void guarded_main2() {
   scoped::Image out_img = ctxt.create_attm_img("attm", 4, 4,
     L_FORMAT_R32G32B32A32_SFLOAT);
 
-  scoped::Framebuffer framebuf = task.create_framebuf(out_img);
+  scoped::RenderPass pass = task.create_pass(out_img);
 
   scoped::Buffer out_buf = ctxt.create_staging_buf("out_buf",
     FRAMEBUF_NCOL * FRAMEBUF_NROW * 4 * sizeof(float));
@@ -274,7 +274,7 @@ void guarded_main2() {
       L_IMAGE_USAGE_ATTACHMENT_BIT,
       L_MEMORY_ACCESS_NONE,
       L_MEMORY_ACCESS_WRITE_ONLY),
-    cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 3, 1, framebuf),
+    cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 3, 1, pass),
     cmd_write_timestamp(toc),
     cmd_copy_img2buf(out_img.view(), out_buf.view()),
   };

@@ -331,21 +331,21 @@ Task::~Task() { destroy_task(*inner); }
 ResourcePool Task::create_rsc_pool() const {
   return HAL_IMPL_NAMESPACE::create_rsc_pool(*inner->ctxt, *inner);
 }
-Framebuffer Task::create_framebuf(const Image& attm) const {
-  return HAL_IMPL_NAMESPACE::create_framebuf(*inner->ctxt, *inner, *attm.inner);
+RenderPass Task::create_pass(const Image& attm) const {
+  return HAL_IMPL_NAMESPACE::create_pass(*inner->ctxt, *inner, *attm.inner);
 }
 
 
 
-Framebuffer::Framebuffer(
+RenderPass::RenderPass(
   const Context& ctxt,
   const Task& task,
   const Image& attm
-) : inner(std::make_unique<HAL_IMPL_NAMESPACE::Framebuffer>(
-  create_framebuf(*ctxt.inner, *task.inner, *attm.inner))) {}
-Framebuffer::Framebuffer(HAL_IMPL_NAMESPACE::Framebuffer&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Framebuffer>(inner)) {}
-Framebuffer::~Framebuffer() { destroy_framebuf(*inner); }
+) : inner(std::make_unique<HAL_IMPL_NAMESPACE::RenderPass>(
+  create_pass(*ctxt.inner, *task.inner, *attm.inner))) {}
+RenderPass::RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner) :
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::RenderPass>(inner)) {}
+RenderPass::~RenderPass() { destroy_pass(*inner); }
 
 
 
