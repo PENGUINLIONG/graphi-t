@@ -1225,18 +1225,6 @@ void bind_pool_rsc(
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 VkSemaphore _create_sema(const Context& ctxt) {
   VkSemaphoreCreateInfo sci {};
   sci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1408,7 +1396,8 @@ void _record_cmd_inline_transact(
   TransactionLike& transact,
   const Command& cmd
 ) {
-  liong::assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+  assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+    "nested inline transaction is not allowed");
   const auto& in = cmd.cmd_inline_transact;
   const auto& subtransact = *in.transact;
 
@@ -1418,6 +1407,7 @@ void _record_cmd_inline_transact(
 
     vkCmdExecuteCommands(cmdbuf, 1, &submit_detail.cmdbuf);
   }
+
   liong::log::info("scheduled inline transaction '",
     cmd.cmd_inline_transact.transact->label, "'");
 }
@@ -1547,46 +1537,47 @@ void _record_cmd_dispatch(TransactionLike& transact, const Command& cmd) {
   }
 }
 
-void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
-  const auto& task = cmd.cmd_ty == L_COMMAND_TYPE_DRAW ?
-    *cmd.cmd_draw.task : *cmd.cmd_draw_indexed.task;
-  const auto& rsc_pool = cmd.cmd_ty == L_COMMAND_TYPE_DRAW ?
-    *cmd.cmd_draw.rsc_pool : *cmd.cmd_draw_indexed.rsc_pool;
+void _record_cmd_draw(TransactionLike& transact, const Command& cmd) {
+  const auto& in = cmd.cmd_draw;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
 
-  vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, task.pipe);
-  if (rsc_pool.desc_set != VK_NULL_HANDLE) {
+  vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+    in.task->pipe);
+  if (in.rsc_pool->desc_set != VK_NULL_HANDLE) {
     vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-      task.pipe_layout, 0, 1, &rsc_pool.desc_set, 0, nullptr);
+      in.task->pipe_layout, 0, 1, &in.rsc_pool->desc_set, 0, nullptr);
   }
 
-  if (cmd.cmd_ty == L_COMMAND_TYPE_DRAW) {
-    const auto& in = cmd.cmd_draw;
+  VkDeviceSize offset = in.verts.offset;
+  vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts.buf->buf, &offset);
+  vkCmdDraw(cmdbuf, in.nvert, in.ninst, 0, 0);
 
-    VkDeviceSize offset = in.verts.offset;
-    vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts.buf->buf, &offset);
-    vkCmdDraw(cmdbuf, in.nvert, in.ninst, 0, 0);
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    liong::log::info("scheduled graphics task '", in.task->label, "' for "
+      "execution");
+  }
+}
+void _record_cmd_draw_indexed(TransactionLike& transact, const Command& cmd) {
+  const auto& in = cmd.cmd_draw_indexed;
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
 
-    if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-      liong::log::info("scheduled graphics task '", in.task->label,
-        "' for execution");
-    }
-  } else if (cmd.cmd_ty == L_COMMAND_TYPE_DRAW_INDEXED) {
-    const auto& in = cmd.cmd_draw_indexed;
+  vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+    in.task->pipe);
+  if (in.rsc_pool->desc_set != VK_NULL_HANDLE) {
+    vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+      in.task->pipe_layout, 0, 1, &in.rsc_pool->desc_set, 0, nullptr);
+  }
 
-    VkDeviceSize offset = in.verts.offset;
-    vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts.buf->buf, &offset);
+  VkDeviceSize offset = in.verts.offset;
+  vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts.buf->buf, &offset);
 
-    vkCmdBindIndexBuffer(cmdbuf, in.idxs.buf->buf, in.idxs.offset,
-      VK_INDEX_TYPE_UINT16);
-    vkCmdDrawIndexed(cmdbuf, in.nidx, in.ninst, 0, 0, 0);
+  vkCmdBindIndexBuffer(cmdbuf, in.idxs.buf->buf, in.idxs.offset,
+    VK_INDEX_TYPE_UINT16);
+  vkCmdDrawIndexed(cmdbuf, in.nidx, in.ninst, 0, 0, 0);
 
-    if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-      liong::log::info("scheduled graphics task '", in.task->label,
-        "' for execution");
-    }
-  } else {
-    liong::panic("unexpected command type ", cmd.cmd_ty);
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    liong::log::info("scheduled graphics task '", in.task->label, "' for "
+      "execution");
   }
 }
 
@@ -1594,9 +1585,10 @@ void _record_cmd_write_timestamp(
   TransactionLike& transact,
   const Command& cmd
 ) {
+  const auto& in = cmd.cmd_write_timestamp;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
 
-  auto query_pool = cmd.cmd_write_timestamp.timestamp->query_pool;
+  auto query_pool = in.timestamp->query_pool;
   vkCmdResetQueryPool(cmdbuf, query_pool, 0, 1);
   vkCmdWriteTimestamp(cmdbuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, query_pool, 0);
 
@@ -1815,12 +1807,13 @@ void _record_cmd_buf_barrier(
   TransactionLike& transact,
   const Command& cmd
 ) {
+  const auto& in = cmd.cmd_buf_barrier;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
 
-  BufferUsage src_usage = cmd.cmd_buf_barrier.src_usage;
-  BufferUsage dst_usage = cmd.cmd_buf_barrier.dst_usage;
-  MemoryAccess src_dev_access = cmd.cmd_buf_barrier.src_dev_access;
-  MemoryAccess dst_dev_access = cmd.cmd_buf_barrier.dst_dev_access;
+  BufferUsage src_usage = in.src_usage;
+  BufferUsage dst_usage = in.dst_usage;
+  MemoryAccess src_dev_access = in.src_dev_access;
+  MemoryAccess dst_dev_access = in.dst_dev_access;
 
   VkAccessFlags src_access = 0;
   VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
@@ -1832,7 +1825,7 @@ void _record_cmd_buf_barrier(
 
   VkBufferMemoryBarrier bmb {};
   bmb.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-  bmb.buffer = cmd.cmd_buf_barrier.buf->buf;
+  bmb.buffer = in.buf->buf;
   bmb.srcAccessMask = src_access;
   bmb.dstAccessMask = dst_access;
   bmb.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -1856,12 +1849,13 @@ void _record_cmd_img_barrier(
   TransactionLike& transact,
   const Command& cmd
 ) {
+  const auto& in = cmd.cmd_img_barrier;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
 
-  ImageUsage src_usage = cmd.cmd_img_barrier.src_usage;
-  ImageUsage dst_usage = cmd.cmd_img_barrier.dst_usage;
-  MemoryAccess src_dev_access = cmd.cmd_img_barrier.src_dev_access;
-  MemoryAccess dst_dev_access = cmd.cmd_img_barrier.dst_dev_access;
+  ImageUsage src_usage = in.src_usage;
+  ImageUsage dst_usage = in.dst_usage;
+  MemoryAccess src_dev_access = in.src_dev_access;
+  MemoryAccess dst_dev_access = in.dst_dev_access;
 
   VkAccessFlags src_access = 0;
   VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
@@ -1877,7 +1871,7 @@ void _record_cmd_img_barrier(
 
   VkImageMemoryBarrier imb {};
   imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  imb.image = cmd.cmd_img_barrier.img->img;
+  imb.image = in.img->img;
   imb.srcAccessMask = src_access;
   imb.dstAccessMask = dst_access;
   imb.oldLayout = src_layout;
@@ -1905,8 +1899,9 @@ void _record_cmd_img_barrier(
 
 void _record_cmd_begin_pass(TransactionLike& transact, const Command& cmd) {
   liong::assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+  const auto& in = cmd.cmd_begin_pass;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
-  const auto& pass = *cmd.cmd_begin_pass.pass;
+  const auto& pass = *in.pass;
 
   VkRenderPassBeginInfo rpbi {};
   rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -1915,7 +1910,7 @@ void _record_cmd_begin_pass(TransactionLike& transact, const Command& cmd) {
   rpbi.renderArea.extent = pass.viewport.extent;
   rpbi.clearValueCount = 1;
   rpbi.pClearValues = &pass.clear_value;
-  VkSubpassContents sc = cmd.cmd_begin_pass.draw_inline ?
+  VkSubpassContents sc = in.draw_inline ?
     VK_SUBPASS_CONTENTS_INLINE :
     VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS;
   vkCmdBeginRenderPass(cmdbuf, &rpbi, sc);
@@ -1924,6 +1919,7 @@ void _record_cmd_begin_pass(TransactionLike& transact, const Command& cmd) {
 }
 void _record_cmd_end_pass(TransactionLike& transact, const Command& cmd) {
   liong::assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+  const auto& in = cmd.cmd_end_pass;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
 
   vkCmdEndRenderPass(cmdbuf);
@@ -1938,8 +1934,6 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
     _record_cmd_set_submit_ty(transact, cmd);
     break;
   case L_COMMAND_TYPE_INLINE_TRANSACTION:
-    assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-      "nested inline transaction is not allowed");
     _record_cmd_inline_transact(transact, cmd);
     break;
   case L_COMMAND_TYPE_COPY_BUFFER_TO_IMAGE:
@@ -1958,10 +1952,10 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
     _record_cmd_dispatch(transact, cmd);
     break;
   case L_COMMAND_TYPE_DRAW:
-    _record_cmd_draw_common(transact, cmd);
+    _record_cmd_draw(transact, cmd);
     break;
   case L_COMMAND_TYPE_DRAW_INDEXED:
-    _record_cmd_draw_common(transact, cmd);
+    _record_cmd_draw_indexed(transact, cmd);
     break;
   case L_COMMAND_TYPE_WRITE_TIMESTAMP:
     _record_cmd_write_timestamp(transact, cmd);
