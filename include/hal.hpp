@@ -297,6 +297,15 @@ L_IMPL_FN void unmap_img_mem(
 
 
 
+L_IMPL_STRUCT struct RenderPass;
+L_IMPL_FN RenderPass create_pass(
+  const Context& ctxt,
+  const Image& img
+);
+L_IMPL_FN void destroy_pass(RenderPass& pass);
+
+
+
 struct DispatchSize {
   uint32_t x, y, z;
 };
@@ -362,20 +371,10 @@ L_IMPL_FN Task create_comp_task(
   const ComputeTaskConfig& cfg
 );
 L_IMPL_FN Task create_graph_task(
-  const Context& ctxt,
+  const RenderPass& pass,
   const GraphicsTaskConfig& cfg
 );
 L_IMPL_FN void destroy_task(Task& task);
-
-
-
-L_IMPL_STRUCT struct Framebuffer;
-L_IMPL_FN Framebuffer create_framebuf(
-  const Context& ctxt,
-  const Task& task,
-  const Image& img
-);
-L_IMPL_FN void destroy_framebuf(Framebuffer& framebuf);
 
 
 
@@ -433,6 +432,8 @@ enum CommandType {
   L_COMMAND_TYPE_WRITE_TIMESTAMP,
   L_COMMAND_TYPE_BUFFER_BARRIER,
   L_COMMAND_TYPE_IMAGE_BARRIER,
+  L_COMMAND_TYPE_BEGIN_RENDER_PASS,
+  L_COMMAND_TYPE_END_RENDER_PASS,
 };
 enum SubmitType {
   L_SUBMIT_TYPE_COMPUTE,
@@ -472,7 +473,6 @@ struct Command {
     struct {
       const Task* task;
       const ResourcePool* rsc_pool;
-      const Framebuffer* framebuf;
       BufferView verts;
       uint32_t nvert;
       uint32_t ninst;
@@ -480,7 +480,6 @@ struct Command {
     struct {
       const Task* task;
       const ResourcePool* rsc_pool;
-      const Framebuffer* framebuf;
       BufferView verts;
       BufferView idxs;
       uint32_t nidx;
@@ -503,6 +502,13 @@ struct Command {
       ImageUsage src_usage;
       ImageUsage dst_usage;
     } cmd_img_barrier;
+    struct {
+      const RenderPass* pass;
+      bool draw_inline;
+    } cmd_begin_pass;
+    struct {
+      const RenderPass* pass;
+    } cmd_end_pass;
   };
 };
 
@@ -566,14 +572,12 @@ inline Command cmd_draw(
   const ResourcePool& rsc_pool,
   const BufferView& verts,
   uint32_t nvert,
-  uint32_t ninst,
-  const Framebuffer& framebuf
+  uint32_t ninst
 ) {
   Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_DRAW;
   cmd.cmd_draw.task = &task;
   cmd.cmd_draw.rsc_pool = &rsc_pool;
-  cmd.cmd_draw.framebuf = &framebuf;
   cmd.cmd_draw.verts = verts;
   cmd.cmd_draw.nvert = nvert;
   cmd.cmd_draw.ninst = ninst;
@@ -587,13 +591,12 @@ inline Command cmd_draw_indexed(
   const BufferView& verts,
   uint32_t nidx,
   uint32_t ninst,
-  const Framebuffer& framebuf
+  const RenderPass& pass
 ) {
   Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_DRAW_INDEXED;
   cmd.cmd_draw_indexed.task = &task;
   cmd.cmd_draw_indexed.rsc_pool = &rsc_pool;
-  cmd.cmd_draw_indexed.framebuf = &framebuf;
   cmd.cmd_draw_indexed.verts = verts;
   cmd.cmd_draw_indexed.idxs = idxs;
   cmd.cmd_draw_indexed.nidx = nidx;
@@ -645,6 +648,24 @@ inline Command cmd_img_barrier(
   cmd.cmd_img_barrier.dst_dev_access = dst_dev_access;
   cmd.cmd_img_barrier.src_usage = src_usage;
   cmd.cmd_img_barrier.dst_usage = dst_usage;
+  return cmd;
+}
+inline Command cmd_begin_pass(
+  const RenderPass& pass,
+  bool draw_inline
+) {
+  Command cmd {};
+  cmd.cmd_ty = L_COMMAND_TYPE_BEGIN_RENDER_PASS;
+  cmd.cmd_begin_pass.pass = &pass;
+  cmd.cmd_begin_pass.draw_inline = draw_inline;
+  return cmd;
+}
+inline Command cmd_end_pass(
+  const RenderPass& pass
+) {
+  Command cmd {};
+  cmd.cmd_ty = L_COMMAND_TYPE_END_RENDER_PASS;
+  cmd.cmd_end_pass.pass = &pass;
   return cmd;
 }
 

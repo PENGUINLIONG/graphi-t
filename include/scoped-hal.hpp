@@ -15,7 +15,7 @@ struct Context;
 struct Buffer;
 struct Image;
 struct Task;
-struct Framebuffer;
+struct RenderPass;
 struct ResourcePool;
 struct Transaction;
 struct CommandDrain;
@@ -133,19 +133,45 @@ struct ResourcePool {
 
 
 
-struct Framebuffer {
-  std::unique_ptr<HAL_IMPL_NAMESPACE::Framebuffer> inner;
+struct RenderPass {
+  std::unique_ptr<HAL_IMPL_NAMESPACE::RenderPass> inner;
 
-  Framebuffer(const Context& ctxt, const Task& task, const Image& attm);
-  Framebuffer(HAL_IMPL_NAMESPACE::Framebuffer&& inner);
-  Framebuffer(Framebuffer&&) = default;
-  ~Framebuffer();
+  RenderPass(const Context& ctxt, const Image& attm);
+  RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner);
+  RenderPass(RenderPass&&) = default;
+  ~RenderPass();
 
-  inline operator HAL_IMPL_NAMESPACE::Framebuffer& () {
+  inline operator HAL_IMPL_NAMESPACE::RenderPass& () {
     return *inner;
   }
-  inline operator const HAL_IMPL_NAMESPACE::Framebuffer& () const {
+  inline operator const HAL_IMPL_NAMESPACE::RenderPass& () const {
     return *inner;
+  }
+
+  Task create_graph_task(
+    const std::string& label,
+    const std::string& vert_entry_point,
+    const void* vert_code,
+    const size_t vert_code_size,
+    const std::string& frag_entry_point,
+    const void* frag_code,
+    const size_t frag_code_size,
+    Topology topo,
+    const std::vector<ResourceType>& rsc_tys
+  ) const;
+  template<typename T>
+  inline Task create_graph_task(
+    const std::string& label,
+    const std::string& vert_entry_point,
+    const std::vector<T>& vert_code,
+    const std::string& frag_entry_point,
+    const std::vector<T>& frag_code,
+    Topology topo,
+    const std::vector<ResourceType>& rsc_tys
+  ) const {
+    return create_graph_task(label, vert_entry_point, vert_code.data(),
+      vert_code.size() * sizeof(T), frag_entry_point, frag_code.data(),
+      frag_code.size() * sizeof(T), topo, rsc_tys);
   }
 };
 
@@ -167,7 +193,6 @@ struct Task {
   }
 
   ResourcePool create_rsc_pool() const;
-  Framebuffer create_framebuf(const Image& attm) const;
 };
 
 
@@ -332,6 +357,8 @@ public:
     return get_ctxt_cfg(*inner);
   }
 
+  RenderPass create_pass(const Image& attm) const;
+
   Task create_comp_task(
     const std::string& label,
     const std::string& entry_point,
@@ -350,31 +377,6 @@ public:
   ) const {
     return create_comp_task(label, entry_point, code.data(),
       code.size() * sizeof(T), workgrp_size, rsc_tys);
-  }
-  Task create_graph_task(
-    const std::string& label,
-    const std::string& vert_entry_point,
-    const void* vert_code,
-    const size_t vert_code_size,
-    const std::string& frag_entry_point,
-    const void* frag_code,
-    const size_t frag_code_size,
-    Topology topo,
-    const std::vector<ResourceType>& rsc_tys
-  ) const;
-  template<typename T>
-  inline Task create_graph_task(
-    const std::string& label,
-    const std::string& vert_entry_point,
-    const std::vector<T>& vert_code,
-    const std::string& frag_entry_point,
-    const std::vector<T>& frag_code,
-    Topology topo,
-    const std::vector<ResourceType>& rsc_tys
-  ) const {
-    return create_graph_task(label, vert_entry_point, vert_code.data(),
-      vert_code.size() * sizeof(T), frag_entry_point, frag_code.data(),
-      frag_code.size() * sizeof(T), topo, rsc_tys);
   }
 
   Buffer create_buf(

@@ -17,6 +17,10 @@ Context::Context(const std::string& label, uint32_t dev_idx) :
   Context(ContextConfig { label, dev_idx }) {}
 Context::~Context() { HAL_IMPL_NAMESPACE::destroy_ctxt(*inner); }
 
+RenderPass Context::create_pass(const Image& attm) const {
+  return HAL_IMPL_NAMESPACE::create_pass(*inner, *attm.inner);
+}
+
 Task Context::create_comp_task(
   const std::string& label,
   const std::string& entry_point,
@@ -34,30 +38,6 @@ Task Context::create_comp_task(
   comp_task_cfg.nrsc_ty = rsc_tys.size();
   comp_task_cfg.workgrp_size = workgrp_size;
   return HAL_IMPL_NAMESPACE::create_comp_task(*inner, comp_task_cfg);
-}
-Task Context::create_graph_task(
-  const std::string& label,
-  const std::string& vert_entry_point,
-  const void* vert_code,
-  const size_t vert_code_size,
-  const std::string& frag_entry_point,
-  const void* frag_code,
-  const size_t frag_code_size,
-  Topology topo,
-  const std::vector<ResourceType>& rsc_tys
-) const {
-  GraphicsTaskConfig graph_task_cfg {};
-  graph_task_cfg.label = label;
-  graph_task_cfg.vert_entry_name = vert_entry_point.c_str();
-  graph_task_cfg.vert_code = vert_code;
-  graph_task_cfg.vert_code_size = vert_code_size;
-  graph_task_cfg.frag_entry_name = frag_entry_point.c_str();
-  graph_task_cfg.frag_code = frag_code;
-  graph_task_cfg.frag_code_size = frag_code_size;
-  graph_task_cfg.topo = topo;
-  graph_task_cfg.rsc_tys = rsc_tys.data();
-  graph_task_cfg.nrsc_ty = rsc_tys.size();
-  return HAL_IMPL_NAMESPACE::create_graph_task(*inner, graph_task_cfg);
 }
 
 Buffer Context::create_buf(
@@ -297,9 +277,11 @@ Timestamp Context::create_timestamp() const {
 
 Buffer::Buffer(const Context& ctxt, const BufferConfig& cfg) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::Buffer>(
-    create_buf(*ctxt.inner, cfg))) {}
+    create_buf(*ctxt.inner, cfg))),
+  dont_destroy(false) {}
 Buffer::Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner) :
-    inner(std::make_unique<HAL_IMPL_NAMESPACE::Buffer>(inner)) {}
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::Buffer>(inner)),
+  dont_destroy(false) {}
 Buffer::~Buffer() {
   if (!dont_destroy) {
     HAL_IMPL_NAMESPACE::destroy_buf(*inner);
@@ -310,9 +292,11 @@ Buffer::~Buffer() {
 
 Image::Image(const Context& ctxt, const ImageConfig& cfg) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::Image>(
-    create_img(*ctxt.inner, cfg))) {}
+    create_img(*ctxt.inner, cfg))),
+  dont_destroy(false) {}
 Image::Image(HAL_IMPL_NAMESPACE::Image&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Image>(inner)) {}
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::Image>(inner)),
+  dont_destroy(false) {}
 Image::~Image() {
   if (!dont_destroy) {
     HAL_IMPL_NAMESPACE::destroy_img(*inner);
@@ -331,21 +315,42 @@ Task::~Task() { destroy_task(*inner); }
 ResourcePool Task::create_rsc_pool() const {
   return HAL_IMPL_NAMESPACE::create_rsc_pool(*inner->ctxt, *inner);
 }
-Framebuffer Task::create_framebuf(const Image& attm) const {
-  return HAL_IMPL_NAMESPACE::create_framebuf(*inner->ctxt, *inner, *attm.inner);
-}
 
 
 
-Framebuffer::Framebuffer(
+RenderPass::RenderPass(
   const Context& ctxt,
-  const Task& task,
   const Image& attm
-) : inner(std::make_unique<HAL_IMPL_NAMESPACE::Framebuffer>(
-  create_framebuf(*ctxt.inner, *task.inner, *attm.inner))) {}
-Framebuffer::Framebuffer(HAL_IMPL_NAMESPACE::Framebuffer&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Framebuffer>(inner)) {}
-Framebuffer::~Framebuffer() { destroy_framebuf(*inner); }
+) : inner(std::make_unique<HAL_IMPL_NAMESPACE::RenderPass>(
+  create_pass(*ctxt.inner, *attm.inner))) {}
+RenderPass::RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner) :
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::RenderPass>(inner)) {}
+RenderPass::~RenderPass() { destroy_pass(*inner); }
+
+Task RenderPass::create_graph_task(
+  const std::string& label,
+  const std::string& vert_entry_point,
+  const void* vert_code,
+  const size_t vert_code_size,
+  const std::string& frag_entry_point,
+  const void* frag_code,
+  const size_t frag_code_size,
+  Topology topo,
+  const std::vector<ResourceType>& rsc_tys
+) const {
+  GraphicsTaskConfig graph_task_cfg {};
+  graph_task_cfg.label = label;
+  graph_task_cfg.vert_entry_name = vert_entry_point.c_str();
+  graph_task_cfg.vert_code = vert_code;
+  graph_task_cfg.vert_code_size = vert_code_size;
+  graph_task_cfg.frag_entry_name = frag_entry_point.c_str();
+  graph_task_cfg.frag_code = frag_code;
+  graph_task_cfg.frag_code_size = frag_code_size;
+  graph_task_cfg.topo = topo;
+  graph_task_cfg.rsc_tys = rsc_tys.data();
+  graph_task_cfg.nrsc_ty = rsc_tys.size();
+  return HAL_IMPL_NAMESPACE::create_graph_task(*inner, graph_task_cfg);
+}
 
 
 

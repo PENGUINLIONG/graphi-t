@@ -5,6 +5,7 @@
 #include "assert.hpp"
 #include "util.hpp"
 #include "log.hpp"
+#include "timer.hpp"
 #define HAL_IMPL_NAMESPACE vk
 #include "scoped-hal-impl.hpp"
 #undef HAL_IMPL_NAMESPACE
@@ -869,7 +870,7 @@ Task create_comp_task(
 
   liong::log::info("created compute task '", cfg.label, "'");
   return Task {
-    &ctxt, desc_set_layout, pipe_layout, pipe, VK_NULL_HANDLE, { shader_mod },
+    &ctxt, desc_set_layout, pipe_layout, pipe, { shader_mod },
     std::move(desc_pool_sizes), cfg.label,
   };
 }
@@ -921,9 +922,11 @@ VkRenderPass _create_pass(
 }
 
 Task create_graph_task(
-  const Context& ctxt,
+  const RenderPass& pass,
   const GraphicsTaskConfig& cfg
 ) {
+  const Context& ctxt = *pass.ctxt;
+
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   VkDescriptorSetLayout desc_set_layout =
     _create_desc_set_layout(ctxt, cfg.rsc_tys, cfg.nrsc_ty, desc_pool_sizes);
@@ -932,7 +935,6 @@ Task create_graph_task(
     _create_shader_mod(ctxt, cfg.vert_code, cfg.vert_code_size);
   VkShaderModule frag_shader_mod =
     _create_shader_mod(ctxt, cfg.frag_code, cfg.frag_code_size);
-  VkRenderPass pass = _create_pass(ctxt);
 
   VkPipelineShaderStageCreateInfo psscis[2] {};
   {
@@ -985,13 +987,21 @@ Task create_graph_task(
   piasci.primitiveRestartEnable = VK_FALSE;
 
   VkViewport viewport {};
+  viewport.x = 0;
+  viewport.y = 0;
+  viewport.width = pass.viewport.extent.width;
+  viewport.height = pass.viewport.extent.height;
+  viewport.minDepth = 0.0f;
+  viewport.maxDepth = 1.0f;
   VkRect2D scissor {};
+  scissor.offset = pass.viewport.offset;
+  scissor.extent = pass.viewport.extent;
   VkPipelineViewportStateCreateInfo pvsci {};
   pvsci.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
   pvsci.viewportCount = 1;
-  pvsci.pViewports = &viewport; // Dynamically specified.
+  pvsci.pViewports = &viewport;
   pvsci.scissorCount = 1;
-  pvsci.pScissors = &scissor; // Dynamically specified.
+  pvsci.pScissors = &scissor;
 
   VkPipelineRasterizationStateCreateInfo prsci {};
   prsci.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
@@ -1027,14 +1037,10 @@ Task create_graph_task(
   pcbsci.attachmentCount = (uint32_t)pcbass.size();
   pcbsci.pAttachments = pcbass.data();
 
-  std::array<VkDynamicState, 2> dss {
-    VK_DYNAMIC_STATE_VIEWPORT,
-    VK_DYNAMIC_STATE_SCISSOR,
-  };
   VkPipelineDynamicStateCreateInfo pdsci {};
   pdsci.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-  pdsci.dynamicStateCount = (uint32_t)dss.size();
-  pdsci.pDynamicStates = dss.data();
+  pdsci.dynamicStateCount = 0;
+  pdsci.pDynamicStates = nullptr;
 
   VkGraphicsPipelineCreateInfo gpci {};
   gpci.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -1050,7 +1056,7 @@ Task create_graph_task(
   gpci.pColorBlendState = &pcbsci;
   gpci.pDynamicState = &pdsci;
   gpci.layout = pipe_layout;
-  gpci.renderPass = pass;
+  gpci.renderPass = pass.pass;
   gpci.subpass = 0;
 
   VkPipeline pipe;
@@ -1059,15 +1065,12 @@ Task create_graph_task(
 
   liong::log::info("created graphics task '", cfg.label, "'");
   return Task {
-    &ctxt, desc_set_layout, pipe_layout, pipe, pass,
+    &ctxt, desc_set_layout, pipe_layout, pipe,
     { vert_shader_mod, frag_shader_mod }, std::move(desc_pool_sizes), cfg.label,
   };
 }
 void destroy_task(Task& task) {
   vkDestroyPipeline(task.ctxt->dev, task.pipe, nullptr);
-  if (task.pass != VK_NULL_HANDLE) {
-    vkDestroyRenderPass(task.ctxt->dev, task.pass, nullptr);
-  }
   for (const VkShaderModule& shader_mod : task.shader_mods) {
     vkDestroyShaderModule(task.ctxt->dev, shader_mod, nullptr);
   }
@@ -1081,14 +1084,15 @@ void destroy_task(Task& task) {
 
 
 
-Framebuffer create_framebuf(
+RenderPass create_pass(
   const Context& ctxt,
-  const Task& task,
   const Image& attm
 ) {
+  VkRenderPass pass = _create_pass(ctxt);
+
   VkFramebufferCreateInfo fci {};
   fci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-  fci.renderPass = task.pass;
+  fci.renderPass = pass;
   fci.attachmentCount = 1;
   fci.pAttachments = &attm.img_view;
   fci.width = (uint32_t)attm.img_cfg.ncol;
@@ -1102,13 +1106,14 @@ Framebuffer create_framebuf(
   viewport.extent.width = (uint32_t)attm.img_cfg.ncol;
   viewport.extent.height = (uint32_t)attm.img_cfg.nrow;
 
-  liong::log::info("created framebuffer");
-  return { &ctxt, &task, &attm, std::move(viewport), framebuf };
+  liong::log::info("created render pass");
+  return { &ctxt, &attm, pass, std::move(viewport), framebuf };
 }
-void destroy_framebuf(Framebuffer& framebuf) {
-  vkDestroyFramebuffer(framebuf.ctxt->dev, framebuf.framebuf, nullptr);
-  framebuf.framebuf = VK_NULL_HANDLE;
-  liong::log::info("destroyed framebuffer");
+void destroy_pass(RenderPass& pass) {
+  vkDestroyFramebuffer(pass.ctxt->dev, pass.framebuf, nullptr);
+  vkDestroyRenderPass(pass.ctxt->dev, pass.pass, nullptr);
+  pass = {};
+  liong::log::info("destroyed render pass");
 }
 
 
@@ -1221,18 +1226,6 @@ void bind_pool_rsc(
 
 
 
-
-
-
-
-
-
-
-
-
-
-
-
 VkSemaphore _create_sema(const Context& ctxt) {
   VkSemaphoreCreateInfo sci {};
   sci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -1250,27 +1243,16 @@ VkFence _create_fence(const Context& ctxt) {
   return fence;
 }
 
-VkCommandPool _create_cmd_pool(const Context& ctxt, uint32_t qfam_idx) {
+VkCommandPool _create_cmd_pool(const Context& ctxt, SubmitType submit_ty) {
   VkCommandPoolCreateInfo cpci {};
   cpci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
   cpci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-  cpci.queueFamilyIndex = qfam_idx;
+  cpci.queueFamilyIndex = ctxt.get_submit_ty_qfam_idx(submit_ty);
 
   VkCommandPool cmd_pool;
   VK_ASSERT << vkCreateCommandPool(ctxt.dev, &cpci, nullptr, &cmd_pool);
 
   return cmd_pool;
-}
-std::array<VkCommandPool, 2> _collect_cmd_pools(
-  const Context& ctxt
-) {
-  std::array<VkCommandPool, 2> cmd_pools {};
-  for (auto i = 0; i < ctxt.submit_details.size(); ++i) {
-    const auto& submit_detail = ctxt.submit_details[i];
-    cmd_pools[i] = _create_cmd_pool(ctxt, submit_detail.qfam_idx);
-  }
-
-  return cmd_pools;
 }
 VkCommandBuffer _alloc_cmdbuf(
   const Context& ctxt,
@@ -1293,45 +1275,77 @@ VkCommandBuffer _alloc_cmdbuf(
 
 struct TransactionLike {
   const Context* ctxt;
-  std::array<VkCommandPool, 2> cmd_pools;
   std::vector<TransactionSubmitDetail> submit_details;
-  std::vector<VkSemaphore> semas;
-  VkFence fence;
   VkCommandBufferLevel level;
 };
-VkCommandBuffer _start_cmdbuf(
-  TransactionLike& transact,
-  SubmitType submit_ty
-) {
-  auto icmd_pool = transact.ctxt->get_queue_rsc_idx(submit_ty);
-  auto queue = transact.ctxt->submit_details[icmd_pool].queue;
-  auto qfam_idx = transact.ctxt->submit_details[icmd_pool].qfam_idx;
-  auto cmd_pool = transact.cmd_pools[icmd_pool];
-  auto cmdbuf = _alloc_cmdbuf(*transact.ctxt, cmd_pool, transact.level);
-
+void _begin_cmdbuf(const TransactionSubmitDetail& submit_detail) {
   VkCommandBufferInheritanceInfo cbii {};
   cbii.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
 
   VkCommandBufferBeginInfo cbbi {};
   cbbi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  if (submit_ty == L_SUBMIT_TYPE_GRAPHICS) {
+  if (submit_detail.submit_ty == L_SUBMIT_TYPE_GRAPHICS) {
     cbbi.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
   }
   cbbi.pInheritanceInfo = &cbii;
-  VK_ASSERT << vkBeginCommandBuffer(cmdbuf, &cbbi);
+  VK_ASSERT << vkBeginCommandBuffer(submit_detail.cmdbuf, &cbbi);
+}
+void _end_cmdbuf(const TransactionSubmitDetail& submit_detail) {
+  VK_ASSERT << vkEndCommandBuffer(submit_detail.cmdbuf);
+}
 
-  TransactionSubmitDetail submit_detail;
+void _push_transact_submit_detail(
+  const Context& ctxt,
+  std::vector<TransactionSubmitDetail>& submit_details,
+  SubmitType submit_ty,
+  VkCommandBufferLevel level
+) {
+  auto cmd_pool = _create_cmd_pool(ctxt, submit_ty);
+  auto cmdbuf = _alloc_cmdbuf(ctxt, cmd_pool, level);
+
+  TransactionSubmitDetail submit_detail {};
   submit_detail.submit_ty = submit_ty;
+  submit_detail.cmd_pool = cmd_pool;
   submit_detail.cmdbuf = cmdbuf;
-  submit_detail.queue = queue;
-  submit_detail.qfam_idx = qfam_idx;
-  submit_detail.pass_detail.pass = VK_NULL_HANDLE;
-  submit_detail.pass_detail.framebuf = VK_NULL_HANDLE;
-  submit_detail.pass_detail.render_area = {};
-  submit_detail.pass_detail.clear_value = {{{ 0.0f, 0.0f, 0.0f, 0.0f }}};
+  submit_detail.wait_sema = submit_details.empty() ?
+    VK_NULL_HANDLE : submit_details.back().signal_sema;
+  submit_detail.signal_sema = _create_sema(ctxt);
 
-  transact.submit_details.emplace_back(std::move(submit_detail));
-  return cmdbuf;
+  submit_details.emplace_back(std::move(submit_detail));
+}
+void _clear_transact_submit_detail(
+  const Context& ctxt,
+  std::vector<TransactionSubmitDetail>& submit_details
+) {
+  for (auto& submit_detail : submit_details) {
+    vkDestroySemaphore(ctxt.dev, submit_detail.signal_sema, nullptr);
+    vkDestroyCommandPool(ctxt.dev, submit_detail.cmd_pool, nullptr);
+  }
+  submit_details.clear();
+}
+void _submit_transact_submit_detail(
+  const Context& ctxt,
+  const TransactionSubmitDetail& submit_detail,
+  VkFence fence
+) {
+  VkPipelineStageFlags stage_mask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+
+  VkSubmitInfo submit_info {};
+  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submit_info.commandBufferCount = 1;
+  submit_info.pCommandBuffers = &submit_detail.cmdbuf;
+  submit_info.signalSemaphoreCount = 1;
+  if (submit_detail.wait_sema != VK_NULL_HANDLE) {
+    // Wait for the last submitted command buffer on the device side.
+    submit_info.waitSemaphoreCount = 1;
+    submit_info.pWaitSemaphores = &submit_detail.wait_sema;
+    submit_info.pWaitDstStageMask = &stage_mask;
+  }
+  submit_info.pSignalSemaphores = &submit_detail.signal_sema;
+
+  // Finish recording and submit the command buffer to the device.
+  VkQueue queue = ctxt.get_submit_ty_queue(submit_detail.submit_ty);
+  VK_ASSERT << vkQueueSubmit(queue, 1, &submit_info, fence);
 }
 VkCommandBuffer _get_cmdbuf(
   TransactionLike& transact,
@@ -1342,65 +1356,31 @@ VkCommandBuffer _get_cmdbuf(
       "cannot infer submit type for submit-type-independent command");
     submit_ty = transact.submit_details.back().submit_ty;
   }
-  auto isubmit_detail = transact.ctxt->get_queue_rsc_idx(submit_ty);
-  auto queue = transact.ctxt->submit_details[isubmit_detail].queue;
-  auto qfam_idx = transact.ctxt->submit_details[isubmit_detail].qfam_idx;
+  const auto& submit_detail = transact.ctxt->get_submit_detail(submit_ty);
+  auto queue = submit_detail.queue;
+  auto qfam_idx = submit_detail.qfam_idx;
+
   if (!transact.submit_details.empty()) {
+    // Do nothing if the submit type is unchanged. It means that the commands
+    // can still be fed into the last command buffer.
     auto& last_submit = transact.submit_details.back();
-    if (queue == last_submit.queue) {
+    if (submit_ty == last_submit.submit_ty) {
       return last_submit.cmdbuf;
-    } else {
-      VK_ASSERT << vkEndCommandBuffer(last_submit.cmdbuf);
-      if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-        VkPipelineStageFlags stage_mask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-
-        VkSubmitInfo submit_info {};
-        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &last_submit.cmdbuf;
-        submit_info.signalSemaphoreCount = 1;
-        if (!transact.semas.empty()) {
-          // Wait for the last submitted command buffer on the device side.
-          submit_info.waitSemaphoreCount = 1;
-          submit_info.pWaitSemaphores = &transact.semas.back();
-          submit_info.pWaitDstStageMask = &stage_mask;
-        }
-        auto sema = _create_sema(*transact.ctxt);
-        submit_info.pSignalSemaphores = &sema;
-
-        // Finish recording and submit the command buffer to the device.
-        VK_ASSERT <<
-          vkQueueSubmit(last_submit.queue, 1, &submit_info, VK_NULL_HANDLE);
-
-        // Don't push before queue submit, or the address might change.
-        transact.semas.push_back(sema);
-      }
-    }
-  }
-  return _start_cmdbuf(transact, submit_ty);
-}
-void _seal_transact(TransactionLike& transact) {
-  const auto& last_submit = transact.submit_details.back();
-  VK_ASSERT << vkEndCommandBuffer(last_submit.cmdbuf);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    VkPipelineStageFlags stage_mask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-
-    VkSubmitInfo submit_info {};
-    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &last_submit.cmdbuf;
-    if (!transact.semas.empty()) {
-      // Wait for the last submitted command buffer on the device side.
-      submit_info.waitSemaphoreCount = 1;
-      submit_info.pWaitSemaphores = &transact.semas.back();
-      submit_info.pWaitDstStageMask = &stage_mask;
     }
 
-    // Finish recording and submit the command buffer to the device. The fence
-    // is created externally.
-    VK_ASSERT <<
-      vkQueueSubmit(last_submit.queue, 1, &submit_info, transact.fence);
+    // Otherwise, end the command buffer and, it it's a primary command buffer,
+    // submit the recorded commands.
+    _end_cmdbuf(last_submit);
+    if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+      _submit_transact_submit_detail(*transact.ctxt,
+        transact.submit_details.back(), VK_NULL_HANDLE);
+    }
   }
+
+  _push_transact_submit_detail(*transact.ctxt, transact.submit_details,
+    submit_ty, transact.level);
+  _begin_cmdbuf(transact.submit_details.back());
+  return transact.submit_details.back().cmdbuf;
 }
 
 void _record_cmd_set_submit_ty(
@@ -1417,7 +1397,8 @@ void _record_cmd_inline_transact(
   TransactionLike& transact,
   const Command& cmd
 ) {
-  liong::assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+  assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+    "nested inline transaction is not allowed");
   const auto& in = cmd.cmd_inline_transact;
   const auto& subtransact = *in.transact;
 
@@ -1425,26 +1406,11 @@ void _record_cmd_inline_transact(
     const auto& submit_detail = subtransact.submit_details[i];
     auto cmdbuf = _get_cmdbuf(transact, submit_detail.submit_ty);
 
-    if (submit_detail.submit_ty == L_SUBMIT_TYPE_GRAPHICS) {
-      VkRenderPassBeginInfo rpbi {};
-      rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-      rpbi.renderPass = submit_detail.pass_detail.pass;
-      rpbi.framebuffer = submit_detail.pass_detail.framebuf;
-      rpbi.renderArea.extent = submit_detail.pass_detail.render_area;
-      rpbi.clearValueCount = 1;
-      rpbi.pClearValues = &submit_detail.pass_detail.clear_value;
-      vkCmdBeginRenderPass(cmdbuf, &rpbi,
-        VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
-    }
     vkCmdExecuteCommands(cmdbuf, 1, &submit_detail.cmdbuf);
-    if (submit_detail.submit_ty == L_SUBMIT_TYPE_GRAPHICS) {
-      vkCmdEndRenderPass(cmdbuf);
-    }
   }
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::info("scheduled inline transaction '",
-      cmd.cmd_inline_transact.transact->label, "'");
-  }
+
+  liong::log::info("scheduled inline transaction '",
+    cmd.cmd_inline_transact.transact->label, "'");
 }
 
 void _record_cmd_copy_buf2img(TransactionLike& transact, const Command& cmd) {
@@ -1572,84 +1538,47 @@ void _record_cmd_dispatch(TransactionLike& transact, const Command& cmd) {
   }
 }
 
-
-void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
-  const auto& task = cmd.cmd_ty == L_COMMAND_TYPE_DRAW ?
-    *cmd.cmd_draw.task : *cmd.cmd_draw_indexed.task;
-  const auto& rsc_pool = cmd.cmd_ty == L_COMMAND_TYPE_DRAW ?
-    *cmd.cmd_draw.rsc_pool : *cmd.cmd_draw_indexed.rsc_pool;
-  const auto& framebuf = cmd.cmd_ty == L_COMMAND_TYPE_DRAW ?
-    *cmd.cmd_draw.framebuf : *cmd.cmd_draw_indexed.framebuf;
+void _record_cmd_draw(TransactionLike& transact, const Command& cmd) {
+  const auto& in = cmd.cmd_draw;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
 
-  // TODO: (penguinliong) Move this to a specialized command.
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    VkRenderPassBeginInfo rpbi {};
-    rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    rpbi.renderPass = task.pass;
-    rpbi.framebuffer = framebuf.framebuf;
-    rpbi.renderArea.extent = framebuf.viewport.extent;
-    rpbi.clearValueCount = 1;
-    rpbi.pClearValues = &framebuf.clear_value;
-
-    vkCmdBeginRenderPass(cmdbuf, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
-  } else {
-    auto& last_submit = transact.submit_details.back();
-    liong::assert(last_submit.pass_detail.pass == VK_NULL_HANDLE,
-      "secondary command buffer can only contain one render pass");
-    last_submit.pass_detail.pass = task.pass;
-    last_submit.pass_detail.framebuf = framebuf.framebuf;
-    last_submit.pass_detail.render_area = framebuf.viewport.extent;
-    last_submit.pass_detail.clear_value = framebuf.clear_value;
-  }
-
-  vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, task.pipe);
-  if (rsc_pool.desc_set != VK_NULL_HANDLE) {
+  vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+    in.task->pipe);
+  if (in.rsc_pool->desc_set != VK_NULL_HANDLE) {
     vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-      task.pipe_layout, 0, 1, &rsc_pool.desc_set, 0, nullptr);
-  }
-  VkRect2D scissor {};
-  scissor.extent = framebuf.viewport.extent;
-  vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
-  VkViewport viewport {};
-  viewport.width = (float)framebuf.viewport.extent.width;
-  viewport.height = (float)framebuf.viewport.extent.height;
-  viewport.minDepth = 0.0f;
-  viewport.maxDepth = 1.0f;
-  vkCmdSetViewport(cmdbuf, 0, 1, &viewport);
-
-  if (cmd.cmd_ty == L_COMMAND_TYPE_DRAW) {
-    const auto& in = cmd.cmd_draw;
-
-    VkDeviceSize offset = in.verts.offset;
-    vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts.buf->buf, &offset);
-    vkCmdDraw(cmdbuf, in.nvert, in.ninst, 0, 0);
-
-    if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-      liong::log::info("scheduled graphics task '", in.task->label,
-        "' for execution");
-    }
-  } else if (cmd.cmd_ty == L_COMMAND_TYPE_DRAW_INDEXED) {
-    const auto& in = cmd.cmd_draw_indexed;
-
-    VkDeviceSize offset = in.verts.offset;
-    vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts.buf->buf, &offset);
-
-    vkCmdBindIndexBuffer(cmdbuf, in.idxs.buf->buf, in.idxs.offset,
-      VK_INDEX_TYPE_UINT16);
-    vkCmdDrawIndexed(cmdbuf, in.nidx, in.ninst, 0, 0, 0);
-
-    if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-      liong::log::info("scheduled graphics task '", in.task->label,
-        "' for execution");
-    }
-  } else {
-    liong::panic("unexpected command type ", cmd.cmd_ty);
+      in.task->pipe_layout, 0, 1, &in.rsc_pool->desc_set, 0, nullptr);
   }
 
-  // TODO: (penguinliong) Move this to a specialized command.
+  VkDeviceSize offset = in.verts.offset;
+  vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts.buf->buf, &offset);
+  vkCmdDraw(cmdbuf, in.nvert, in.ninst, 0, 0);
+
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    vkCmdEndRenderPass(cmdbuf);
+    liong::log::info("scheduled graphics task '", in.task->label, "' for "
+      "execution");
+  }
+}
+void _record_cmd_draw_indexed(TransactionLike& transact, const Command& cmd) {
+  const auto& in = cmd.cmd_draw_indexed;
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
+
+  vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+    in.task->pipe);
+  if (in.rsc_pool->desc_set != VK_NULL_HANDLE) {
+    vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
+      in.task->pipe_layout, 0, 1, &in.rsc_pool->desc_set, 0, nullptr);
+  }
+
+  VkDeviceSize offset = in.verts.offset;
+  vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts.buf->buf, &offset);
+
+  vkCmdBindIndexBuffer(cmdbuf, in.idxs.buf->buf, in.idxs.offset,
+    VK_INDEX_TYPE_UINT16);
+  vkCmdDrawIndexed(cmdbuf, in.nidx, in.ninst, 0, 0, 0);
+
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    liong::log::info("scheduled graphics task '", in.task->label, "' for "
+      "execution");
   }
 }
 
@@ -1657,9 +1586,10 @@ void _record_cmd_write_timestamp(
   TransactionLike& transact,
   const Command& cmd
 ) {
+  const auto& in = cmd.cmd_write_timestamp;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
 
-  auto query_pool = cmd.cmd_write_timestamp.timestamp->query_pool;
+  auto query_pool = in.timestamp->query_pool;
   vkCmdResetQueryPool(cmdbuf, query_pool, 0, 1);
   vkCmdWriteTimestamp(cmdbuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, query_pool, 0);
 
@@ -1667,18 +1597,6 @@ void _record_cmd_write_timestamp(
     liong::log::info("schedule timestamp write");
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 void _make_buf_barrier_params(
   BufferUsage usage,
@@ -1890,12 +1808,13 @@ void _record_cmd_buf_barrier(
   TransactionLike& transact,
   const Command& cmd
 ) {
+  const auto& in = cmd.cmd_buf_barrier;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
 
-  BufferUsage src_usage = cmd.cmd_buf_barrier.src_usage;
-  BufferUsage dst_usage = cmd.cmd_buf_barrier.dst_usage;
-  MemoryAccess src_dev_access = cmd.cmd_buf_barrier.src_dev_access;
-  MemoryAccess dst_dev_access = cmd.cmd_buf_barrier.dst_dev_access;
+  BufferUsage src_usage = in.src_usage;
+  BufferUsage dst_usage = in.dst_usage;
+  MemoryAccess src_dev_access = in.src_dev_access;
+  MemoryAccess dst_dev_access = in.dst_dev_access;
 
   VkAccessFlags src_access = 0;
   VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
@@ -1907,7 +1826,7 @@ void _record_cmd_buf_barrier(
 
   VkBufferMemoryBarrier bmb {};
   bmb.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-  bmb.buffer = cmd.cmd_buf_barrier.buf->buf;
+  bmb.buffer = in.buf->buf;
   bmb.srcAccessMask = src_access;
   bmb.dstAccessMask = dst_access;
   bmb.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -1931,12 +1850,13 @@ void _record_cmd_img_barrier(
   TransactionLike& transact,
   const Command& cmd
 ) {
+  const auto& in = cmd.cmd_img_barrier;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
 
-  ImageUsage src_usage = cmd.cmd_img_barrier.src_usage;
-  ImageUsage dst_usage = cmd.cmd_img_barrier.dst_usage;
-  MemoryAccess src_dev_access = cmd.cmd_img_barrier.src_dev_access;
-  MemoryAccess dst_dev_access = cmd.cmd_img_barrier.dst_dev_access;
+  ImageUsage src_usage = in.src_usage;
+  ImageUsage dst_usage = in.dst_usage;
+  MemoryAccess src_dev_access = in.src_dev_access;
+  MemoryAccess dst_dev_access = in.dst_dev_access;
 
   VkAccessFlags src_access = 0;
   VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
@@ -1952,7 +1872,7 @@ void _record_cmd_img_barrier(
 
   VkImageMemoryBarrier imb {};
   imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  imb.image = cmd.cmd_img_barrier.img->img;
+  imb.image = in.img->img;
   imb.srcAccessMask = src_access;
   imb.dstAccessMask = dst_access;
   imb.oldLayout = src_layout;
@@ -1978,6 +1898,36 @@ void _record_cmd_img_barrier(
   }
 }
 
+void _record_cmd_begin_pass(TransactionLike& transact, const Command& cmd) {
+  liong::assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+  const auto& in = cmd.cmd_begin_pass;
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
+  const auto& pass = *in.pass;
+
+  VkRenderPassBeginInfo rpbi {};
+  rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+  rpbi.renderPass = pass.pass;
+  rpbi.framebuffer = pass.framebuf;
+  rpbi.renderArea.extent = pass.viewport.extent;
+  rpbi.clearValueCount = 1;
+  rpbi.pClearValues = &pass.clear_value;
+  VkSubpassContents sc = in.draw_inline ?
+    VK_SUBPASS_CONTENTS_INLINE :
+    VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS;
+  vkCmdBeginRenderPass(cmdbuf, &rpbi, sc);
+
+  liong::log::info("scheduled render pass begin");
+}
+void _record_cmd_end_pass(TransactionLike& transact, const Command& cmd) {
+  liong::assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+  const auto& in = cmd.cmd_end_pass;
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
+
+  vkCmdEndRenderPass(cmdbuf);
+
+  liong::log::info("scheduled render pass end");
+}
+
 // Returns whether the submit queue to submit has changed.
 void _record_cmd(TransactionLike& transact, const Command& cmd) {
   switch (cmd.cmd_ty) {
@@ -1985,8 +1935,6 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
     _record_cmd_set_submit_ty(transact, cmd);
     break;
   case L_COMMAND_TYPE_INLINE_TRANSACTION:
-    assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-      "nested inline transaction is not allowed");
     _record_cmd_inline_transact(transact, cmd);
     break;
   case L_COMMAND_TYPE_COPY_BUFFER_TO_IMAGE:
@@ -2005,10 +1953,10 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
     _record_cmd_dispatch(transact, cmd);
     break;
   case L_COMMAND_TYPE_DRAW:
-    _record_cmd_draw_common(transact, cmd);
+    _record_cmd_draw(transact, cmd);
     break;
   case L_COMMAND_TYPE_DRAW_INDEXED:
-    _record_cmd_draw_common(transact, cmd);
+    _record_cmd_draw_indexed(transact, cmd);
     break;
   case L_COMMAND_TYPE_WRITE_TIMESTAMP:
     _record_cmd_write_timestamp(transact, cmd);
@@ -2018,6 +1966,12 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
     break;
   case L_COMMAND_TYPE_IMAGE_BARRIER:
     _record_cmd_img_barrier(transact, cmd);
+    break;
+  case L_COMMAND_TYPE_BEGIN_RENDER_PASS:
+    _record_cmd_begin_pass(transact, cmd);
+    break;
+  case L_COMMAND_TYPE_END_RENDER_PASS:
+    _record_cmd_end_pass(transact, cmd);
     break;
   default:
     liong::log::warn("ignored unknown command: ", cmd.cmd_ty);
@@ -2029,15 +1983,11 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
 
 CommandDrain create_cmd_drain(const Context& ctxt) {
   auto fence = _create_fence(ctxt);
-  auto cmd_pools = _collect_cmd_pools(ctxt);
   liong::log::info("created command drain");
-  return CommandDrain { &ctxt, std::move(cmd_pools), {}, fence, {}, {} };
+  return CommandDrain { &ctxt, {}, fence };
 }
 void destroy_cmd_drain(CommandDrain& cmd_drain) {
-  for (auto cmd_pool : cmd_drain.cmd_pools) {
-    if (cmd_pool == VK_NULL_HANDLE) { break; }
-    vkDestroyCommandPool(cmd_drain.ctxt->dev, cmd_pool, nullptr);
-  }
+  _clear_transact_submit_detail(*cmd_drain.ctxt, cmd_drain.submit_details);
   vkDestroyFence(cmd_drain.ctxt->dev, cmd_drain.fence, nullptr);
   cmd_drain = {};
   liong::log::info("destroyed command drain");
@@ -2047,40 +1997,37 @@ void submit_cmds(
   const Command* cmds,
   size_t ncmd
 ) {
-  auto tic = std::chrono::high_resolution_clock::now();
-  TransactionLike transact;
+  liong::assert(ncmd > 0, "cannot submit empty command buffer");
+
+  TransactionLike transact {};
   transact.ctxt = cmd_drain.ctxt;
-  transact.cmd_pools = std::move(cmd_drain.cmd_pools);
-  transact.fence = cmd_drain.fence;
   transact.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
+  liong::Timer timer {};
+  timer.tic();
   for (auto i = 0; i < ncmd; ++i) {
     liong::log::debug("recording ", i, "th command");
     _record_cmd(transact, cmds[i]);
   }
-  _seal_transact(transact);
-  cmd_drain.semas = std::move(transact.semas);
-  cmd_drain.cmd_pools = std::move(transact.cmd_pools);
-  auto toc = std::chrono::high_resolution_clock::now();
+  cmd_drain.submit_details = std::move(transact.submit_details);
+  timer.toc();
 
-  cmd_drain.submit_since = toc;
-  std::chrono::duration<double, std::micro> drecord = toc - tic;
+  _end_cmdbuf(cmd_drain.submit_details.back());
+  _submit_transact_submit_detail(*cmd_drain.ctxt,
+    cmd_drain.submit_details.back(), cmd_drain.fence);
+
   liong::log::info("submitted transaction for execution, command recording "
-    "took ", drecord.count(), "us");
+    "took ", timer.us(), "us");
 }
 void _reset_cmd_drain(CommandDrain& cmd_drain) {
-  for (auto sema : cmd_drain.semas) {
-    vkDestroySemaphore(cmd_drain.ctxt->dev, sema, nullptr);
-  }
-  cmd_drain.semas.clear();
-  for (auto cmd_pool : cmd_drain.cmd_pools) {
-    if (cmd_pool == VK_NULL_HANDLE) { break; }
-    VK_ASSERT << vkResetCommandPool(cmd_drain.ctxt->dev, cmd_pool, 0);
-  }
+  _clear_transact_submit_detail(*cmd_drain.ctxt, cmd_drain.submit_details);
   VK_ASSERT << vkResetFences(cmd_drain.ctxt->dev, 1, &cmd_drain.fence);
 }
 void wait_cmd_drain(CommandDrain& cmd_drain) {
   const uint32_t SPIN_INTERVAL = 3000;
-  auto tic = std::chrono::high_resolution_clock::now();
+
+  Timer wait_timer {};
+  wait_timer.tic();
   for (VkResult err;;) {
     err = vkWaitForFences(cmd_drain.ctxt->dev, 1, &cmd_drain.fence, VK_TRUE,
         SPIN_INTERVAL);
@@ -2091,21 +2038,18 @@ void wait_cmd_drain(CommandDrain& cmd_drain) {
       break;
     }
   }
-  auto toc = std::chrono::high_resolution_clock::now();
+  wait_timer.toc();
+
+  Timer reset_timer {};
+  reset_timer.tic();
+
   _reset_cmd_drain(cmd_drain);
-  auto toc2 = std::chrono::high_resolution_clock::now();
 
-  std::chrono::duration<double, std::micro> dwait = toc - tic;
-  std::chrono::duration<double, std::micro> dsubmit =
-    toc2 - cmd_drain.submit_since;
-  std::chrono::duration<double, std::micro> dreset =
-    toc2 - toc;
+  reset_timer.toc();
 
-  liong::log::info("command drain returned after ", dwait.count(), "us since "
-    "the wait started, ", dsubmit.count(), "us since submission "
-    "(spin interval = ", SPIN_INTERVAL / 1000.0, "us; resource recycling took ",
-    dreset.count(), "us)");
-
+  liong::log::info("command drain returned after ", wait_timer.us(), "us since "
+    "the wait started (spin interval = ", SPIN_INTERVAL / 1000.0,
+    "us; resource recycling took ", reset_timer.us(), "us)");
 }
 
 
@@ -2116,24 +2060,19 @@ Transaction create_transact(
   const Command* cmds,
   size_t ncmd
 ) {
-  TransactionLike transact;
+  TransactionLike transact {};
   transact.ctxt = &ctxt;
-  transact.cmd_pools = _collect_cmd_pools(ctxt);
   transact.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
   for (auto i = 0; i < ncmd; ++i) {
     _record_cmd(transact, cmds[i]);
   }
-  _seal_transact(transact);
+  _end_cmdbuf(transact.submit_details.back());
 
   liong::log::info("created transaction");
-  return Transaction { label, &ctxt, std::move(transact.cmd_pools),
-    std::move(transact.submit_details) };
+  return Transaction { label, &ctxt, std::move(transact.submit_details) };
 }
 void destroy_transact(Transaction& transact) {
-  for (auto cmd_pool : transact.cmd_pools) {
-    if (cmd_pool == VK_NULL_HANDLE) { break; }
-    vkDestroyCommandPool(transact.ctxt->dev, cmd_pool, nullptr);
-  }
+  _clear_transact_submit_detail(*transact.ctxt, transact.submit_details);
   transact = {};
   liong::log::info("destroyed transaction");
 }
