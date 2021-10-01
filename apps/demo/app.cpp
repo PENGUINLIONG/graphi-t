@@ -213,9 +213,6 @@ void guarded_main2() {
     L_RESOURCE_TYPE_UNIFORM_BUFFER,
   };
 
-  scoped::Task task = ctxt.create_graph_task("graph_task", "main", art.vert_spv,
-    "main", art.frag_spv, L_TOPOLOGY_TRIANGLE, rsc_tys);
-
   scoped::Buffer ubo = ctxt.create_uniform_buf("ubo", 4 * sizeof(float));
   {
     float data[4] {
@@ -225,6 +222,19 @@ void guarded_main2() {
     float* ubo_data = (float*)mapped;
     std::memcpy(ubo_data, data, sizeof(data));
   }
+
+  constexpr uint32_t FRAMEBUF_NCOL = 4;
+  constexpr uint32_t FRAMEBUF_NROW = 4;
+
+  scoped::Image out_img = ctxt.create_attm_img("attm", 4, 4,
+    L_FORMAT_R32G32B32A32_SFLOAT);
+
+  scoped::Buffer out_buf = ctxt.create_staging_buf("out_buf",
+    FRAMEBUF_NCOL * FRAMEBUF_NROW * 4 * sizeof(float));
+
+  scoped::RenderPass pass = ctxt.create_pass(out_img);
+  scoped::Task task = pass.create_graph_task("graph_task", "main", art.vert_spv,
+    "main", art.frag_spv, L_TOPOLOGY_TRIANGLE, rsc_tys);
 
   scoped::ResourcePool rsc_pool = task.create_rsc_pool();
   rsc_pool.bind(0, ubo.view());
@@ -251,30 +261,20 @@ void guarded_main2() {
     std::memcpy(idxs_data, data, sizeof(data));
   }
 
-
-  constexpr uint32_t FRAMEBUF_NCOL = 4;
-  constexpr uint32_t FRAMEBUF_NROW = 4;
-
-  scoped::Image out_img = ctxt.create_attm_img("attm", 4, 4,
-    L_FORMAT_R32G32B32A32_SFLOAT);
-
-  scoped::RenderPass pass = task.create_pass(out_img);
-
-  scoped::Buffer out_buf = ctxt.create_staging_buf("out_buf",
-    FRAMEBUF_NCOL * FRAMEBUF_NROW * 4 * sizeof(float));
-
   scoped::Timestamp tic = ctxt.create_timestamp();
   scoped::Timestamp toc = ctxt.create_timestamp();
 
   std::vector<Command> cmds {
     cmd_set_submit_ty(L_SUBMIT_TYPE_GRAPHICS),
     cmd_write_timestamp(tic),
+    cmd_begin_pass(pass, true),
     cmd_img_barrier(out_img,
       L_IMAGE_USAGE_ATTACHMENT_BIT,
       L_IMAGE_USAGE_ATTACHMENT_BIT,
       L_MEMORY_ACCESS_NONE,
       L_MEMORY_ACCESS_WRITE_ONLY),
     cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 3, 1, pass),
+    cmd_end_pass(pass),
     cmd_write_timestamp(toc),
     cmd_copy_img2buf(out_img.view(), out_buf.view()),
   };

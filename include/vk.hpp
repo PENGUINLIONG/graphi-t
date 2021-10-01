@@ -104,7 +104,6 @@ struct Task {
   VkDescriptorSetLayout desc_set_layout;
   VkPipelineLayout pipe_layout;
   VkPipeline pipe;
-  VkRenderPass pass;
   std::vector<VkShaderModule> shader_mods;
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   std::string label;
@@ -113,8 +112,8 @@ struct Task {
 
 struct RenderPass {
   const Context* ctxt;
-  const Task* task;
   const Image* img;
+  VkRenderPass pass;
   VkRect2D viewport;
   VkFramebuffer framebuf;
   VkClearValue clear_value;

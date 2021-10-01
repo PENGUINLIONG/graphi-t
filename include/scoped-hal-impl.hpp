@@ -17,6 +17,10 @@ Context::Context(const std::string& label, uint32_t dev_idx) :
   Context(ContextConfig { label, dev_idx }) {}
 Context::~Context() { HAL_IMPL_NAMESPACE::destroy_ctxt(*inner); }
 
+RenderPass Context::create_pass(const Image& attm) const {
+  return HAL_IMPL_NAMESPACE::create_pass(*inner, *attm.inner);
+}
+
 Task Context::create_comp_task(
   const std::string& label,
   const std::string& entry_point,
@@ -34,30 +38,6 @@ Task Context::create_comp_task(
   comp_task_cfg.nrsc_ty = rsc_tys.size();
   comp_task_cfg.workgrp_size = workgrp_size;
   return HAL_IMPL_NAMESPACE::create_comp_task(*inner, comp_task_cfg);
-}
-Task Context::create_graph_task(
-  const std::string& label,
-  const std::string& vert_entry_point,
-  const void* vert_code,
-  const size_t vert_code_size,
-  const std::string& frag_entry_point,
-  const void* frag_code,
-  const size_t frag_code_size,
-  Topology topo,
-  const std::vector<ResourceType>& rsc_tys
-) const {
-  GraphicsTaskConfig graph_task_cfg {};
-  graph_task_cfg.label = label;
-  graph_task_cfg.vert_entry_name = vert_entry_point.c_str();
-  graph_task_cfg.vert_code = vert_code;
-  graph_task_cfg.vert_code_size = vert_code_size;
-  graph_task_cfg.frag_entry_name = frag_entry_point.c_str();
-  graph_task_cfg.frag_code = frag_code;
-  graph_task_cfg.frag_code_size = frag_code_size;
-  graph_task_cfg.topo = topo;
-  graph_task_cfg.rsc_tys = rsc_tys.data();
-  graph_task_cfg.nrsc_ty = rsc_tys.size();
-  return HAL_IMPL_NAMESPACE::create_graph_task(*inner, graph_task_cfg);
 }
 
 Buffer Context::create_buf(
@@ -331,21 +311,42 @@ Task::~Task() { destroy_task(*inner); }
 ResourcePool Task::create_rsc_pool() const {
   return HAL_IMPL_NAMESPACE::create_rsc_pool(*inner->ctxt, *inner);
 }
-RenderPass Task::create_pass(const Image& attm) const {
-  return HAL_IMPL_NAMESPACE::create_pass(*inner->ctxt, *inner, *attm.inner);
-}
 
 
 
 RenderPass::RenderPass(
   const Context& ctxt,
-  const Task& task,
   const Image& attm
 ) : inner(std::make_unique<HAL_IMPL_NAMESPACE::RenderPass>(
-  create_pass(*ctxt.inner, *task.inner, *attm.inner))) {}
+  create_pass(*ctxt.inner, *attm.inner))) {}
 RenderPass::RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::RenderPass>(inner)) {}
 RenderPass::~RenderPass() { destroy_pass(*inner); }
+
+Task RenderPass::create_graph_task(
+  const std::string& label,
+  const std::string& vert_entry_point,
+  const void* vert_code,
+  const size_t vert_code_size,
+  const std::string& frag_entry_point,
+  const void* frag_code,
+  const size_t frag_code_size,
+  Topology topo,
+  const std::vector<ResourceType>& rsc_tys
+) const {
+  GraphicsTaskConfig graph_task_cfg {};
+  graph_task_cfg.label = label;
+  graph_task_cfg.vert_entry_name = vert_entry_point.c_str();
+  graph_task_cfg.vert_code = vert_code;
+  graph_task_cfg.vert_code_size = vert_code_size;
+  graph_task_cfg.frag_entry_name = frag_entry_point.c_str();
+  graph_task_cfg.frag_code = frag_code;
+  graph_task_cfg.frag_code_size = frag_code_size;
+  graph_task_cfg.topo = topo;
+  graph_task_cfg.rsc_tys = rsc_tys.data();
+  graph_task_cfg.nrsc_ty = rsc_tys.size();
+  return HAL_IMPL_NAMESPACE::create_graph_task(*inner, graph_task_cfg);
+}
 
 
 

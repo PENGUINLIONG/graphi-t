@@ -869,7 +869,7 @@ Task create_comp_task(
 
   liong::log::info("created compute task '", cfg.label, "'");
   return Task {
-    &ctxt, desc_set_layout, pipe_layout, pipe, VK_NULL_HANDLE, { shader_mod },
+    &ctxt, desc_set_layout, pipe_layout, pipe, { shader_mod },
     std::move(desc_pool_sizes), cfg.label,
   };
 }
@@ -921,9 +921,11 @@ VkRenderPass _create_pass(
 }
 
 Task create_graph_task(
-  const Context& ctxt,
+  const RenderPass& pass,
   const GraphicsTaskConfig& cfg
 ) {
+  const Context& ctxt = *pass.ctxt;
+
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   VkDescriptorSetLayout desc_set_layout =
     _create_desc_set_layout(ctxt, cfg.rsc_tys, cfg.nrsc_ty, desc_pool_sizes);
@@ -932,7 +934,6 @@ Task create_graph_task(
     _create_shader_mod(ctxt, cfg.vert_code, cfg.vert_code_size);
   VkShaderModule frag_shader_mod =
     _create_shader_mod(ctxt, cfg.frag_code, cfg.frag_code_size);
-  VkRenderPass pass = _create_pass(ctxt);
 
   VkPipelineShaderStageCreateInfo psscis[2] {};
   {
@@ -985,13 +986,21 @@ Task create_graph_task(
   piasci.primitiveRestartEnable = VK_FALSE;
 
   VkViewport viewport {};
+  viewport.x = 0;
+  viewport.y = 0;
+  viewport.width = pass.viewport.extent.width;
+  viewport.height = pass.viewport.extent.height;
+  viewport.minDepth = 0.0f;
+  viewport.maxDepth = 1.0f;
   VkRect2D scissor {};
+  scissor.offset = pass.viewport.offset;
+  scissor.extent = pass.viewport.extent;
   VkPipelineViewportStateCreateInfo pvsci {};
   pvsci.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
   pvsci.viewportCount = 1;
-  pvsci.pViewports = &viewport; // Dynamically specified.
+  pvsci.pViewports = &viewport;
   pvsci.scissorCount = 1;
-  pvsci.pScissors = &scissor; // Dynamically specified.
+  pvsci.pScissors = &scissor;
 
   VkPipelineRasterizationStateCreateInfo prsci {};
   prsci.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
@@ -1027,14 +1036,10 @@ Task create_graph_task(
   pcbsci.attachmentCount = (uint32_t)pcbass.size();
   pcbsci.pAttachments = pcbass.data();
 
-  std::array<VkDynamicState, 2> dss {
-    VK_DYNAMIC_STATE_VIEWPORT,
-    VK_DYNAMIC_STATE_SCISSOR,
-  };
   VkPipelineDynamicStateCreateInfo pdsci {};
   pdsci.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-  pdsci.dynamicStateCount = (uint32_t)dss.size();
-  pdsci.pDynamicStates = dss.data();
+  pdsci.dynamicStateCount = 0;
+  pdsci.pDynamicStates = nullptr;
 
   VkGraphicsPipelineCreateInfo gpci {};
   gpci.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
@@ -1050,7 +1055,7 @@ Task create_graph_task(
   gpci.pColorBlendState = &pcbsci;
   gpci.pDynamicState = &pdsci;
   gpci.layout = pipe_layout;
-  gpci.renderPass = pass;
+  gpci.renderPass = pass.pass;
   gpci.subpass = 0;
 
   VkPipeline pipe;
@@ -1059,15 +1064,12 @@ Task create_graph_task(
 
   liong::log::info("created graphics task '", cfg.label, "'");
   return Task {
-    &ctxt, desc_set_layout, pipe_layout, pipe, pass,
+    &ctxt, desc_set_layout, pipe_layout, pipe,
     { vert_shader_mod, frag_shader_mod }, std::move(desc_pool_sizes), cfg.label,
   };
 }
 void destroy_task(Task& task) {
   vkDestroyPipeline(task.ctxt->dev, task.pipe, nullptr);
-  if (task.pass != VK_NULL_HANDLE) {
-    vkDestroyRenderPass(task.ctxt->dev, task.pass, nullptr);
-  }
   for (const VkShaderModule& shader_mod : task.shader_mods) {
     vkDestroyShaderModule(task.ctxt->dev, shader_mod, nullptr);
   }
@@ -1083,12 +1085,13 @@ void destroy_task(Task& task) {
 
 RenderPass create_pass(
   const Context& ctxt,
-  const Task& task,
   const Image& attm
 ) {
+  VkRenderPass pass = _create_pass(ctxt);
+
   VkFramebufferCreateInfo fci {};
   fci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-  fci.renderPass = task.pass;
+  fci.renderPass = pass;
   fci.attachmentCount = 1;
   fci.pAttachments = &attm.img_view;
   fci.width = (uint32_t)attm.img_cfg.ncol;
@@ -1102,13 +1105,14 @@ RenderPass create_pass(
   viewport.extent.width = (uint32_t)attm.img_cfg.ncol;
   viewport.extent.height = (uint32_t)attm.img_cfg.nrow;
 
-  liong::log::info("created framebuffer");
-  return { &ctxt, &task, &attm, std::move(viewport), framebuf };
+  liong::log::info("created render pass");
+  return { &ctxt, &attm, pass, std::move(viewport), framebuf };
 }
 void destroy_pass(RenderPass& pass) {
   vkDestroyFramebuffer(pass.ctxt->dev, pass.framebuf, nullptr);
-  pass.framebuf = VK_NULL_HANDLE;
-  liong::log::info("destroyed framebuffer");
+  vkDestroyRenderPass(pass.ctxt->dev, pass.pass, nullptr);
+  pass = {};
+  liong::log::info("destroyed render pass");
 }
 
 
@@ -1425,21 +1429,7 @@ void _record_cmd_inline_transact(
     const auto& submit_detail = subtransact.submit_details[i];
     auto cmdbuf = _get_cmdbuf(transact, submit_detail.submit_ty);
 
-    if (submit_detail.submit_ty == L_SUBMIT_TYPE_GRAPHICS) {
-      VkRenderPassBeginInfo rpbi {};
-      rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-      rpbi.renderPass = submit_detail.pass_detail.pass;
-      rpbi.framebuffer = submit_detail.pass_detail.framebuf;
-      rpbi.renderArea.extent = submit_detail.pass_detail.render_area;
-      rpbi.clearValueCount = 1;
-      rpbi.pClearValues = &submit_detail.pass_detail.clear_value;
-      vkCmdBeginRenderPass(cmdbuf, &rpbi,
-        VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS);
-    }
     vkCmdExecuteCommands(cmdbuf, 1, &submit_detail.cmdbuf);
-    if (submit_detail.submit_ty == L_SUBMIT_TYPE_GRAPHICS) {
-      vkCmdEndRenderPass(cmdbuf);
-    }
   }
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
     liong::log::info("scheduled inline transaction '",
@@ -1578,45 +1568,13 @@ void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
     *cmd.cmd_draw.task : *cmd.cmd_draw_indexed.task;
   const auto& rsc_pool = cmd.cmd_ty == L_COMMAND_TYPE_DRAW ?
     *cmd.cmd_draw.rsc_pool : *cmd.cmd_draw_indexed.rsc_pool;
-  const auto& pass = cmd.cmd_ty == L_COMMAND_TYPE_DRAW ?
-    *cmd.cmd_draw.pass : *cmd.cmd_draw_indexed.pass;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
-
-  // TODO: (penguinliong) Move this to a specialized command.
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    VkRenderPassBeginInfo rpbi {};
-    rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    rpbi.renderPass = task.pass;
-    rpbi.framebuffer = pass.framebuf;
-    rpbi.renderArea.extent = pass.viewport.extent;
-    rpbi.clearValueCount = 1;
-    rpbi.pClearValues = &pass.clear_value;
-
-    vkCmdBeginRenderPass(cmdbuf, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
-  } else {
-    auto& last_submit = transact.submit_details.back();
-    liong::assert(last_submit.pass_detail.pass == VK_NULL_HANDLE,
-      "secondary command buffer can only contain one render pass");
-    last_submit.pass_detail.pass = task.pass;
-    last_submit.pass_detail.framebuf = pass.framebuf;
-    last_submit.pass_detail.render_area = pass.viewport.extent;
-    last_submit.pass_detail.clear_value = pass.clear_value;
-  }
 
   vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, task.pipe);
   if (rsc_pool.desc_set != VK_NULL_HANDLE) {
     vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
       task.pipe_layout, 0, 1, &rsc_pool.desc_set, 0, nullptr);
   }
-  VkRect2D scissor {};
-  scissor.extent = pass.viewport.extent;
-  vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
-  VkViewport viewport {};
-  viewport.width = (float)pass.viewport.extent.width;
-  viewport.height = (float)pass.viewport.extent.height;
-  viewport.minDepth = 0.0f;
-  viewport.maxDepth = 1.0f;
-  vkCmdSetViewport(cmdbuf, 0, 1, &viewport);
 
   if (cmd.cmd_ty == L_COMMAND_TYPE_DRAW) {
     const auto& in = cmd.cmd_draw;
@@ -1646,11 +1604,6 @@ void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
   } else {
     liong::panic("unexpected command type ", cmd.cmd_ty);
   }
-
-  // TODO: (penguinliong) Move this to a specialized command.
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    vkCmdEndRenderPass(cmdbuf);
-  }
 }
 
 void _record_cmd_write_timestamp(
@@ -1667,18 +1620,6 @@ void _record_cmd_write_timestamp(
     liong::log::info("schedule timestamp write");
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 void _make_buf_barrier_params(
   BufferUsage usage,
@@ -1978,6 +1919,34 @@ void _record_cmd_img_barrier(
   }
 }
 
+void _record_cmd_begin_pass(TransactionLike& transact, const Command& cmd) {
+  liong::assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
+  const auto& pass = *cmd.cmd_begin_pass.pass;
+
+  VkRenderPassBeginInfo rpbi {};
+  rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+  rpbi.renderPass = pass.pass;
+  rpbi.framebuffer = pass.framebuf;
+  rpbi.renderArea.extent = pass.viewport.extent;
+  rpbi.clearValueCount = 1;
+  rpbi.pClearValues = &pass.clear_value;
+  VkSubpassContents sc = cmd.cmd_begin_pass.draw_inline ?
+    VK_SUBPASS_CONTENTS_INLINE :
+    VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS;
+  vkCmdBeginRenderPass(cmdbuf, &rpbi, sc);
+
+  liong::log::info("scheduled render pass begin");
+}
+void _record_cmd_end_pass(TransactionLike& transact, const Command& cmd) {
+  liong::assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
+
+  vkCmdEndRenderPass(cmdbuf);
+
+  liong::log::info("scheduled render pass end");
+}
+
 // Returns whether the submit queue to submit has changed.
 void _record_cmd(TransactionLike& transact, const Command& cmd) {
   switch (cmd.cmd_ty) {
@@ -2018,6 +1987,12 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
     break;
   case L_COMMAND_TYPE_IMAGE_BARRIER:
     _record_cmd_img_barrier(transact, cmd);
+    break;
+  case L_COMMAND_TYPE_BEGIN_RENDER_PASS:
+    _record_cmd_begin_pass(transact, cmd);
+    break;
+  case L_COMMAND_TYPE_END_RENDER_PASS:
+    _record_cmd_end_pass(transact, cmd);
     break;
   default:
     liong::log::warn("ignored unknown command: ", cmd.cmd_ty);
