@@ -1254,27 +1254,16 @@ VkFence _create_fence(const Context& ctxt) {
   return fence;
 }
 
-VkCommandPool _create_cmd_pool(const Context& ctxt, uint32_t qfam_idx) {
+VkCommandPool _create_cmd_pool(const Context& ctxt, SubmitType submit_ty) {
   VkCommandPoolCreateInfo cpci {};
   cpci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
   cpci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-  cpci.queueFamilyIndex = qfam_idx;
+  cpci.queueFamilyIndex = ctxt.get_submit_ty_qfam_idx(submit_ty);
 
   VkCommandPool cmd_pool;
   VK_ASSERT << vkCreateCommandPool(ctxt.dev, &cpci, nullptr, &cmd_pool);
 
   return cmd_pool;
-}
-std::array<VkCommandPool, 2> _collect_cmd_pools(
-  const Context& ctxt
-) {
-  std::array<VkCommandPool, 2> cmd_pools {};
-  for (auto i = 0; i < ctxt.submit_details.size(); ++i) {
-    const auto& submit_detail = ctxt.submit_details[i];
-    cmd_pools[i] = _create_cmd_pool(ctxt, submit_detail.qfam_idx);
-  }
-
-  return cmd_pools;
 }
 VkCommandBuffer _alloc_cmdbuf(
   const Context& ctxt,
@@ -1297,45 +1286,77 @@ VkCommandBuffer _alloc_cmdbuf(
 
 struct TransactionLike {
   const Context* ctxt;
-  std::array<VkCommandPool, 2> cmd_pools;
   std::vector<TransactionSubmitDetail> submit_details;
-  std::vector<VkSemaphore> semas;
-  VkFence fence;
   VkCommandBufferLevel level;
 };
-VkCommandBuffer _start_cmdbuf(
-  TransactionLike& transact,
-  SubmitType submit_ty
-) {
-  auto icmd_pool = transact.ctxt->get_queue_rsc_idx(submit_ty);
-  auto queue = transact.ctxt->submit_details[icmd_pool].queue;
-  auto qfam_idx = transact.ctxt->submit_details[icmd_pool].qfam_idx;
-  auto cmd_pool = transact.cmd_pools[icmd_pool];
-  auto cmdbuf = _alloc_cmdbuf(*transact.ctxt, cmd_pool, transact.level);
-
+void _begin_cmdbuf(const TransactionSubmitDetail& submit_detail) {
   VkCommandBufferInheritanceInfo cbii {};
   cbii.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
 
   VkCommandBufferBeginInfo cbbi {};
   cbbi.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
-  if (submit_ty == L_SUBMIT_TYPE_GRAPHICS) {
+  if (submit_detail.submit_ty == L_SUBMIT_TYPE_GRAPHICS) {
     cbbi.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
   }
   cbbi.pInheritanceInfo = &cbii;
-  VK_ASSERT << vkBeginCommandBuffer(cmdbuf, &cbbi);
+  VK_ASSERT << vkBeginCommandBuffer(submit_detail.cmdbuf, &cbbi);
+}
+void _end_cmdbuf(const TransactionSubmitDetail& submit_detail) {
+  VK_ASSERT << vkEndCommandBuffer(submit_detail.cmdbuf);
+}
 
-  TransactionSubmitDetail submit_detail;
+void _push_transact_submit_detail(
+  const Context& ctxt,
+  std::vector<TransactionSubmitDetail>& submit_details,
+  SubmitType submit_ty,
+  VkCommandBufferLevel level
+) {
+  auto cmd_pool = _create_cmd_pool(ctxt, submit_ty);
+  auto cmdbuf = _alloc_cmdbuf(ctxt, cmd_pool, level);
+
+  TransactionSubmitDetail submit_detail {};
   submit_detail.submit_ty = submit_ty;
+  submit_detail.cmd_pool = cmd_pool;
   submit_detail.cmdbuf = cmdbuf;
-  submit_detail.queue = queue;
-  submit_detail.qfam_idx = qfam_idx;
-  submit_detail.pass_detail.pass = VK_NULL_HANDLE;
-  submit_detail.pass_detail.pass = VK_NULL_HANDLE;
-  submit_detail.pass_detail.render_area = {};
-  submit_detail.pass_detail.clear_value = {{{ 0.0f, 0.0f, 0.0f, 0.0f }}};
+  submit_detail.wait_sema = submit_details.empty() ?
+    VK_NULL_HANDLE : submit_details.back().signal_sema;
+  submit_detail.signal_sema = _create_sema(ctxt);
 
-  transact.submit_details.emplace_back(std::move(submit_detail));
-  return cmdbuf;
+  submit_details.emplace_back(std::move(submit_detail));
+}
+void _clear_transact_submit_detail(
+  const Context& ctxt,
+  std::vector<TransactionSubmitDetail>& submit_details
+) {
+  for (auto& submit_detail : submit_details) {
+    vkDestroySemaphore(ctxt.dev, submit_detail.signal_sema, nullptr);
+    vkDestroyCommandPool(ctxt.dev, submit_detail.cmd_pool, nullptr);
+  }
+  submit_details.clear();
+}
+void _submit_transact_submit_detail(
+  const Context& ctxt,
+  const TransactionSubmitDetail& submit_detail,
+  VkFence fence
+) {
+  VkPipelineStageFlags stage_mask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+
+  VkSubmitInfo submit_info {};
+  submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+  submit_info.commandBufferCount = 1;
+  submit_info.pCommandBuffers = &submit_detail.cmdbuf;
+  submit_info.signalSemaphoreCount = 1;
+  if (submit_detail.wait_sema != VK_NULL_HANDLE) {
+    // Wait for the last submitted command buffer on the device side.
+    submit_info.waitSemaphoreCount = 1;
+    submit_info.pWaitSemaphores = &submit_detail.wait_sema;
+    submit_info.pWaitDstStageMask = &stage_mask;
+  }
+  submit_info.pSignalSemaphores = &submit_detail.signal_sema;
+
+  // Finish recording and submit the command buffer to the device.
+  VkQueue queue = ctxt.get_submit_ty_queue(submit_detail.submit_ty);
+  VK_ASSERT << vkQueueSubmit(queue, 1, &submit_info, fence);
 }
 VkCommandBuffer _get_cmdbuf(
   TransactionLike& transact,
@@ -1346,65 +1367,31 @@ VkCommandBuffer _get_cmdbuf(
       "cannot infer submit type for submit-type-independent command");
     submit_ty = transact.submit_details.back().submit_ty;
   }
-  auto isubmit_detail = transact.ctxt->get_queue_rsc_idx(submit_ty);
-  auto queue = transact.ctxt->submit_details[isubmit_detail].queue;
-  auto qfam_idx = transact.ctxt->submit_details[isubmit_detail].qfam_idx;
+  const auto& submit_detail = transact.ctxt->get_submit_detail(submit_ty);
+  auto queue = submit_detail.queue;
+  auto qfam_idx = submit_detail.qfam_idx;
+
   if (!transact.submit_details.empty()) {
+    // Do nothing if the submit type is unchanged. It means that the commands
+    // can still be fed into the last command buffer.
     auto& last_submit = transact.submit_details.back();
-    if (queue == last_submit.queue) {
+    if (submit_ty == last_submit.submit_ty) {
       return last_submit.cmdbuf;
-    } else {
-      VK_ASSERT << vkEndCommandBuffer(last_submit.cmdbuf);
-      if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-        VkPipelineStageFlags stage_mask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-
-        VkSubmitInfo submit_info {};
-        submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-        submit_info.commandBufferCount = 1;
-        submit_info.pCommandBuffers = &last_submit.cmdbuf;
-        submit_info.signalSemaphoreCount = 1;
-        if (!transact.semas.empty()) {
-          // Wait for the last submitted command buffer on the device side.
-          submit_info.waitSemaphoreCount = 1;
-          submit_info.pWaitSemaphores = &transact.semas.back();
-          submit_info.pWaitDstStageMask = &stage_mask;
-        }
-        auto sema = _create_sema(*transact.ctxt);
-        submit_info.pSignalSemaphores = &sema;
-
-        // Finish recording and submit the command buffer to the device.
-        VK_ASSERT <<
-          vkQueueSubmit(last_submit.queue, 1, &submit_info, VK_NULL_HANDLE);
-
-        // Don't push before queue submit, or the address might change.
-        transact.semas.push_back(sema);
-      }
-    }
-  }
-  return _start_cmdbuf(transact, submit_ty);
-}
-void _seal_transact(TransactionLike& transact) {
-  const auto& last_submit = transact.submit_details.back();
-  VK_ASSERT << vkEndCommandBuffer(last_submit.cmdbuf);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    VkPipelineStageFlags stage_mask = VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-
-    VkSubmitInfo submit_info {};
-    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers = &last_submit.cmdbuf;
-    if (!transact.semas.empty()) {
-      // Wait for the last submitted command buffer on the device side.
-      submit_info.waitSemaphoreCount = 1;
-      submit_info.pWaitSemaphores = &transact.semas.back();
-      submit_info.pWaitDstStageMask = &stage_mask;
     }
 
-    // Finish recording and submit the command buffer to the device. The fence
-    // is created externally.
-    VK_ASSERT <<
-      vkQueueSubmit(last_submit.queue, 1, &submit_info, transact.fence);
+    // Otherwise, end the command buffer and, it it's a primary command buffer,
+    // submit the recorded commands.
+    _end_cmdbuf(last_submit);
+    if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+      _submit_transact_submit_detail(*transact.ctxt,
+        transact.submit_details.back(), VK_NULL_HANDLE);
+    }
   }
+
+  _push_transact_submit_detail(*transact.ctxt, transact.submit_details,
+    submit_ty, transact.level);
+  _begin_cmdbuf(transact.submit_details.back());
+  return transact.submit_details.back().cmdbuf;
 }
 
 void _record_cmd_set_submit_ty(
@@ -1431,10 +1418,8 @@ void _record_cmd_inline_transact(
 
     vkCmdExecuteCommands(cmdbuf, 1, &submit_detail.cmdbuf);
   }
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::info("scheduled inline transaction '",
-      cmd.cmd_inline_transact.transact->label, "'");
-  }
+  liong::log::info("scheduled inline transaction '",
+    cmd.cmd_inline_transact.transact->label, "'");
 }
 
 void _record_cmd_copy_buf2img(TransactionLike& transact, const Command& cmd) {
@@ -1561,7 +1546,6 @@ void _record_cmd_dispatch(TransactionLike& transact, const Command& cmd) {
     liong::log::info("scheduled compute task '", task.label, "' for execution");
   }
 }
-
 
 void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
   const auto& task = cmd.cmd_ty == L_COMMAND_TYPE_DRAW ?
@@ -2004,15 +1988,11 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
 
 CommandDrain create_cmd_drain(const Context& ctxt) {
   auto fence = _create_fence(ctxt);
-  auto cmd_pools = _collect_cmd_pools(ctxt);
   liong::log::info("created command drain");
-  return CommandDrain { &ctxt, std::move(cmd_pools), {}, fence, {}, {} };
+  return CommandDrain { &ctxt, {}, fence, {}, {} };
 }
 void destroy_cmd_drain(CommandDrain& cmd_drain) {
-  for (auto cmd_pool : cmd_drain.cmd_pools) {
-    if (cmd_pool == VK_NULL_HANDLE) { break; }
-    vkDestroyCommandPool(cmd_drain.ctxt->dev, cmd_pool, nullptr);
-  }
+  _clear_transact_submit_detail(*cmd_drain.ctxt, cmd_drain.submit_details);
   vkDestroyFence(cmd_drain.ctxt->dev, cmd_drain.fence, nullptr);
   cmd_drain = {};
   liong::log::info("destroyed command drain");
@@ -2023,18 +2003,22 @@ void submit_cmds(
   size_t ncmd
 ) {
   auto tic = std::chrono::high_resolution_clock::now();
-  TransactionLike transact;
+  TransactionLike transact {};
   transact.ctxt = cmd_drain.ctxt;
-  transact.cmd_pools = std::move(cmd_drain.cmd_pools);
-  transact.fence = cmd_drain.fence;
   transact.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+
   for (auto i = 0; i < ncmd; ++i) {
     liong::log::debug("recording ", i, "th command");
     _record_cmd(transact, cmds[i]);
   }
-  _seal_transact(transact);
-  cmd_drain.semas = std::move(transact.semas);
-  cmd_drain.cmd_pools = std::move(transact.cmd_pools);
+  if (!transact.submit_details.empty()) {
+    _end_cmdbuf(transact.submit_details.back());
+    _submit_transact_submit_detail(*transact.ctxt,
+      transact.submit_details.back(), cmd_drain.fence);
+  }
+  
+  cmd_drain.submit_details = std::move(transact.submit_details);
+
   auto toc = std::chrono::high_resolution_clock::now();
 
   cmd_drain.submit_since = toc;
@@ -2043,14 +2027,7 @@ void submit_cmds(
     "took ", drecord.count(), "us");
 }
 void _reset_cmd_drain(CommandDrain& cmd_drain) {
-  for (auto sema : cmd_drain.semas) {
-    vkDestroySemaphore(cmd_drain.ctxt->dev, sema, nullptr);
-  }
-  cmd_drain.semas.clear();
-  for (auto cmd_pool : cmd_drain.cmd_pools) {
-    if (cmd_pool == VK_NULL_HANDLE) { break; }
-    VK_ASSERT << vkResetCommandPool(cmd_drain.ctxt->dev, cmd_pool, 0);
-  }
+  _clear_transact_submit_detail(*cmd_drain.ctxt, cmd_drain.submit_details);
   VK_ASSERT << vkResetFences(cmd_drain.ctxt->dev, 1, &cmd_drain.fence);
 }
 void wait_cmd_drain(CommandDrain& cmd_drain) {
@@ -2080,7 +2057,6 @@ void wait_cmd_drain(CommandDrain& cmd_drain) {
     "the wait started, ", dsubmit.count(), "us since submission "
     "(spin interval = ", SPIN_INTERVAL / 1000.0, "us; resource recycling took ",
     dreset.count(), "us)");
-
 }
 
 
@@ -2091,24 +2067,19 @@ Transaction create_transact(
   const Command* cmds,
   size_t ncmd
 ) {
-  TransactionLike transact;
+  TransactionLike transact {};
   transact.ctxt = &ctxt;
-  transact.cmd_pools = _collect_cmd_pools(ctxt);
   transact.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
   for (auto i = 0; i < ncmd; ++i) {
     _record_cmd(transact, cmds[i]);
   }
-  _seal_transact(transact);
+  _end_cmdbuf(transact.submit_details.back());
 
   liong::log::info("created transaction");
-  return Transaction { label, &ctxt, std::move(transact.cmd_pools),
-    std::move(transact.submit_details) };
+  return Transaction { label, &ctxt, std::move(transact.submit_details) };
 }
 void destroy_transact(Transaction& transact) {
-  for (auto cmd_pool : transact.cmd_pools) {
-    if (cmd_pool == VK_NULL_HANDLE) { break; }
-    vkDestroyCommandPool(transact.ctxt->dev, cmd_pool, nullptr);
-  }
+  _clear_transact_submit_detail(*transact.ctxt, transact.submit_details);
   transact = {};
   liong::log::info("destroyed transaction");
 }

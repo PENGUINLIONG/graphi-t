@@ -66,7 +66,7 @@ struct Context {
     SubmitType submit_ty
   ) const {
     auto i = get_queue_rsc_idx(submit_ty);
-    assert(i < submit_details.size(), "unsupported submit type");
+    liong::assert(i < submit_details.size(), "unsupported submit type");
     return submit_details[i];
   }
   inline uint32_t get_submit_ty_qfam_idx(SubmitType submit_ty) const {
@@ -75,6 +75,13 @@ struct Context {
     }
     auto isubmit_detail = get_queue_rsc_idx(submit_ty);
     return submit_details[isubmit_detail].qfam_idx;
+  }
+  inline VkQueue get_submit_ty_queue(SubmitType submit_ty) const {
+    if (submit_ty == L_SUBMIT_TYPE_ANY) {
+      return VK_NULL_HANDLE;
+    }
+    auto isubmit_detail = get_queue_rsc_idx(submit_ty);
+    return submit_details[isubmit_detail].queue;
   }
 };
 
@@ -132,10 +139,12 @@ struct TransactionRenderPassDetail {
   VkClearValue clear_value;
 };
 struct TransactionSubmitDetail {
+  const Context* ctxt;
   SubmitType submit_ty;
-  VkQueue queue;
-  uint32_t qfam_idx;
+  VkCommandPool cmd_pool;
   VkCommandBuffer cmdbuf;
+  VkSemaphore wait_sema;
+  VkSemaphore signal_sema;
   // If the `pass` member is not null, then there should be only one submit
   // detail in `submit_details` containing all the rendering command in the
   // render pass.
@@ -143,8 +152,7 @@ struct TransactionSubmitDetail {
 };
 struct CommandDrain {
   const Context* ctxt;
-  std::array<VkCommandPool, 2> cmd_pools;
-  std::vector<VkSemaphore> semas;
+  std::vector<TransactionSubmitDetail> submit_details;
   VkFence fence;
   // The time command buffer is written with any command.
   std::chrono::high_resolution_clock::time_point dirty_since;
@@ -155,7 +163,6 @@ struct CommandDrain {
 struct Transaction {
   std::string label;
   const Context* ctxt;
-  std::array<VkCommandPool, 2> cmd_pools;
   std::vector<TransactionSubmitDetail> submit_details;
 };
 
