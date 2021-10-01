@@ -7,7 +7,6 @@
 #include <vulkan/vulkan.h>
 #define HAL_IMPL_NAMESPACE vk
 #include "scoped-hal.hpp"
-#undef HAL_IMPL_NAMESPACE
 
 namespace liong {
 
@@ -154,10 +153,6 @@ struct CommandDrain {
   const Context* ctxt;
   std::vector<TransactionSubmitDetail> submit_details;
   VkFence fence;
-  // The time command buffer is written with any command.
-  std::chrono::high_resolution_clock::time_point dirty_since;
-  // The timne command buffer is submitted for execution.
-  std::chrono::high_resolution_clock::time_point submit_since;
 };
 
 struct Transaction {

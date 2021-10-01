@@ -5,6 +5,7 @@
 #include "assert.hpp"
 #include "util.hpp"
 #include "log.hpp"
+#include "timer.hpp"
 #define HAL_IMPL_NAMESPACE vk
 #include "scoped-hal-impl.hpp"
 #undef HAL_IMPL_NAMESPACE
@@ -1983,7 +1984,7 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
 CommandDrain create_cmd_drain(const Context& ctxt) {
   auto fence = _create_fence(ctxt);
   liong::log::info("created command drain");
-  return CommandDrain { &ctxt, {}, fence, {}, {} };
+  return CommandDrain { &ctxt, {}, fence };
 }
 void destroy_cmd_drain(CommandDrain& cmd_drain) {
   _clear_transact_submit_detail(*cmd_drain.ctxt, cmd_drain.submit_details);
@@ -1996,29 +1997,27 @@ void submit_cmds(
   const Command* cmds,
   size_t ncmd
 ) {
-  auto tic = std::chrono::high_resolution_clock::now();
+  liong::assert(ncmd > 0, "cannot submit empty command buffer");
+
   TransactionLike transact {};
   transact.ctxt = cmd_drain.ctxt;
   transact.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 
+  liong::Timer timer {};
+  timer.tic();
   for (auto i = 0; i < ncmd; ++i) {
     liong::log::debug("recording ", i, "th command");
     _record_cmd(transact, cmds[i]);
   }
-  if (!transact.submit_details.empty()) {
-    _end_cmdbuf(transact.submit_details.back());
-    _submit_transact_submit_detail(*transact.ctxt,
-      transact.submit_details.back(), cmd_drain.fence);
-  }
-  
   cmd_drain.submit_details = std::move(transact.submit_details);
+  timer.toc();
 
-  auto toc = std::chrono::high_resolution_clock::now();
+  _end_cmdbuf(cmd_drain.submit_details.back());
+  _submit_transact_submit_detail(*cmd_drain.ctxt,
+    cmd_drain.submit_details.back(), cmd_drain.fence);
 
-  cmd_drain.submit_since = toc;
-  std::chrono::duration<double, std::micro> drecord = toc - tic;
   liong::log::info("submitted transaction for execution, command recording "
-    "took ", drecord.count(), "us");
+    "took ", timer.us(), "us");
 }
 void _reset_cmd_drain(CommandDrain& cmd_drain) {
   _clear_transact_submit_detail(*cmd_drain.ctxt, cmd_drain.submit_details);
@@ -2026,7 +2025,9 @@ void _reset_cmd_drain(CommandDrain& cmd_drain) {
 }
 void wait_cmd_drain(CommandDrain& cmd_drain) {
   const uint32_t SPIN_INTERVAL = 3000;
-  auto tic = std::chrono::high_resolution_clock::now();
+
+  Timer wait_timer {};
+  wait_timer.tic();
   for (VkResult err;;) {
     err = vkWaitForFences(cmd_drain.ctxt->dev, 1, &cmd_drain.fence, VK_TRUE,
         SPIN_INTERVAL);
@@ -2037,20 +2038,18 @@ void wait_cmd_drain(CommandDrain& cmd_drain) {
       break;
     }
   }
-  auto toc = std::chrono::high_resolution_clock::now();
+  wait_timer.toc();
+
+  Timer reset_timer {};
+  reset_timer.tic();
+
   _reset_cmd_drain(cmd_drain);
-  auto toc2 = std::chrono::high_resolution_clock::now();
 
-  std::chrono::duration<double, std::micro> dwait = toc - tic;
-  std::chrono::duration<double, std::micro> dsubmit =
-    toc2 - cmd_drain.submit_since;
-  std::chrono::duration<double, std::micro> dreset =
-    toc2 - toc;
+  reset_timer.toc();
 
-  liong::log::info("command drain returned after ", dwait.count(), "us since "
-    "the wait started, ", dsubmit.count(), "us since submission "
-    "(spin interval = ", SPIN_INTERVAL / 1000.0, "us; resource recycling took ",
-    dreset.count(), "us)");
+  liong::log::info("command drain returned after ", wait_timer.us(), "us since "
+    "the wait started (spin interval = ", SPIN_INTERVAL / 1000.0,
+    "us; resource recycling took ", reset_timer.us(), "us)");
 }
 
 

@@ -1,5 +1,6 @@
 #include "log.hpp"
 #include "vk.hpp"
+#include "hal-timer.hpp"
 #include "glslang.hpp"
 
 using namespace liong;
@@ -261,12 +262,11 @@ void guarded_main2() {
     std::memcpy(idxs_data, data, sizeof(data));
   }
 
-  scoped::Timestamp tic = ctxt.create_timestamp();
-  scoped::Timestamp toc = ctxt.create_timestamp();
+  ext::DeviceTimer dev_timer(ctxt);
 
   std::vector<Command> cmds {
     cmd_set_submit_ty(L_SUBMIT_TYPE_GRAPHICS),
-    cmd_write_timestamp(tic),
+    dev_timer.cmd_tic(),
     cmd_begin_pass(pass, true),
     cmd_img_barrier(out_img,
       L_IMAGE_USAGE_ATTACHMENT_BIT,
@@ -275,7 +275,7 @@ void guarded_main2() {
       L_MEMORY_ACCESS_WRITE_ONLY),
     cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 3, 1, pass),
     cmd_end_pass(pass),
-    cmd_write_timestamp(toc),
+    dev_timer.cmd_toc(),
     cmd_copy_img2buf(out_img.view(), out_buf.view()),
   };
 
@@ -283,7 +283,7 @@ void guarded_main2() {
   cmd_drain.submit(cmds);
   cmd_drain.wait();
 
-  liong::log::warn("drawing took ", toc.get_result_us() - tic.get_result_us(), "us");
+  liong::log::warn("drawing took ", dev_timer.us(), "us");
 
   {
     scoped::MappedBuffer mapped = out_buf.map(L_MEMORY_ACCESS_READ_ONLY);
