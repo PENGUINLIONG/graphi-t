@@ -133,6 +133,26 @@ struct ResourcePool {
 
 
 
+struct Task {
+  std::unique_ptr<HAL_IMPL_NAMESPACE::Task> inner;
+
+  Task(const Context& ctxt, const ComputeTaskConfig& cfg);
+  Task(HAL_IMPL_NAMESPACE::Task&& inner);
+  Task(Task&&) = default;
+  ~Task();
+
+  inline operator HAL_IMPL_NAMESPACE::Task& () {
+    return *inner;
+  }
+  inline operator const HAL_IMPL_NAMESPACE::Task& () const {
+    return *inner;
+  }
+
+  ResourcePool create_rsc_pool() const;
+};
+
+
+
 struct RenderPass {
   std::unique_ptr<HAL_IMPL_NAMESPACE::RenderPass> inner;
 
@@ -173,26 +193,6 @@ struct RenderPass {
       vert_code.size() * sizeof(T), frag_entry_point, frag_code.data(),
       frag_code.size() * sizeof(T), topo, rsc_tys);
   }
-};
-
-
-
-struct Task {
-  std::unique_ptr<HAL_IMPL_NAMESPACE::Task> inner;
-
-  Task(const Context& ctxt, const ComputeTaskConfig& cfg);
-  Task(HAL_IMPL_NAMESPACE::Task&& inner);
-  Task(Task&&) = default;
-  ~Task();
-
-  inline operator HAL_IMPL_NAMESPACE::Task& () {
-    return *inner;
-  }
-  inline operator const HAL_IMPL_NAMESPACE::Task& () const {
-    return *inner;
-  }
-
-  ResourcePool create_rsc_pool() const;
 };
 
 

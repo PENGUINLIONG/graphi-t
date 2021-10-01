@@ -198,7 +198,7 @@ void guarded_main() {
   std::vector<ResourceType> rsc_tys {
     L_RESOURCE_TYPE_UNIFORM_BUFFER,
   };
-  scoped::Task task = ctxt.create_graph_task("graph_task", "main", art.vert_spv,
+  scoped::Task task = pass.create_graph_task("graph_task", "main", art.vert_spv,
     "main", art.frag_spv, L_TOPOLOGY_TRIANGLE, rsc_tys);
 
   // 16 is just a random non-zero number.
