@@ -58,6 +58,13 @@ void initialize() {
   inst_exts.resize(ninst_ext);
   VK_ASSERT << vkEnumerateInstanceExtensionProperties(nullptr, &ninst_ext, inst_exts.data());
 
+  uint32_t ninst_layer = 0;
+  VK_ASSERT << vkEnumerateInstanceLayerProperties(&ninst_layer, nullptr);
+
+  std::vector<VkLayerProperties> inst_layers;
+  inst_layers.resize(ninst_layer);
+  VK_ASSERT << vkEnumerateInstanceLayerProperties(&ninst_layer, inst_layers.data());
+
   // Enable all extensions by default.
   std::vector<const char*> inst_ext_names;
   inst_ext_names.reserve(ninst_ext);
@@ -66,11 +73,26 @@ void initialize() {
   }
   liong::log::info("enabled instance extensions: ", liong::util::join(", ", inst_ext_names));
 
+  static std::vector<const char*> layers;
+  for (const auto& inst_layer : inst_layers) {
+    liong::log::debug("found layer ", inst_layer.layerName);
+#if !defined(NDEBUG)
+#if __ANDROID__
+    if (std::strcmp("VK_LAYER_KHRONOS_validation", inst_layer.layerName) == 0) {
+      layers.emplace_back("VK_LAYER_KHRONOS_validation");
+      liong::log::debug("vulkan validation layer is enabled");
+    }
+#endif // __ANDROID__
+#endif // !defined(NDEBUG)
+  }
+
   VkInstanceCreateInfo ici {};
   ici.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
   ici.pApplicationInfo = &app_info;
   ici.enabledExtensionCount = inst_ext_names.size();
   ici.ppEnabledExtensionNames = inst_ext_names.data();
+  ici.enabledLayerCount = layers.size();
+  ici.ppEnabledLayerNames = layers.data();
 
   VK_ASSERT << vkCreateInstance(&ici, nullptr, &inst);
 
@@ -889,7 +911,7 @@ VkRenderPass _create_pass(
     ad.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
     // TODO: (penguinliong) Support layout inference in the future.
     ad.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    ad.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+    ad.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
   }
   // TODO: (penguinliong) Support input attachments.
   std::array<VkSubpassDescription, 1> sds {};
@@ -1008,6 +1030,7 @@ Task create_graph_task(
   prsci.cullMode = VK_CULL_MODE_NONE;
   prsci.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
   prsci.polygonMode = VK_POLYGON_MODE_FILL;
+  prsci.lineWidth = 1.0f;
 
   VkPipelineMultisampleStateCreateInfo pmsci {};
   pmsci.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
@@ -1606,7 +1629,9 @@ void _make_buf_barrier_params(
 ) {
   if (dev_access == L_MEMORY_ACCESS_NONE) { return; }
 
-  if (usage == L_BUFFER_USAGE_STAGING_BIT) {
+  if (usage == 0) {
+    liong::panic("buffer barrier must be specified with a usage");
+  } else if (usage == L_BUFFER_USAGE_STAGING_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
       // Transfer source.
       access = VK_ACCESS_TRANSFER_READ_BIT;
@@ -1616,21 +1641,21 @@ void _make_buf_barrier_params(
       access = VK_ACCESS_TRANSFER_WRITE_BIT;
       stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
     } else {
-      return;
+      liong::panic("buffer used for staging can't be both read and written");
     }
   } else if (usage == L_BUFFER_USAGE_VERTEX_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
       access = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
       stage = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
     } else {
-      return;
+      liong::panic("buffer used for vertex input cannot be written");
     }
   } else if (usage == L_BUFFER_USAGE_INDEX_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
       access = VK_ACCESS_INDEX_READ_BIT;
       stage = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
     } else {
-      return;
+      liong::panic("buffer used for index input cannot be written");
     }
   } else if (usage == L_BUFFER_USAGE_UNIFORM_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
@@ -1640,7 +1665,7 @@ void _make_buf_barrier_params(
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
     } else {
-      return;
+      liong::panic("buffer used for uniform cannot be written");
     }
   } else if (usage == L_BUFFER_USAGE_STORAGE_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
@@ -1659,6 +1684,8 @@ void _make_buf_barrier_params(
         VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
     }
+  } else {
+    liong::panic("cannot make buffer barrier with a set of usage");
   }
 }
 
@@ -1671,7 +1698,11 @@ void _make_img_barrier_src_params(
 ) {
   if (dev_access == L_MEMORY_ACCESS_NONE) { return; }
 
-  if (usage == L_IMAGE_USAGE_STAGING_BIT) {
+  if (usage == L_IMAGE_USAGE_NONE) {
+    access = 0;
+    stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  } else if (usage == L_IMAGE_USAGE_STAGING_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
       // Transfer source.
       access = VK_ACCESS_TRANSFER_READ_BIT;
@@ -1683,6 +1714,7 @@ void _make_img_barrier_src_params(
       stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
       layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     } else {
+      liong::panic("image used for staging can't be both read and written");
       return;
     }
   } else if (usage == L_IMAGE_USAGE_ATTACHMENT_BIT) {
@@ -1706,6 +1738,7 @@ void _make_img_barrier_src_params(
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
       layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     } else {
+      liong::panic("image used for sampling cannot be written");
       return;
     }
   } else if (usage == L_IMAGE_USAGE_STORAGE_BIT) {
@@ -1731,6 +1764,18 @@ void _make_img_barrier_src_params(
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
       layout = VK_IMAGE_LAYOUT_GENERAL;
     }
+  } else if (usage == L_IMAGE_USAGE_PRESENT_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      access = 0;
+      stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+      layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    } else {
+      liong::panic("image used for present cannot be written");
+      return;
+    }
+  } else {
+    liong::panic("cannot make image barrier with a set of usage");
+    return;
   }
 }
 void _make_img_barrier_dst_params(
@@ -1742,7 +1787,11 @@ void _make_img_barrier_dst_params(
 ) {
   if (dev_access == L_MEMORY_ACCESS_NONE) { return; }
 
-  if (usage == L_IMAGE_USAGE_STAGING_BIT) {
+  if (usage == L_IMAGE_USAGE_NONE) {
+    access = 0;
+    stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  } if (usage == L_IMAGE_USAGE_STAGING_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
       // Transfer source.
       access = VK_ACCESS_TRANSFER_READ_BIT;
@@ -1754,7 +1803,7 @@ void _make_img_barrier_dst_params(
       stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
       layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     } else {
-      return;
+      liong::panic("image used for staging can't be both read and written");
     }
   } else if (usage == L_IMAGE_USAGE_ATTACHMENT_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
@@ -1777,7 +1826,7 @@ void _make_img_barrier_dst_params(
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
       layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     } else {
-      return;
+      liong::panic("image used for sampling cannot be written");
     }
   } else if (usage == L_IMAGE_USAGE_STORAGE_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
@@ -1802,6 +1851,17 @@ void _make_img_barrier_dst_params(
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
       layout = VK_IMAGE_LAYOUT_GENERAL;
     }
+  } else if (usage == L_IMAGE_USAGE_PRESENT_BIT) {
+    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+      access = 0;
+      stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+      layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    } else {
+      liong::panic("image used for present cannot be written");
+      return;
+    }
+  } else {
+    liong::panic("cannot make image barrier with a set of usage");
   }
 }
 void _record_cmd_buf_barrier(

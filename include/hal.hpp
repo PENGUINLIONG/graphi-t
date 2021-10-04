@@ -250,10 +250,12 @@ L_IMPL_FN void unmap_buf_mem(
 
 
 enum ImageUsageBits {
+  L_IMAGE_USAGE_NONE = 0,
   L_IMAGE_USAGE_STAGING_BIT = (1 << 0),
   L_IMAGE_USAGE_SAMPLED_BIT = (1 << 1),
   L_IMAGE_USAGE_STORAGE_BIT = (1 << 2),
   L_IMAGE_USAGE_ATTACHMENT_BIT = (1 << 3),
+  L_IMAGE_USAGE_PRESENT_BIT = (1 << 4),
 };
 typedef uint32_t ImageUsage;
 // Describe a row-major 2D image.
