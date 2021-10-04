@@ -176,6 +176,8 @@ struct RenderPass {
     const std::string& frag_entry_point,
     const void* frag_code,
     const size_t frag_code_size,
+    const VertexInput* vert_inputs,
+    size_t nvert_input,
     Topology topo,
     const std::vector<ResourceType>& rsc_tys
   ) const;
@@ -186,12 +188,13 @@ struct RenderPass {
     const std::vector<T>& vert_code,
     const std::string& frag_entry_point,
     const std::vector<T>& frag_code,
+    const std::vector<VertexInput>& vert_inputs,
     Topology topo,
     const std::vector<ResourceType>& rsc_tys
   ) const {
     return create_graph_task(label, vert_entry_point, vert_code.data(),
       vert_code.size() * sizeof(T), frag_entry_point, frag_code.data(),
-      frag_code.size() * sizeof(T), topo, rsc_tys);
+      frag_code.size() * sizeof(T), vert_inputs.data(), vert_inputs.size(), topo, rsc_tys);
   }
 };
 

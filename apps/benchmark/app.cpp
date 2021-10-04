@@ -204,7 +204,7 @@ void guarded_main() {
     L_RESOURCE_TYPE_UNIFORM_BUFFER,
   };
   scoped::Task task = pass.create_graph_task("graph_task", "main", art.vert_spv,
-    "main", art.frag_spv, L_TOPOLOGY_TRIANGLE, rsc_tys);
+    "main", art.frag_spv, { VertexInput { L_FORMAT_R32G32B32A32_SFLOAT, L_VERTEX_INPUT_RATE_VERTEX }}, L_TOPOLOGY_TRIANGLE, rsc_tys);
 
   // 16 is just a random non-zero number.
   scoped::Buffer ubo = ctxt.create_uniform_buf("ubo",

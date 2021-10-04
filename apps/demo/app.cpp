@@ -235,7 +235,7 @@ void guarded_main2() {
 
   scoped::RenderPass pass = ctxt.create_pass(out_img);
   scoped::Task task = pass.create_graph_task("graph_task", "main", art.vert_spv,
-    "main", art.frag_spv, L_TOPOLOGY_TRIANGLE, rsc_tys);
+    "main", art.frag_spv, { VertexInput { L_FORMAT_R32G32B32A32_SFLOAT, L_VERTEX_INPUT_RATE_VERTEX }}, L_TOPOLOGY_TRIANGLE, rsc_tys);
 
   scoped::ResourcePool rsc_pool = task.create_rsc_pool();
   rsc_pool.bind(0, ubo.view());

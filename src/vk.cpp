@@ -974,16 +974,41 @@ Task create_graph_task(
     pssci.module = frag_shader_mod;
   }
 
-  std::array<VkVertexInputBindingDescription, 1> vibds {
-    VkVertexInputBindingDescription {
-      0, 4 * sizeof(float), VK_VERTEX_INPUT_RATE_VERTEX
-    },
-  };
-  std::array<VkVertexInputAttributeDescription, 1> viads = {
-    VkVertexInputAttributeDescription {
-      0, 0, VK_FORMAT_R32G32B32A32_SFLOAT, 0 * sizeof(float)
-    },
-  };
+  std::vector<VkVertexInputBindingDescription> vibds;
+  std::vector<VkVertexInputAttributeDescription> viads;
+  size_t base_offset = 0;
+  for (auto i = 0; i < cfg.nvert_input; ++i) {
+    auto& vert_input = cfg.vert_inputs[i];
+    size_t fmt_size = vert_input.fmt.get_fmt_size();
+
+    VkVertexInputBindingDescription vibd {};
+    vibd.binding = i;
+    vibd.stride = 0; // Will be assigned later.
+    switch (cfg.vert_inputs[i].rate) {
+    case L_VERTEX_INPUT_RATE_VERTEX:
+      vibd.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+      break;
+    case L_VERTEX_INPUT_RATE_INSTANCE:
+      vibd.inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
+      liong::panic("instanced draw is currently unsupported");
+      break;
+    default:
+      liong::panic("unexpected vertex input rate");
+    }
+    vibds.emplace_back(std::move(vibd));
+
+    VkVertexInputAttributeDescription viad {};
+    viad.location = i;
+    viad.binding = i;
+    viad.format = _make_img_fmt(vert_input.fmt);
+    viad.offset = base_offset;
+    viads.emplace_back(std::move(viad));
+
+    base_offset += fmt_size;
+  }
+  for (auto& vibd : vibds) {
+    vibd.stride = base_offset;
+  }
   VkPipelineVertexInputStateCreateInfo pvisci {};
   pvisci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
   pvisci.vertexBindingDescriptionCount = (uint32_t)vibds.size();

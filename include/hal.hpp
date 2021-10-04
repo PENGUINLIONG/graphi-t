@@ -341,6 +341,14 @@ enum Topology {
   L_TOPOLOGY_LINE = 2,
   L_TOPOLOGY_TRIANGLE = 3,
 };
+enum VertexInputRate {
+  L_VERTEX_INPUT_RATE_VERTEX,
+  L_VERTEX_INPUT_RATE_INSTANCE,
+};
+struct VertexInput {
+  PixelFormat fmt;
+  VertexInputRate rate;
+};
 struct GraphicsTaskConfig {
   // Human-readable label of the task.
   std::string label;
@@ -362,6 +370,10 @@ struct GraphicsTaskConfig {
   size_t frag_code_size;
   // Topology of vertex inputs to be assembled.
   Topology topo;
+  // Vertex vertex input specifications.
+  const VertexInput* vert_inputs;
+  // Number of vertex inputs.
+  size_t nvert_input;
   // Resources to be allocated.
   const ResourceType* rsc_tys;
   // Number of resources allocated.
