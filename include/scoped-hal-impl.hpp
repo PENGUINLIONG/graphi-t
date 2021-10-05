@@ -117,8 +117,8 @@ Buffer Context::create_idx_buf(
 Image Context::create_img(
   const std::string& label,
   ImageUsage usage,
-  size_t nrow,
-  size_t ncol,
+  size_t height,
+  size_t width,
   PixelFormat fmt
 ) const {
   MemoryAccess host_access = L_MEMORY_ACCESS_NONE;
@@ -141,65 +141,65 @@ Image Context::create_img(
   img_cfg.label = label;
   img_cfg.host_access = host_access;
   img_cfg.dev_access = dev_access;
-  img_cfg.nrow = nrow;
-  img_cfg.ncol = ncol;
+  img_cfg.height = height;
+  img_cfg.width = width;
   img_cfg.fmt = fmt;
   img_cfg.usage = usage;
   return HAL_IMPL_NAMESPACE::create_img(*inner, img_cfg);
 }
 Image Context::create_staging_img(
   const std::string& label,
-  size_t nrow,
-  size_t ncol,
+  size_t height,
+  size_t width,
   PixelFormat fmt
 ) const {
-  return create_img(label, L_IMAGE_USAGE_STAGING_BIT, nrow, ncol, fmt);
+  return create_img(label, L_IMAGE_USAGE_STAGING_BIT, height, width, fmt);
 }
 Image Context::create_sampled_img(
   const std::string& label,
-  size_t nrow,
-  size_t ncol,
+  size_t height,
+  size_t width,
   PixelFormat fmt
 ) const {
-  return create_img(label, L_IMAGE_USAGE_SAMPLED_BIT, nrow, ncol, fmt);
+  return create_img(label, L_IMAGE_USAGE_SAMPLED_BIT, height, width, fmt);
 }
 Image Context::create_storage_img(
   const std::string& label,
-  size_t nrow,
-  size_t ncol,
+  size_t height,
+  size_t width,
   PixelFormat fmt
 ) const {
-  return create_img(label, L_IMAGE_USAGE_STORAGE_BIT, nrow, ncol, fmt);
+  return create_img(label, L_IMAGE_USAGE_STORAGE_BIT, height, width, fmt);
 }
 Image Context::create_attm_img(
   const std::string& label,
-  size_t nrow,
-  size_t ncol,
+  size_t height,
+  size_t width,
   PixelFormat fmt
 ) const {
-  return create_img(label, L_IMAGE_USAGE_ATTACHMENT_BIT, nrow, ncol, fmt);
+  return create_img(label, L_IMAGE_USAGE_ATTACHMENT_BIT, height, width, fmt);
 }
 
 void _copy_img_tile(
   void* dst,
   size_t dst_row_pitch,
-  size_t dst_row_offset,
+  size_t dst_y_offset,
   size_t dst_local_offset, // Offset starting from base of each row.
   void* src,
   size_t src_row_pitch,
-  size_t src_row_offset,
+  size_t src_y_offset,
   size_t src_local_offset,
-  size_t nrow,
+  size_t height,
   size_t row_size
 ) {
   uint8_t* dst_typed = (uint8_t*)dst;
   uint8_t* src_typed = (uint8_t*)src;
 
-  for (size_t row = 0; row < nrow; ++row) {
+  for (size_t row = 0; row < height; ++row) {
     size_t dst_offset =
-      (dst_row_offset + row) * dst_row_pitch + dst_local_offset;
+      (dst_y_offset + row) * dst_row_pitch + dst_local_offset;
     size_t src_offset =
-      (src_row_offset + row) * src_row_pitch + src_local_offset;
+      (src_y_offset + row) * src_row_pitch + src_local_offset;
     std::memcpy(
       (uint8_t*)dst_typed + dst_offset,
       (uint8_t*)src_typed + src_offset,
@@ -215,10 +215,10 @@ MappedImage::MappedImage(const ImageView& view, MemoryAccess map_access) :
 
   const auto& img_cfg = view.img->img_cfg;
   size_t fmt_size = img_cfg.fmt.get_fmt_size();
-  size_t expected_pitch = fmt_size * img_cfg.ncol;
+  size_t expected_pitch = fmt_size * img_cfg.width;
 
   bool need_stage_buf = false;
-  if (view.ncol != img_cfg.ncol || view.nrow != img_cfg.nrow) {
+  if (view.width != img_cfg.width || view.height != img_cfg.height) {
     liong::log::warn("only a portion of the image is mapped; staging buffer "
       "will be used to relayout data on the host side");
     need_stage_buf = true;
@@ -229,7 +229,7 @@ MappedImage::MappedImage(const ImageView& view, MemoryAccess map_access) :
     need_stage_buf = true;
   }
   if (need_stage_buf) {
-    buf_size = expected_pitch * img_cfg.nrow;
+    buf_size = expected_pitch * img_cfg.height;
     buf = new uint8_t[buf_size];
   }
 
@@ -238,17 +238,17 @@ MappedImage::MappedImage(const ImageView& view, MemoryAccess map_access) :
   if (buf != nullptr && (map_access & L_MEMORY_ACCESS_READ_BIT)) {
     size_t buf_row_pitch = expected_pitch;
     _copy_img_tile(buf, expected_pitch, 0, 0, mapped, row_pitch,
-      view.row_offset, view.col_offset * fmt_size, view.nrow, expected_pitch);
+      view.y_offset, view.x_offset * fmt_size, view.height, expected_pitch);
   }
 }
 MappedImage::~MappedImage() {
   if (buf != nullptr) {
     const auto& img_cfg = view.img->img_cfg;
     size_t fmt_size = img_cfg.fmt.get_fmt_size();
-    size_t buf_row_pitch = view.ncol * fmt_size;
+    size_t buf_row_pitch = view.width * fmt_size;
 
-    _copy_img_tile(mapped, row_pitch, view.row_offset,
-      view.col_offset * fmt_size, buf, buf_row_pitch, 0, 0, view.nrow,
+    _copy_img_tile(mapped, row_pitch, view.y_offset,
+      view.x_offset * fmt_size, buf, buf_row_pitch, 0, 0, view.height,
       buf_row_pitch);
 
     delete [] (uint8_t*)buf;

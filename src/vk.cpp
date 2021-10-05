@@ -655,8 +655,8 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   ici.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
   ici.imageType = VK_IMAGE_TYPE_2D;
   ici.format = fmt;
-  ici.extent.width = (uint32_t)img_cfg.ncol;
-  ici.extent.height = (uint32_t)img_cfg.nrow;
+  ici.extent.width = img_cfg.width;
+  ici.extent.height = img_cfg.height;
   ici.extent.depth = 1;
   ici.mipLevels = 1;
   ici.arrayLayers = 1;
@@ -752,8 +752,8 @@ void map_img_mem(
   row_pitch = sl.rowPitch;
 
   liong::log::info("mapped image '", img.img->img_cfg.label, "' from (",
-    img.col_offset, ", ", img.row_offset, ") to (", img.col_offset + img.ncol,
-    ", ", img.row_offset + img.nrow, ")");
+    img.x_offset, ", ", img.y_offset, ") to (", img.x_offset + img.width, ", ",
+    img.y_offset + img.height, ")");
 }
 void unmap_img_mem(
   const ImageView& img,
@@ -1143,16 +1143,16 @@ RenderPass create_pass(
   fci.renderPass = pass;
   fci.attachmentCount = 1;
   fci.pAttachments = &attm.img_view;
-  fci.width = (uint32_t)attm.img_cfg.ncol;
-  fci.height = (uint32_t)attm.img_cfg.nrow;
+  fci.width = attm.img_cfg.width;
+  fci.height = attm.img_cfg.height;
   fci.layers = 1;
 
   VkFramebuffer framebuf;
   VK_ASSERT << vkCreateFramebuffer(ctxt.dev, &fci, nullptr, &framebuf);
 
   VkRect2D viewport {};
-  viewport.extent.width = (uint32_t)attm.img_cfg.ncol;
-  viewport.extent.height = (uint32_t)attm.img_cfg.nrow;
+  viewport.extent.width = attm.img_cfg.width;
+  viewport.extent.height = attm.img_cfg.height;
 
   liong::log::info("created render pass");
   return { &ctxt, &attm, pass, std::move(viewport), framebuf };
@@ -1470,15 +1470,15 @@ void _record_cmd_copy_buf2img(TransactionLike& transact, const Command& cmd) {
   VkBufferImageCopy bic {};
   bic.bufferOffset = src.offset;
   bic.bufferRowLength = 0;
-  bic.bufferImageHeight = (uint32_t)dst.img->img_cfg.nrow;
+  bic.bufferImageHeight = (uint32_t)dst.img->img_cfg.height;
   bic.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   bic.imageSubresource.mipLevel = 0;
   bic.imageSubresource.baseArrayLayer = 0;
   bic.imageSubresource.layerCount = 1;
-  bic.imageOffset.x = dst.col_offset;
-  bic.imageOffset.y = dst.row_offset;
-  bic.imageExtent.width = dst.ncol;
-  bic.imageExtent.height = dst.nrow;
+  bic.imageOffset.x = dst.x_offset;
+  bic.imageOffset.y = dst.y_offset;
+  bic.imageExtent.width = dst.width;
+  bic.imageExtent.height = dst.height;
   bic.imageExtent.depth = 1;
 
   vkCmdCopyBufferToImage(cmdbuf, src.buf->buf, dst.img->img,
@@ -1497,15 +1497,15 @@ void _record_cmd_copy_img2buf(TransactionLike& transact, const Command& cmd) {
   VkBufferImageCopy bic {};
   bic.bufferOffset = dst.offset;
   bic.bufferRowLength = 0;
-  bic.bufferImageHeight = static_cast<uint32_t>(src.img->img_cfg.nrow);
+  bic.bufferImageHeight = static_cast<uint32_t>(src.img->img_cfg.height);
   bic.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   bic.imageSubresource.mipLevel = 0;
   bic.imageSubresource.baseArrayLayer = 0;
   bic.imageSubresource.layerCount = 1;
-  bic.imageOffset.x = src.col_offset;
-  bic.imageOffset.y = src.row_offset;
-  bic.imageExtent.width = src.ncol;
-  bic.imageExtent.height = src.nrow;
+  bic.imageOffset.x = src.x_offset;
+  bic.imageOffset.y = src.y_offset;
+  bic.imageExtent.width = src.width;
+  bic.imageExtent.height = src.height;
   bic.imageExtent.depth = 1;
 
   vkCmdCopyImageToBuffer(cmdbuf, src.img->img, VK_IMAGE_LAYOUT_GENERAL,
@@ -1537,15 +1537,15 @@ void _record_cmd_copy_img(TransactionLike& transact, const Command& cmd) {
   const auto& in = cmd.cmd_copy_img;
   const auto& src = in.src;
   const auto& dst = in.dst;
-  assert(src.ncol == dst.ncol && src.nrow == dst.nrow,
+  assert(src.width == dst.width && src.height == dst.height,
     "image copy size mismatched");
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
 
   VkImageCopy ic {};
-  ic.srcOffset.x = src.col_offset;
-  ic.srcOffset.y = src.row_offset;
-  ic.dstOffset.x = dst.col_offset;
-  ic.dstOffset.y = dst.row_offset;
+  ic.srcOffset.x = src.x_offset;
+  ic.srcOffset.y = src.y_offset;
+  ic.dstOffset.x = dst.x_offset;
+  ic.dstOffset.y = dst.y_offset;
   ic.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   ic.srcSubresource.baseArrayLayer = 0;
   ic.srcSubresource.layerCount = 1;
@@ -1554,8 +1554,8 @@ void _record_cmd_copy_img(TransactionLike& transact, const Command& cmd) {
   ic.dstSubresource.baseArrayLayer = 0;
   ic.dstSubresource.layerCount = 1;
   ic.dstSubresource.mipLevel = 0;
-  ic.extent.width = dst.ncol;
-  ic.extent.height = dst.nrow;
+  ic.extent.width = dst.width;
+  ic.extent.height = dst.height;
   ic.extent.depth = 1;
 
   vkCmdCopyImage(cmdbuf, src.img->img, VK_IMAGE_LAYOUT_GENERAL,
