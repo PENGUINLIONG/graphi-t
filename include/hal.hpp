@@ -270,9 +270,9 @@ struct ImageConfig {
   MemoryAccess host_access;
   MemoryAccess dev_access;
   // Number of rows, or height of the image.
-  size_t height;
+  uint32_t height;
   // Number of columns, or width of the image.
-  size_t width;
+  uint32_t width;
   // Pixel format of the image.
   PixelFormat fmt;
   // Usage of the image.
@@ -285,10 +285,10 @@ L_IMPL_FN const ImageConfig& get_img_cfg(const Image& img);
 
 struct ImageView {
   const Image* img; // Lifetime bound.
-  uint32_t y_offset;
   uint32_t x_offset;
-  uint32_t height;
+  uint32_t y_offset;
   uint32_t width;
+  uint32_t height;
 };
 
 L_IMPL_FN void map_img_mem(

@@ -246,26 +246,26 @@ struct Image {
   }
 
   inline ImageView view(
-    uint32_t row_offset,
-    uint32_t col_offset,
-    uint32_t nrow,
-    uint32_t ncol
-  ) const {
-    return ImageView { &*inner, row_offset, col_offset, nrow, ncol };
+    uint32_t x_offset,
+    uint32_t y_offset,
+    uint32_t width,
+    uint32_t height
+    ) const {
+    return ImageView { &*inner, x_offset, y_offset, width, height };
   }
   inline ImageView view() const {
     auto& img_cfg = cfg();
-    return view(0, 0, (uint32_t)img_cfg.nrow, (uint32_t)img_cfg.ncol);
+    return view(0, 0, (uint32_t)img_cfg.width, (uint32_t)img_cfg.height);
   }
 
   inline MappedImage map(
-    uint32_t row_offset,
-    uint32_t col_offset,
-    uint32_t ncol,
-    uint32_t nrow,
+    uint32_t x_offset,
+    uint32_t y_offset,
+    uint32_t width,
+    uint32_t height,
     MemoryAccess map_access
   ) const {
-    return MappedImage(view(row_offset, col_offset, nrow, ncol), map_access);
+    return MappedImage(view(x_offset, y_offset, width, height), map_access);
   }
   inline MappedImage map(MemoryAccess map_access) const {
     return MappedImage(view(), map_access);
@@ -417,32 +417,32 @@ public:
   Image create_img(
     const std::string& label,
     ImageUsage usage,
-    size_t nrow,
-    size_t ncol,
+    size_t width,
+    size_t height,
     PixelFormat fmt
   ) const;
   Image create_staging_img(
     const std::string& label,
-    size_t nrow,
-    size_t ncol,
+    size_t width,
+    size_t height,
     PixelFormat fmt
   ) const;
   Image create_sampled_img(
     const std::string& label,
-    size_t nrow,
-    size_t ncol,
+    size_t width,
+    size_t height,
     PixelFormat fmt
   ) const;
   Image create_storage_img(
     const std::string& label,
-    size_t nrow,
-    size_t ncol,
+    size_t width,
+    size_t height,
     PixelFormat fmt
   ) const;
   Image create_attm_img(
     const std::string& label,
-    size_t nrow,
-    size_t ncol,
+    size_t width,
+    size_t height,
     PixelFormat fmt
   ) const;
 

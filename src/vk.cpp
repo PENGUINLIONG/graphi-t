@@ -655,8 +655,8 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   ici.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
   ici.imageType = VK_IMAGE_TYPE_2D;
   ici.format = fmt;
-  ici.extent.width = (uint32_t)img_cfg.width;
-  ici.extent.height = (uint32_t)img_cfg.height;
+  ici.extent.width = img_cfg.width;
+  ici.extent.height = img_cfg.height;
   ici.extent.depth = 1;
   ici.mipLevels = 1;
   ici.arrayLayers = 1;
@@ -1143,16 +1143,16 @@ RenderPass create_pass(
   fci.renderPass = pass;
   fci.attachmentCount = 1;
   fci.pAttachments = &attm.img_view;
-  fci.width = (uint32_t)attm.img_cfg.width;
-  fci.height = (uint32_t)attm.img_cfg.height;
+  fci.width = attm.img_cfg.width;
+  fci.height = attm.img_cfg.height;
   fci.layers = 1;
 
   VkFramebuffer framebuf;
   VK_ASSERT << vkCreateFramebuffer(ctxt.dev, &fci, nullptr, &framebuf);
 
   VkRect2D viewport {};
-  viewport.extent.width = (uint32_t)attm.img_cfg.width;
-  viewport.extent.height = (uint32_t)attm.img_cfg.height;
+  viewport.extent.width = attm.img_cfg.width;
+  viewport.extent.height = attm.img_cfg.height;
 
   liong::log::info("created render pass");
   return { &ctxt, &attm, pass, std::move(viewport), framebuf };
