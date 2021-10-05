@@ -189,6 +189,11 @@ L_DEF_FMT(R16G16_UINT, 2, 0x02);
 L_DEF_FMT(R16G16B16_UINT, 3, 0x02);
 L_DEF_FMT(R16G16B16A16_UINT, 4, 0x02);
 
+L_DEF_FMT(R16_SFLOAT, 1, 0x10);
+L_DEF_FMT(R16G16_SFLOAT, 2, 0x10);
+L_DEF_FMT(R16G16B16_SFLOAT, 3, 0x10);
+L_DEF_FMT(R16G16B16A16_SFLOAT, 4, 0x10);
+
 L_DEF_FMT(R32_UINT, 1, 0x03);
 L_DEF_FMT(R32G32_UINT, 2, 0x03);
 L_DEF_FMT(R32G32B32_UINT, 3, 0x03);
@@ -264,10 +269,10 @@ struct ImageConfig {
   std::string label;
   MemoryAccess host_access;
   MemoryAccess dev_access;
-  // Number of rows in the image.
-  size_t nrow;
-  // Number of columns in the image.
-  size_t ncol;
+  // Number of rows, or height of the image.
+  size_t height;
+  // Number of columns, or width of the image.
+  size_t width;
   // Pixel format of the image.
   PixelFormat fmt;
   // Usage of the image.
@@ -280,10 +285,10 @@ L_IMPL_FN const ImageConfig& get_img_cfg(const Image& img);
 
 struct ImageView {
   const Image* img; // Lifetime bound.
-  uint32_t row_offset;
-  uint32_t col_offset;
-  uint32_t nrow;
-  uint32_t ncol;
+  uint32_t y_offset;
+  uint32_t x_offset;
+  uint32_t height;
+  uint32_t width;
 };
 
 L_IMPL_FN void map_img_mem(
@@ -597,7 +602,7 @@ inline Command cmd_draw(
   cmd.cmd_draw.ninst = ninst;
   return cmd;
 }
-// Draw triangle lists, index by index, where each index points to a vertex. 
+// Draw triangle lists, index by index, where each index points to a vertex.
 inline Command cmd_draw_indexed(
   const Task& task,
   const ResourcePool& rsc_pool,
