@@ -43,6 +43,10 @@ std::vector<std::string> physdev_descs {};
 
 
 void initialize() {
+  if (inst != VK_NULL_HANDLE) {
+    liong::log::warn("ignored redundant vulkan module initialization");
+    return;
+  }
   VkApplicationInfo app_info {};
   app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
   app_info.apiVersion = VK_API_VERSION_1_0;
@@ -77,12 +81,10 @@ void initialize() {
   for (const auto& inst_layer : inst_layers) {
     liong::log::debug("found layer ", inst_layer.layerName);
 #if !defined(NDEBUG)
-#if __ANDROID__
     if (std::strcmp("VK_LAYER_KHRONOS_validation", inst_layer.layerName) == 0) {
       layers.emplace_back("VK_LAYER_KHRONOS_validation");
       liong::log::debug("vulkan validation layer is enabled");
     }
-#endif // __ANDROID__
 #endif // !defined(NDEBUG)
   }
 
@@ -213,6 +215,9 @@ uint32_t _get_mem_prior(
   }
 }
 Context create_ctxt(const ContextConfig& cfg) {
+  if (inst == VK_NULL_HANDLE) {
+    initialize();
+  }
   auto physdev = physdevs[cfg.dev_idx];
 
   VkPhysicalDeviceFeatures feat;
@@ -435,9 +440,11 @@ Context create_ctxt(const ContextConfig& cfg) {
   };
 }
 void destroy_ctxt(Context& ctxt) {
-  vkDestroySampler(ctxt.dev, ctxt.fast_samp, nullptr);
-  vkDestroyDevice(ctxt.dev, nullptr);
-  liong::log::info("destroyed vulkan context '", ctxt.ctxt_cfg.label, "'");
+  if (ctxt.dev != VK_NULL_HANDLE) {
+    vkDestroySampler(ctxt.dev, ctxt.fast_samp, nullptr);
+    vkDestroyDevice(ctxt.dev, nullptr);
+    liong::log::info("destroyed vulkan context '", ctxt.ctxt_cfg.label, "'");
+  }
   ctxt = {};
 }
 const ContextConfig& get_ctxt_cfg(const Context& ctxt) {
@@ -507,10 +514,12 @@ Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg) {
   return Buffer { &ctxt, devmem, buf, buf_cfg };
 }
 void destroy_buf(Buffer& buf) {
-  vkDestroyBuffer(buf.ctxt->dev, buf.buf, nullptr);
-  vkFreeMemory(buf.ctxt->dev, buf.devmem, nullptr);
-  liong::log::info("destroyed buffer '", buf.buf_cfg.label, "'");
-  buf = {};
+  if (buf.buf != VK_NULL_HANDLE) {
+    vkDestroyBuffer(buf.ctxt->dev, buf.buf, nullptr);
+    vkFreeMemory(buf.ctxt->dev, buf.devmem, nullptr);
+    liong::log::info("destroyed buffer '", buf.buf_cfg.label, "'");
+    buf = {};
+  }
 }
 const BufferConfig& get_buf_cfg(const Buffer& buf) {
   return buf.buf_cfg;
@@ -644,9 +653,8 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
 
   // Check whether the device support our use case.
   VkImageFormatProperties ifp;
-  VK_ASSERT << vkGetPhysicalDeviceImageFormatProperties(
-    physdevs[ctxt.ctxt_cfg.dev_idx], fmt, VK_IMAGE_TYPE_2D,
-    VK_IMAGE_TILING_OPTIMAL, usage, 0, &ifp);
+  VK_ASSERT << vkGetPhysicalDeviceImageFormatProperties(ctxt.physdev, fmt,
+    VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL, usage, 0, &ifp);
 
   VkImageLayout layout = is_staging_img ?
     VK_IMAGE_LAYOUT_PREINITIALIZED : VK_IMAGE_LAYOUT_UNDEFINED;
@@ -719,16 +727,18 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   };
 }
 void destroy_img(Image& img) {
-  vkDestroyImageView(img.ctxt->dev, img.img_view, nullptr);
-  vkDestroyImage(img.ctxt->dev, img.img, nullptr);
-  vkFreeMemory(img.ctxt->dev, img.devmem, nullptr);
-
-  liong::log::info("destroyed image '", img.img_cfg.label, "'");
-  img = {};
+  if (img.img != VK_NULL_HANDLE) {
+    vkDestroyImageView(img.ctxt->dev, img.img_view, nullptr);
+    vkDestroyImage(img.ctxt->dev, img.img, nullptr);
+    vkFreeMemory(img.ctxt->dev, img.devmem, nullptr);
+    liong::log::info("destroyed image '", img.img_cfg.label, "'");
+    img = {};
+  }
 }
 const ImageConfig& get_img_cfg(const Image& img) {
   return img.img_cfg;
 }
+
 
 
 void map_img_mem(
@@ -1118,16 +1128,18 @@ Task create_graph_task(
   };
 }
 void destroy_task(Task& task) {
-  vkDestroyPipeline(task.ctxt->dev, task.pipe, nullptr);
-  for (const VkShaderModule& shader_mod : task.shader_mods) {
-    vkDestroyShaderModule(task.ctxt->dev, shader_mod, nullptr);
-  }
-  task.shader_mods.clear();
-  vkDestroyPipelineLayout(task.ctxt->dev, task.pipe_layout, nullptr);
-  vkDestroyDescriptorSetLayout(task.ctxt->dev, task.desc_set_layout, nullptr);
+  if (task.pipe != VK_NULL_HANDLE) {
+    vkDestroyPipeline(task.ctxt->dev, task.pipe, nullptr);
+    for (const VkShaderModule& shader_mod : task.shader_mods) {
+      vkDestroyShaderModule(task.ctxt->dev, shader_mod, nullptr);
+    }
+    task.shader_mods.clear();
+    vkDestroyPipelineLayout(task.ctxt->dev, task.pipe_layout, nullptr);
+    vkDestroyDescriptorSetLayout(task.ctxt->dev, task.desc_set_layout, nullptr);
 
-  liong::log::info("destroyed task '", task.label, "'");
-  task = {};
+    liong::log::info("destroyed task '", task.label, "'");
+    task = {};
+  }
 }
 
 
@@ -1158,10 +1170,12 @@ RenderPass create_pass(
   return { &ctxt, &attm, pass, std::move(viewport), framebuf };
 }
 void destroy_pass(RenderPass& pass) {
-  vkDestroyFramebuffer(pass.ctxt->dev, pass.framebuf, nullptr);
-  vkDestroyRenderPass(pass.ctxt->dev, pass.pass, nullptr);
-  pass = {};
-  liong::log::info("destroyed render pass");
+  if (pass.pass != VK_NULL_HANDLE) {
+    vkDestroyFramebuffer(pass.ctxt->dev, pass.framebuf, nullptr);
+    vkDestroyRenderPass(pass.ctxt->dev, pass.pass, nullptr);
+    pass = {};
+    liong::log::info("destroyed render pass");
+  }
 }
 
 
@@ -1199,9 +1213,9 @@ ResourcePool create_rsc_pool(
 void destroy_rsc_pool(ResourcePool& rsc_pool) {
   if (rsc_pool.desc_pool != VK_NULL_HANDLE) {
     vkDestroyDescriptorPool(rsc_pool.ctxt->dev, rsc_pool.desc_pool, nullptr);
-    rsc_pool.desc_pool = VK_NULL_HANDLE;
+    liong::log::info("destroyed resource pool");
+    rsc_pool = {};
   }
-  liong::log::info("destroyed resource pool");
 }
 void bind_pool_rsc(
   ResourcePool& rsc_pool,
@@ -1482,7 +1496,7 @@ void _record_cmd_copy_buf2img(TransactionLike& transact, const Command& cmd) {
   bic.imageExtent.depth = 1;
 
   vkCmdCopyBufferToImage(cmdbuf, src.buf->buf, dst.img->img,
-    VK_IMAGE_LAYOUT_GENERAL, 1, &bic);
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bic);
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
     liong::log::info("scheduled copy from buffer '", src.buf->buf_cfg.label,
       "' to image '", dst.img->img_cfg.label, "'");
@@ -1508,8 +1522,8 @@ void _record_cmd_copy_img2buf(TransactionLike& transact, const Command& cmd) {
   bic.imageExtent.height = src.height;
   bic.imageExtent.depth = 1;
 
-  vkCmdCopyImageToBuffer(cmdbuf, src.img->img, VK_IMAGE_LAYOUT_GENERAL,
-    dst.buf->buf, 1, &bic);
+  vkCmdCopyImageToBuffer(cmdbuf, src.img->img,
+    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst.buf->buf, 1, &bic);
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
     liong::log::info("scheduled copy from image '", src.img->img_cfg.label,
       "' to buffer '", dst.buf->buf_cfg.label, "'");
@@ -1558,8 +1572,8 @@ void _record_cmd_copy_img(TransactionLike& transact, const Command& cmd) {
   ic.extent.height = dst.height;
   ic.extent.depth = 1;
 
-  vkCmdCopyImage(cmdbuf, src.img->img, VK_IMAGE_LAYOUT_GENERAL,
-    dst.img->img, VK_IMAGE_LAYOUT_GENERAL, 1, &ic);
+  vkCmdCopyImage(cmdbuf, src.img->img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+    dst.img->img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &ic);
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
     liong::log::info("scheduled copy from image '", src.img->img_cfg.label,
       "' to image '", dst.img->img_cfg.label, "'");
@@ -2072,10 +2086,12 @@ CommandDrain create_cmd_drain(const Context& ctxt) {
   return CommandDrain { &ctxt, {}, fence };
 }
 void destroy_cmd_drain(CommandDrain& cmd_drain) {
-  _clear_transact_submit_detail(*cmd_drain.ctxt, cmd_drain.submit_details);
-  vkDestroyFence(cmd_drain.ctxt->dev, cmd_drain.fence, nullptr);
-  cmd_drain = {};
-  liong::log::info("destroyed command drain");
+  if (cmd_drain.fence != nullptr) {
+    _clear_transact_submit_detail(*cmd_drain.ctxt, cmd_drain.submit_details);
+    vkDestroyFence(cmd_drain.ctxt->dev, cmd_drain.fence, nullptr);
+    cmd_drain = {};
+    liong::log::info("destroyed command drain");
+  }
 }
 void submit_cmds(
   CommandDrain& cmd_drain,
@@ -2177,9 +2193,11 @@ Timestamp create_timestamp(const Context& ctxt) {
   return Timestamp { &ctxt, query_pool };
 }
 void destroy_timestamp(Timestamp& timestamp) {
-  vkDestroyQueryPool(timestamp.ctxt->dev, timestamp.query_pool, nullptr);
-  timestamp = {};
-  liong::log::info("destroyed timestamp");
+  if (timestamp.query_pool != VK_NULL_HANDLE) {
+    vkDestroyQueryPool(timestamp.ctxt->dev, timestamp.query_pool, nullptr);
+    timestamp = {};
+    liong::log::info("destroyed timestamp");
+  }
 }
 double get_timestamp_result_us(const Timestamp& timestamp) {
   uint64_t t;

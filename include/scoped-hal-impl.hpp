@@ -15,7 +15,11 @@ Context::Context(HAL_IMPL_NAMESPACE::Context&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::Context>(inner)) {}
 Context::Context(const std::string& label, uint32_t dev_idx) :
   Context(ContextConfig { label, dev_idx }) {}
-Context::~Context() { HAL_IMPL_NAMESPACE::destroy_ctxt(*inner); }
+Context::~Context() {
+  if (inner != nullptr) {
+    HAL_IMPL_NAMESPACE::destroy_ctxt(*inner);
+  }
+}
 
 RenderPass Context::create_pass(const Image& attm) const {
   return HAL_IMPL_NAMESPACE::create_pass(*inner, *attm.inner);
@@ -283,7 +287,7 @@ Buffer::Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::Buffer>(inner)),
   dont_destroy(false) {}
 Buffer::~Buffer() {
-  if (!dont_destroy) {
+  if (!dont_destroy && inner != nullptr) {
     HAL_IMPL_NAMESPACE::destroy_buf(*inner);
   }
 }
@@ -298,7 +302,7 @@ Image::Image(HAL_IMPL_NAMESPACE::Image&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::Image>(inner)),
   dont_destroy(false) {}
 Image::~Image() {
-  if (!dont_destroy) {
+  if (!dont_destroy && inner != nullptr) {
     HAL_IMPL_NAMESPACE::destroy_img(*inner);
   }
 }
@@ -310,7 +314,11 @@ Task::Task(const Context& ctxt, const ComputeTaskConfig& cfg) :
     create_comp_task(*ctxt.inner, cfg))) {}
 Task::Task(HAL_IMPL_NAMESPACE::Task&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::Task>(std::move(inner))) {}
-Task::~Task() { destroy_task(*inner); }
+Task::~Task() {
+  if (inner != nullptr) {
+    destroy_task(*inner);
+  }
+}
 
 ResourcePool Task::create_rsc_pool() const {
   return HAL_IMPL_NAMESPACE::create_rsc_pool(*inner->ctxt, *inner);
@@ -325,7 +333,11 @@ RenderPass::RenderPass(
   create_pass(*ctxt.inner, *attm.inner))) {}
 RenderPass::RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::RenderPass>(inner)) {}
-RenderPass::~RenderPass() { destroy_pass(*inner); }
+RenderPass::~RenderPass() {
+  if (inner != nullptr) {
+    destroy_pass(*inner);
+  }
+}
 
 Task RenderPass::create_graph_task(
   const std::string& label,
@@ -363,7 +375,11 @@ ResourcePool::ResourcePool(const Context& ctxt, const Task& task) :
     create_rsc_pool(*ctxt.inner, *task.inner))) {}
 ResourcePool::ResourcePool(HAL_IMPL_NAMESPACE::ResourcePool&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::ResourcePool>(inner)) {}
-ResourcePool::~ResourcePool() { destroy_rsc_pool(*inner); }
+ResourcePool::~ResourcePool() {
+  if (inner != nullptr) {
+    destroy_rsc_pool(*inner);
+  }
+}
 
 
 
@@ -381,7 +397,11 @@ Transaction::Transaction(
   const std::string& label,
   const std::vector<Command>& cmds
 ) : Transaction(ctxt, label, cmds.data(), cmds.size()) {}
-Transaction::~Transaction() { destroy_transact(*inner); }
+Transaction::~Transaction() {
+  if (inner != nullptr) {
+    destroy_transact(*inner);
+  }
+}
 
 
 
@@ -391,7 +411,11 @@ Timestamp::Timestamp(
   create_timestamp(*ctxt.inner))) {}
 Timestamp::Timestamp(HAL_IMPL_NAMESPACE::Timestamp&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::Timestamp>(inner)) {}
-Timestamp::~Timestamp() { if (inner) { destroy_timestamp(*inner); } }
+Timestamp::~Timestamp() {
+  if (inner != nullptr) {
+    destroy_timestamp(*inner);
+  }
+}
 
 
 
@@ -400,7 +424,11 @@ CommandDrain::CommandDrain(const Context& ctxt) :
     create_cmd_drain(*ctxt.inner))) {}
 CommandDrain::CommandDrain(HAL_IMPL_NAMESPACE::CommandDrain&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::CommandDrain>(inner)) {}
-CommandDrain::~CommandDrain() { destroy_cmd_drain(*inner); }
+CommandDrain::~CommandDrain() {
+  if (inner != nullptr) {
+    destroy_cmd_drain(*inner);
+  }
+}
 
 } // namespace scoped
 } // namespace HAL_IMPL_NAMESPACE

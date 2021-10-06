@@ -25,10 +25,13 @@ struct CommandDrain;
 struct CommandDrain {
   std::unique_ptr<HAL_IMPL_NAMESPACE::CommandDrain> inner;
 
+  CommandDrain() = default;
   CommandDrain(const Context& ctxt);
   CommandDrain(HAL_IMPL_NAMESPACE::CommandDrain&& inner);
   CommandDrain(CommandDrain&&) = default;
   ~CommandDrain();
+
+  CommandDrain& operator=(CommandDrain&&) = default;
 
   inline operator HAL_IMPL_NAMESPACE::CommandDrain& () {
     return *inner;
@@ -58,10 +61,13 @@ struct CommandDrain {
 struct Timestamp {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Timestamp> inner;
 
+  Timestamp() = default;
   Timestamp(const Context& ctxt);
   Timestamp(HAL_IMPL_NAMESPACE::Timestamp&& inner);
   Timestamp(Timestamp&&) = default;
   ~Timestamp();
+
+  Timestamp& operator=(Timestamp&&) = default;
 
   inline operator HAL_IMPL_NAMESPACE::Timestamp& () {
     return *inner;
@@ -80,6 +86,7 @@ struct Timestamp {
 struct Transaction {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Transaction> inner;
 
+  Transaction() = default;
   Transaction(
     const Context& ctxt,
     const std::string& label,
@@ -98,6 +105,8 @@ struct Transaction {
   ) : Transaction(ctxt, cmds.data(), N) {}
   ~Transaction();
 
+  Transaction& operator=(Transaction&&) = default;
+
   inline operator HAL_IMPL_NAMESPACE::Transaction& () {
     return *inner;
   }
@@ -111,10 +120,13 @@ struct Transaction {
 struct ResourcePool {
   std::unique_ptr<HAL_IMPL_NAMESPACE::ResourcePool> inner;
 
+  ResourcePool() = default;
   ResourcePool(const Context& ctxt, const Task& task);
   ResourcePool(HAL_IMPL_NAMESPACE::ResourcePool&& inner);
   ResourcePool(ResourcePool&&) = default;
   ~ResourcePool();
+
+  ResourcePool& operator=(ResourcePool&&) = default;
 
   inline operator HAL_IMPL_NAMESPACE::ResourcePool& () {
     return *inner;
@@ -136,10 +148,13 @@ struct ResourcePool {
 struct Task {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Task> inner;
 
+  Task() = default;
   Task(const Context& ctxt, const ComputeTaskConfig& cfg);
   Task(HAL_IMPL_NAMESPACE::Task&& inner);
   Task(Task&&) = default;
   ~Task();
+
+  Task& operator=(Task&&) = default;
 
   inline operator HAL_IMPL_NAMESPACE::Task& () {
     return *inner;
@@ -156,10 +171,13 @@ struct Task {
 struct RenderPass {
   std::unique_ptr<HAL_IMPL_NAMESPACE::RenderPass> inner;
 
+  RenderPass() = default;
   RenderPass(const Context& ctxt, const Image& attm);
   RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner);
   RenderPass(RenderPass&&) = default;
   ~RenderPass();
+
+  RenderPass& operator=(RenderPass&&) = default;
 
   inline operator HAL_IMPL_NAMESPACE::RenderPass& () {
     return *inner;
@@ -229,10 +247,13 @@ struct Image {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Image> inner;
   bool dont_destroy;
 
+  Image() = default;
   Image(const Context& ctxt, const ImageConfig& cfg);
   Image(HAL_IMPL_NAMESPACE::Image&& inner);
   Image(Image&&) = default;
   ~Image();
+
+  Image& operator=(Image&&) = default;
 
   inline operator HAL_IMPL_NAMESPACE::Image& () {
     return *inner;
@@ -251,11 +272,10 @@ struct Image {
     uint32_t width,
     uint32_t height
     ) const {
-    return ImageView { &*inner, x_offset, y_offset, width, height };
+    return make_img_view(*inner, x_offset, y_offset, width, height);
   }
   inline ImageView view() const {
-    auto& img_cfg = cfg();
-    return view(0, 0, (uint32_t)img_cfg.width, (uint32_t)img_cfg.height);
+    return make_img_view(*inner);
   }
 
   inline MappedImage map(
@@ -300,11 +320,13 @@ struct Buffer {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Buffer> inner;
   bool dont_destroy;
 
+  Buffer() = default;
   Buffer(const Context& ctxt, const BufferConfig& cfg);
   Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner);
   Buffer(Buffer&&) = default;
   ~Buffer();
 
+  Buffer& operator=(Buffer&&) = default;
 
   inline operator HAL_IMPL_NAMESPACE::Buffer& () {
     return *inner;
@@ -318,11 +340,10 @@ struct Buffer {
   }
 
   inline BufferView view(size_t offset, size_t size) const {
-    return BufferView { &*inner, offset, size };
+    return make_buf_view(*inner, offset, size);
   }
   inline BufferView view() const {
-    auto& buf_cfg = cfg();
-    return view(0, buf_cfg.size);
+    return make_buf_view(*inner);
   }
 
   inline MappedBuffer map(
@@ -343,11 +364,14 @@ struct Context {
 public:
   std::unique_ptr<HAL_IMPL_NAMESPACE::Context> inner;
 
+  Context() = default;
   Context(const ContextConfig& cfg);
   Context(const std::string& label, uint32_t dev_idx);
   Context(HAL_IMPL_NAMESPACE::Context&& inner);
   Context(Context&&) = default;
   ~Context();
+
+  Context& operator=(Context&&) = default;
 
   inline operator HAL_IMPL_NAMESPACE::Context& () {
     return *inner;

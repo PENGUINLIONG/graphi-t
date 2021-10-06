@@ -241,6 +241,17 @@ struct BufferView {
   size_t offset;
   size_t size;
 };
+inline BufferView make_buf_view(const Buffer& buf, size_t offset, size_t size) {
+  BufferView out {};
+  out.buf = &buf;
+  out.offset = offset;
+  out.size = size;
+  return out;
+}
+inline BufferView make_buf_view(const Buffer& buf) {
+  const BufferConfig& buf_cfg = get_buf_cfg(buf);
+  return make_buf_view(buf, 0, buf_cfg.size);
+}
 
 L_IMPL_FN void map_buf_mem(
   const BufferView& dst,
@@ -290,6 +301,25 @@ struct ImageView {
   uint32_t width;
   uint32_t height;
 };
+inline ImageView make_img_view(
+  const Image& img,
+  uint32_t x_offset,
+  uint32_t y_offset,
+  uint32_t width,
+  uint32_t height
+) {
+  ImageView out {};
+  out.img = &img;
+  out.x_offset = x_offset;
+  out.y_offset = y_offset;
+  out.width = width;
+  out.height = height;
+  return out;
+}
+inline ImageView make_img_view(const Image& img) {
+  const ImageConfig& img_cfg = get_img_cfg(img);
+  return make_img_view(img, 0, 0, img_cfg.width, img_cfg.height);
+}
 
 L_IMPL_FN void map_img_mem(
   const ImageView& img,
