@@ -2087,7 +2087,7 @@ CommandDrain create_cmd_drain(const Context& ctxt) {
   return CommandDrain { &ctxt, {}, fence };
 }
 void destroy_cmd_drain(CommandDrain& cmd_drain) {
-  if (cmd_drain.fence != nullptr) {
+  if (cmd_drain.fence != VK_NULL_HANDLE) {
     _clear_transact_submit_detail(*cmd_drain.ctxt, cmd_drain.submit_details);
     vkDestroyFence(cmd_drain.ctxt->dev, cmd_drain.fence, nullptr);
     cmd_drain = {};
