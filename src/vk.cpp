@@ -907,7 +907,8 @@ Task create_comp_task(
     { shader_mod }, std::move(desc_pool_sizes), cfg.label };
 }
 VkRenderPass _create_pass(
-  const Context& ctxt
+  const Context& ctxt,
+  const Image& attm
 ) {
   std::array<VkAttachmentReference, 1> ars {
     { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
@@ -915,7 +916,7 @@ VkRenderPass _create_pass(
   std::array<VkAttachmentDescription, 1> ads {};
   {
     VkAttachmentDescription& ad = ads[0];
-    ad.format = VK_FORMAT_R8G8B8A8_UNORM;
+    ad.format = _make_img_fmt(attm.img_cfg.fmt);
     ad.samples = VK_SAMPLE_COUNT_1_BIT;
     ad.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
     ad.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
@@ -1149,7 +1150,7 @@ RenderPass create_pass(
   const Context& ctxt,
   const Image& attm
 ) {
-  VkRenderPass pass = _create_pass(ctxt);
+  VkRenderPass pass = _create_pass(ctxt, attm);
 
   VkFramebufferCreateInfo fci {};
   fci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
