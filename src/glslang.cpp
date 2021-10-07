@@ -230,7 +230,7 @@ public:
       liong::assert(nubo <= 1, "a pipeline can only bind to one uniform block");
       if (nubo != 0) {
         auto ubo = program->getUniformBlock(0);
-        liong::assert(ubo.getBinding(), "uniform block binding point must be 0");
+        liong::assert(ubo.getBinding() == 0, "uniform block binding point must be 0");
         liong::assert(ubo.size != 0, "unexpected zero-sized uniform block");
         ubo_size = ubo.size;
       } else {
