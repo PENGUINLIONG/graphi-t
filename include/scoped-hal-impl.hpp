@@ -321,7 +321,7 @@ Task::~Task() {
 }
 
 ResourcePool Task::create_rsc_pool() const {
-  return HAL_IMPL_NAMESPACE::create_rsc_pool(*inner->ctxt, *inner);
+  return HAL_IMPL_NAMESPACE::create_rsc_pool(*inner);
 }
 
 
@@ -372,7 +372,7 @@ Task RenderPass::create_graph_task(
 
 ResourcePool::ResourcePool(const Context& ctxt, const Task& task) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::ResourcePool>(
-    create_rsc_pool(*ctxt.inner, *task.inner))) {}
+    create_rsc_pool(*task.inner))) {}
 ResourcePool::ResourcePool(HAL_IMPL_NAMESPACE::ResourcePool&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::ResourcePool>(inner)) {}
 ResourcePool::~ResourcePool() {

@@ -902,9 +902,9 @@ Task create_comp_task(
 
   liong::log::info("created compute task '", cfg.label, "'");
   return Task {
-    &ctxt, desc_set_layout, pipe_layout, pipe, { shader_mod },
-    std::move(desc_pool_sizes), cfg.label,
-  };
+    &ctxt, desc_set_layout, pipe_layout, pipe,
+    std::vector<ResourceType>(cfg.rsc_tys, cfg.rsc_tys + cfg.nrsc_ty),
+    { shader_mod }, std::move(desc_pool_sizes), cfg.label };
 }
 VkRenderPass _create_pass(
   const Context& ctxt
@@ -1124,8 +1124,9 @@ Task create_graph_task(
   liong::log::info("created graphics task '", cfg.label, "'");
   return Task {
     &ctxt, desc_set_layout, pipe_layout, pipe,
-    { vert_shader_mod, frag_shader_mod }, std::move(desc_pool_sizes), cfg.label,
-  };
+    std::vector<ResourceType>(cfg.rsc_tys, cfg.rsc_tys + cfg.nrsc_ty),
+    { vert_shader_mod, frag_shader_mod },
+    std::move(desc_pool_sizes), cfg.label };
 }
 void destroy_task(Task& task) {
   if (task.pipe != VK_NULL_HANDLE) {
@@ -1180,14 +1181,13 @@ void destroy_pass(RenderPass& pass) {
 
 
 
-ResourcePool create_rsc_pool(
-  const Context& ctxt,
-  const Task& task
-) {
+ResourcePool create_rsc_pool(const Task& task) {
   if (task.desc_pool_sizes.size() == 0) {
     liong::log::info("created resource pool with no entry");
-    return ResourcePool { &ctxt, VK_NULL_HANDLE, VK_NULL_HANDLE };
+    return ResourcePool { &task, VK_NULL_HANDLE, VK_NULL_HANDLE };
   }
+
+  VkDevice dev = task.ctxt->dev;
 
   VkDescriptorPoolCreateInfo dpci {};
   dpci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
@@ -1196,7 +1196,7 @@ ResourcePool create_rsc_pool(
   dpci.maxSets = 1;
 
   VkDescriptorPool desc_pool;
-  VK_ASSERT << vkCreateDescriptorPool(ctxt.dev, &dpci, nullptr, &desc_pool);
+  VK_ASSERT << vkCreateDescriptorPool(dev, &dpci, nullptr, &desc_pool);
 
   VkDescriptorSetAllocateInfo dsai {};
   dsai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -1205,14 +1205,14 @@ ResourcePool create_rsc_pool(
   dsai.pSetLayouts = &task.desc_set_layout;
 
   VkDescriptorSet desc_set;
-  VK_ASSERT << vkAllocateDescriptorSets(ctxt.dev, &dsai, &desc_set);
+  VK_ASSERT << vkAllocateDescriptorSets(dev, &dsai, &desc_set);
 
   liong::log::info("created resource pool");
-  return ResourcePool { &ctxt, desc_pool, desc_set };
+  return ResourcePool { &task, desc_pool, desc_set };
 }
 void destroy_rsc_pool(ResourcePool& rsc_pool) {
   if (rsc_pool.desc_pool != VK_NULL_HANDLE) {
-    vkDestroyDescriptorPool(rsc_pool.ctxt->dev, rsc_pool.desc_pool, nullptr);
+    vkDestroyDescriptorPool(rsc_pool.task->ctxt->dev, rsc_pool.desc_pool, nullptr);
     liong::log::info("destroyed resource pool");
     rsc_pool = {};
   }
@@ -1236,15 +1236,18 @@ void bind_pool_rsc(
   write_desc_set.dstBinding = idx;
   write_desc_set.dstArrayElement = 0;
   write_desc_set.descriptorCount = 1;
-  if (buf_view.buf->buf_cfg.usage & L_BUFFER_USAGE_UNIFORM_BIT) {
+  switch (rsc_pool.task->rsc_tys[idx]) {
+  case L_RESOURCE_TYPE_UNIFORM_BUFFER:
     write_desc_set.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-  }
-  if (buf_view.buf->buf_cfg.usage & L_BUFFER_USAGE_STORAGE_BIT) {
+    break;
+  case L_RESOURCE_TYPE_STORAGE_BUFFER:
     write_desc_set.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+    break;
+  default: liong::panic("unexpected buffer resource type");
   }
   write_desc_set.pBufferInfo = &dbi;
 
-  vkUpdateDescriptorSets(rsc_pool.ctxt->dev, 1, &write_desc_set, 0, nullptr);
+  vkUpdateDescriptorSets(rsc_pool.task->ctxt->dev, 1, &write_desc_set, 0, nullptr);
   liong::log::info("bound pool resource #", idx, " to buffer '",
     buf_view.buf->buf_cfg.label, "'");
 }
@@ -1257,7 +1260,6 @@ void bind_pool_rsc(
     "cannot bind to empty resource pool");
 
   VkDescriptorImageInfo dii {};
-  dii.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
   dii.imageView = img_view.img->img_view;
 
   VkWriteDescriptorSet write_desc_set {};
@@ -1266,22 +1268,20 @@ void bind_pool_rsc(
   write_desc_set.dstBinding = idx;
   write_desc_set.dstArrayElement = 0;
   write_desc_set.descriptorCount = 1;
-  switch (img_view.img->img_cfg.usage) {
-  case L_IMAGE_USAGE_SAMPLED_BIT:
+  switch (rsc_pool.task->rsc_tys[idx]) {
+  case L_RESOURCE_TYPE_SAMPLED_IMAGE:
     write_desc_set.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    dii.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     break;
-  case L_IMAGE_USAGE_STORAGE_BIT:
+  case L_RESOURCE_TYPE_STORAGE_IMAGE:
     write_desc_set.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    dii.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
     break;
-  case L_IMAGE_USAGE_ATTACHMENT_BIT:
-    liong::panic("input attachment is not yet unsupported");
-    break;
-  default:
-    liong::panic("unexpected image usage");
+  default: liong::panic("unexpected image resource type");
   }
   write_desc_set.pImageInfo = &dii;
 
-  vkUpdateDescriptorSets(rsc_pool.ctxt->dev, 1, &write_desc_set, 0, nullptr);
+  vkUpdateDescriptorSets(rsc_pool.task->ctxt->dev, 1, &write_desc_set, 0, nullptr);
   liong::log::info("bound pool resource #", idx, " to image '",
     img_view.img->img_cfg.label, "'");
 }

@@ -428,10 +428,7 @@ L_IMPL_FN void destroy_task(Task& task);
 
 
 L_IMPL_STRUCT struct ResourcePool;
-L_IMPL_FN ResourcePool create_rsc_pool(
-  const Context& ctxt,
-  const Task& task
-);
+L_IMPL_FN ResourcePool create_rsc_pool(const Task& task);
 L_IMPL_FN void destroy_rsc_pool(ResourcePool& rsc_pool);
 L_IMPL_FN void bind_pool_rsc(
   ResourcePool& rsc_pool,

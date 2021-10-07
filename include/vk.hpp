@@ -110,6 +110,7 @@ struct Task {
   VkDescriptorSetLayout desc_set_layout;
   VkPipelineLayout pipe_layout;
   VkPipeline pipe;
+  std::vector<ResourceType> rsc_tys;
   std::vector<VkShaderModule> shader_mods;
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   std::string label;
@@ -126,7 +127,7 @@ struct RenderPass {
 };
 
 struct ResourcePool {
-  const Context* ctxt;
+  const Task* task;
   VkDescriptorPool desc_pool;
   VkDescriptorSet desc_set;
 };
