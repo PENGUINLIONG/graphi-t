@@ -75,7 +75,7 @@ void initialize() {
   for (const auto& inst_ext : inst_exts) {
     inst_ext_names.emplace_back(inst_ext.extensionName);
   }
-  liong::log::info("enabled instance extensions: ", liong::util::join(", ", inst_ext_names));
+  liong::log::debug("enabled instance extensions: ", liong::util::join(", ", inst_ext_names));
 
   static std::vector<const char*> layers;
   for (const auto& inst_layer : inst_layers) {
@@ -120,6 +120,7 @@ void initialize() {
       VK_VERSION_MINOR(physdev_prop.apiVersion), ")");
     physdev_descs.emplace_back(std::move(desc));
   }
+  liong::log::info("vulkan backend initialized");
 }
 std::string desc_dev(uint32_t idx) {
   return idx < physdev_descs.size() ? physdev_descs[idx] : std::string {};
@@ -218,6 +219,9 @@ Context create_ctxt(const ContextConfig& cfg) {
   if (inst == VK_NULL_HANDLE) {
     initialize();
   }
+  liong::assert(cfg.dev_idx < physdevs.size(),
+    "wanted vulkan device does not exists (#", cfg.dev_idx, " of ",
+      physdevs.size(), " available devices)");
   auto physdev = physdevs[cfg.dev_idx];
 
   VkPhysicalDeviceFeatures feat;
@@ -267,7 +271,7 @@ Context create_ctxt(const ContextConfig& cfg) {
     if ((queue_flags & VK_QUEUE_PROTECTED_BIT) != 0) {
       qfam_cap_lit.push_back("PROTECTED");
     }
-    liong::log::info("discovered queue families #", i, ": ",
+    liong::log::debug("discovered queue families #", i, ": ",
       liong::util::join(" | ", qfam_cap_lit));
 
     uint32_t nset_bit = liong::util::count_set_bits(queue_flags);
@@ -372,7 +376,7 @@ Context create_ctxt(const ContextConfig& cfg) {
   for (const auto& dev_ext : dev_exts) {
     dev_ext_names.emplace_back(dev_ext.extensionName);
   }
-  liong::log::info("enabled device extensions: ", liong::util::join(", ", dev_ext_names));
+  liong::log::debug("enabled device extensions: ", liong::util::join(", ", dev_ext_names));
 
   VkDeviceCreateInfo dci {};
   dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -431,7 +435,7 @@ Context create_ctxt(const ContextConfig& cfg) {
   VkSampler fast_samp;
   VK_ASSERT << vkCreateSampler(dev, &sci, nullptr, &fast_samp);
 
-  liong::log::info("created vulkan context '", cfg.label, "' on device #",
+  liong::log::debug("created vulkan context '", cfg.label, "' on device #",
     cfg.dev_idx, ": ", physdev_descs[cfg.dev_idx]);
   return Context {
     dev, physdev, std::move(physdev_prop), std::move(submit_details),
@@ -443,7 +447,7 @@ void destroy_ctxt(Context& ctxt) {
   if (ctxt.dev != VK_NULL_HANDLE) {
     vkDestroySampler(ctxt.dev, ctxt.fast_samp, nullptr);
     vkDestroyDevice(ctxt.dev, nullptr);
-    liong::log::info("destroyed vulkan context '", ctxt.ctxt_cfg.label, "'");
+    liong::log::debug("destroyed vulkan context '", ctxt.ctxt_cfg.label, "'");
   }
   ctxt = {};
 }
@@ -510,14 +514,14 @@ Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg) {
 
   VK_ASSERT << vkBindBufferMemory(ctxt.dev, buf, devmem, 0);
 
-  liong::log::info("created buffer '", buf_cfg.label, "'");
+  liong::log::debug("created buffer '", buf_cfg.label, "'");
   return Buffer { &ctxt, devmem, buf, buf_cfg };
 }
 void destroy_buf(Buffer& buf) {
   if (buf.buf != VK_NULL_HANDLE) {
     vkDestroyBuffer(buf.ctxt->dev, buf.buf, nullptr);
     vkFreeMemory(buf.ctxt->dev, buf.devmem, nullptr);
-    liong::log::info("destroyed buffer '", buf.buf_cfg.label, "'");
+    liong::log::debug("destroyed buffer '", buf.buf_cfg.label, "'");
     buf = {};
   }
 }
@@ -534,7 +538,7 @@ void map_buf_mem(
 ) {
   VK_ASSERT << vkMapMemory(buf.buf->ctxt->dev, buf.buf->devmem, buf.offset,
     buf.size, 0, &mapped);
-  liong::log::info("mapped buffer '", buf.buf->buf_cfg.label, "' from ",
+  liong::log::debug("mapped buffer '", buf.buf->buf_cfg.label, "' from ",
     buf.offset, " to ", buf.offset + buf.size);
 }
 void unmap_buf_mem(
@@ -542,7 +546,7 @@ void unmap_buf_mem(
   void* mapped
 ) {
   vkUnmapMemory(buf.buf->ctxt->dev, buf.buf->devmem);
-  liong::log::info("unmapped buffer '", buf.buf->buf_cfg.label, "'");
+  liong::log::debug("unmapped buffer '", buf.buf->buf_cfg.label, "'");
 }
 
 
@@ -720,7 +724,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
     VK_ASSERT << vkCreateImageView(ctxt.dev, &ivci, nullptr, &img_view);
   }
 
-  liong::log::info("created image '", img_cfg.label, "'");
+  liong::log::debug("created image '", img_cfg.label, "'");
   uint32_t qfam_idx = ctxt.get_submit_ty_qfam_idx(init_submit_ty);
   return Image {
     &ctxt, devmem, img, img_view, img_cfg, is_staging_img
@@ -731,7 +735,7 @@ void destroy_img(Image& img) {
     vkDestroyImageView(img.ctxt->dev, img.img_view, nullptr);
     vkDestroyImage(img.ctxt->dev, img.img, nullptr);
     vkFreeMemory(img.ctxt->dev, img.devmem, nullptr);
-    liong::log::info("destroyed image '", img.img_cfg.label, "'");
+    liong::log::debug("destroyed image '", img.img_cfg.label, "'");
     img = {};
   }
 }
@@ -761,7 +765,7 @@ void map_img_mem(
     sl.size, 0, &mapped);
   row_pitch = sl.rowPitch;
 
-  liong::log::info("mapped image '", img.img->img_cfg.label, "' from (",
+  liong::log::debug("mapped image '", img.img->img_cfg.label, "' from (",
     img.x_offset, ", ", img.y_offset, ") to (", img.x_offset + img.width, ", ",
     img.y_offset + img.height, ")");
 }
@@ -770,7 +774,7 @@ void unmap_img_mem(
   void* mapped
 ) {
   vkUnmapMemory(img.img->ctxt->dev, img.img->devmem);
-  liong::log::info("unmapped image '", img.img->img_cfg.label, "'");
+  liong::log::debug("unmapped image '", img.img->img_cfg.label, "'");
 }
 
 
@@ -900,7 +904,7 @@ Task create_comp_task(
   VK_ASSERT << vkCreateComputePipelines(ctxt.dev, VK_NULL_HANDLE, 1, &cpci,
     nullptr, &pipe);
 
-  liong::log::info("created compute task '", cfg.label, "'");
+  liong::log::debug("created compute task '", cfg.label, "'");
   return Task {
     &ctxt, desc_set_layout, pipe_layout, pipe,
     std::vector<ResourceType>(cfg.rsc_tys, cfg.rsc_tys + cfg.nrsc_ty),
@@ -1122,7 +1126,7 @@ Task create_graph_task(
   VK_ASSERT << vkCreateGraphicsPipelines(ctxt.dev, VK_NULL_HANDLE, 1, &gpci,
     nullptr, &pipe);
 
-  liong::log::info("created graphics task '", cfg.label, "'");
+  liong::log::debug("created graphics task '", cfg.label, "'");
   return Task {
     &ctxt, desc_set_layout, pipe_layout, pipe,
     std::vector<ResourceType>(cfg.rsc_tys, cfg.rsc_tys + cfg.nrsc_ty),
@@ -1139,7 +1143,7 @@ void destroy_task(Task& task) {
     vkDestroyPipelineLayout(task.ctxt->dev, task.pipe_layout, nullptr);
     vkDestroyDescriptorSetLayout(task.ctxt->dev, task.desc_set_layout, nullptr);
 
-    liong::log::info("destroyed task '", task.label, "'");
+    liong::log::debug("destroyed task '", task.label, "'");
     task = {};
   }
 }
@@ -1168,7 +1172,7 @@ RenderPass create_pass(
   viewport.extent.width = attm.img_cfg.width;
   viewport.extent.height = attm.img_cfg.height;
 
-  liong::log::info("created render pass");
+  liong::log::debug("created render pass");
   return { &ctxt, &attm, pass, std::move(viewport), framebuf };
 }
 void destroy_pass(RenderPass& pass) {
@@ -1176,7 +1180,7 @@ void destroy_pass(RenderPass& pass) {
     vkDestroyFramebuffer(pass.ctxt->dev, pass.framebuf, nullptr);
     vkDestroyRenderPass(pass.ctxt->dev, pass.pass, nullptr);
     pass = {};
-    liong::log::info("destroyed render pass");
+    liong::log::debug("destroyed render pass");
   }
 }
 
@@ -1184,7 +1188,7 @@ void destroy_pass(RenderPass& pass) {
 
 ResourcePool create_rsc_pool(const Task& task) {
   if (task.desc_pool_sizes.size() == 0) {
-    liong::log::info("created resource pool with no entry");
+    liong::log::debug("created resource pool with no entry");
     return ResourcePool { &task, VK_NULL_HANDLE, VK_NULL_HANDLE };
   }
 
@@ -1208,13 +1212,13 @@ ResourcePool create_rsc_pool(const Task& task) {
   VkDescriptorSet desc_set;
   VK_ASSERT << vkAllocateDescriptorSets(dev, &dsai, &desc_set);
 
-  liong::log::info("created resource pool");
+  liong::log::debug("created resource pool");
   return ResourcePool { &task, desc_pool, desc_set };
 }
 void destroy_rsc_pool(ResourcePool& rsc_pool) {
   if (rsc_pool.desc_pool != VK_NULL_HANDLE) {
     vkDestroyDescriptorPool(rsc_pool.task->ctxt->dev, rsc_pool.desc_pool, nullptr);
-    liong::log::info("destroyed resource pool");
+    liong::log::debug("destroyed resource pool");
     rsc_pool = {};
   }
 }
@@ -1249,7 +1253,7 @@ void bind_pool_rsc(
   write_desc_set.pBufferInfo = &dbi;
 
   vkUpdateDescriptorSets(rsc_pool.task->ctxt->dev, 1, &write_desc_set, 0, nullptr);
-  liong::log::info("bound pool resource #", idx, " to buffer '",
+  liong::log::debug("bound pool resource #", idx, " to buffer '",
     buf_view.buf->buf_cfg.label, "'");
 }
 void bind_pool_rsc(
@@ -1283,7 +1287,7 @@ void bind_pool_rsc(
   write_desc_set.pImageInfo = &dii;
 
   vkUpdateDescriptorSets(rsc_pool.task->ctxt->dev, 1, &write_desc_set, 0, nullptr);
-  liong::log::info("bound pool resource #", idx, " to image '",
+  liong::log::debug("bound pool resource #", idx, " to image '",
     img_view.img->img_cfg.label, "'");
 }
 
@@ -1453,7 +1457,7 @@ void _record_cmd_set_submit_ty(
   SubmitType submit_ty = cmd.cmd_set_submit_ty.submit_ty;
   _get_cmdbuf(transact, submit_ty);
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::info("submit type is set");
+    liong::log::debug("command drain submit type is set");
   }
 }
 void _record_cmd_inline_transact(
@@ -1472,7 +1476,7 @@ void _record_cmd_inline_transact(
     vkCmdExecuteCommands(cmdbuf, 1, &submit_detail.cmdbuf);
   }
 
-  liong::log::info("scheduled inline transaction '",
+  liong::log::debug("scheduled inline transaction '",
     cmd.cmd_inline_transact.transact->label, "'");
 }
 
@@ -1499,7 +1503,7 @@ void _record_cmd_copy_buf2img(TransactionLike& transact, const Command& cmd) {
   vkCmdCopyBufferToImage(cmdbuf, src.buf->buf, dst.img->img,
     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bic);
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::info("scheduled copy from buffer '", src.buf->buf_cfg.label,
+    liong::log::debug("scheduled copy from buffer '", src.buf->buf_cfg.label,
       "' to image '", dst.img->img_cfg.label, "'");
   }
 }
@@ -1526,7 +1530,7 @@ void _record_cmd_copy_img2buf(TransactionLike& transact, const Command& cmd) {
   vkCmdCopyImageToBuffer(cmdbuf, src.img->img,
     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst.buf->buf, 1, &bic);
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::info("scheduled copy from image '", src.img->img_cfg.label,
+    liong::log::debug("scheduled copy from image '", src.img->img_cfg.label,
       "' to buffer '", dst.buf->buf_cfg.label, "'");
   }
 }
@@ -1544,7 +1548,7 @@ void _record_cmd_copy_buf(TransactionLike& transact, const Command& cmd) {
 
   vkCmdCopyBuffer(cmdbuf, src.buf->buf, dst.buf->buf, 1, &bc);
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::info("scheduled copy from buffer '", src.buf->buf_cfg.label,
+    liong::log::debug("scheduled copy from buffer '", src.buf->buf_cfg.label,
       "' to buffer '", dst.buf->buf_cfg.label, "'");
   }
 }
@@ -1576,7 +1580,7 @@ void _record_cmd_copy_img(TransactionLike& transact, const Command& cmd) {
   vkCmdCopyImage(cmdbuf, src.img->img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
     dst.img->img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &ic);
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::info("scheduled copy from image '", src.img->img_cfg.label,
+    liong::log::debug("scheduled copy from image '", src.img->img_cfg.label,
       "' to image '", dst.img->img_cfg.label, "'");
   }
 }
@@ -1597,7 +1601,7 @@ void _record_cmd_dispatch(TransactionLike& transact, const Command& cmd) {
   }
   vkCmdDispatch(cmdbuf, nworkgrp.x, nworkgrp.y, nworkgrp.z);
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::info("scheduled compute task '", task.label, "' for execution");
+    liong::log::debug("scheduled compute task '", task.label, "' for execution");
   }
 }
 
@@ -1617,7 +1621,7 @@ void _record_cmd_draw(TransactionLike& transact, const Command& cmd) {
   vkCmdDraw(cmdbuf, in.nvert, in.ninst, 0, 0);
 
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::info("scheduled graphics task '", in.task->label, "' for "
+    liong::log::debug("scheduled graphics task '", in.task->label, "' for "
       "execution");
   }
 }
@@ -1640,7 +1644,7 @@ void _record_cmd_draw_indexed(TransactionLike& transact, const Command& cmd) {
   vkCmdDrawIndexed(cmdbuf, in.nidx, in.ninst, 0, 0, 0);
 
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::info("scheduled graphics task '", in.task->label, "' for "
+    liong::log::debug("scheduled graphics task '", in.task->label, "' for "
       "execution");
   }
 }
@@ -1657,7 +1661,7 @@ void _record_cmd_write_timestamp(
   vkCmdWriteTimestamp(cmdbuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, query_pool, 0);
 
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::info("schedule timestamp write");
+    liong::log::debug("scheduled timestamp write");
   }
 }
 
@@ -1943,7 +1947,7 @@ void _record_cmd_buf_barrier(
     1, &bmb,
     0, nullptr);
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::info("scheduled buffer barrier");
+    liong::log::debug("scheduled buffer barrier");
   }
 }
 void _record_cmd_img_barrier(
@@ -1994,7 +1998,7 @@ void _record_cmd_img_barrier(
     0, nullptr,
     1, &imb);
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::info("scheduled image barrier");
+    liong::log::debug("scheduled image barrier");
   }
 }
 
@@ -2016,7 +2020,7 @@ void _record_cmd_begin_pass(TransactionLike& transact, const Command& cmd) {
     VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS;
   vkCmdBeginRenderPass(cmdbuf, &rpbi, sc);
 
-  liong::log::info("scheduled render pass begin");
+  liong::log::debug("scheduled render pass begin");
 }
 void _record_cmd_end_pass(TransactionLike& transact, const Command& cmd) {
   liong::assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
@@ -2025,7 +2029,7 @@ void _record_cmd_end_pass(TransactionLike& transact, const Command& cmd) {
 
   vkCmdEndRenderPass(cmdbuf);
 
-  liong::log::info("scheduled render pass end");
+  liong::log::debug("scheduled render pass end");
 }
 
 // Returns whether the submit queue to submit has changed.
@@ -2083,7 +2087,7 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
 
 CommandDrain create_cmd_drain(const Context& ctxt) {
   auto fence = _create_fence(ctxt);
-  liong::log::info("created command drain");
+  liong::log::debug("created command drain");
   return CommandDrain { &ctxt, {}, fence };
 }
 void destroy_cmd_drain(CommandDrain& cmd_drain) {
@@ -2091,7 +2095,7 @@ void destroy_cmd_drain(CommandDrain& cmd_drain) {
     _clear_transact_submit_detail(*cmd_drain.ctxt, cmd_drain.submit_details);
     vkDestroyFence(cmd_drain.ctxt->dev, cmd_drain.fence, nullptr);
     cmd_drain = {};
-    liong::log::info("destroyed command drain");
+    liong::log::debug("destroyed command drain");
   }
 }
 void submit_cmds(
@@ -2118,7 +2122,7 @@ void submit_cmds(
   _submit_transact_submit_detail(*cmd_drain.ctxt,
     cmd_drain.submit_details.back(), cmd_drain.fence);
 
-  liong::log::info("submitted transaction for execution, command recording "
+  liong::log::debug("submitted transaction for execution, command recording "
     "took ", timer.us(), "us");
 }
 void _reset_cmd_drain(CommandDrain& cmd_drain) {
@@ -2149,8 +2153,8 @@ void wait_cmd_drain(CommandDrain& cmd_drain) {
 
   reset_timer.toc();
 
-  liong::log::info("command drain returned after ", wait_timer.us(), "us since "
-    "the wait started (spin interval = ", SPIN_INTERVAL / 1000.0,
+  liong::log::debug("command drain returned after ", wait_timer.us(),
+    "us since the wait started (spin interval = ", SPIN_INTERVAL / 1000.0,
     "us; resource recycling took ", reset_timer.us(), "us)");
 }
 
@@ -2170,13 +2174,13 @@ Transaction create_transact(
   }
   _end_cmdbuf(transact.submit_details.back());
 
-  liong::log::info("created transaction");
+  liong::log::debug("created transaction");
   return Transaction { label, &ctxt, std::move(transact.submit_details) };
 }
 void destroy_transact(Transaction& transact) {
   _clear_transact_submit_detail(*transact.ctxt, transact.submit_details);
   transact = {};
-  liong::log::info("destroyed transaction");
+  liong::log::debug("destroyed transaction");
 }
 
 
@@ -2190,14 +2194,14 @@ Timestamp create_timestamp(const Context& ctxt) {
   VkQueryPool query_pool;
   VK_ASSERT << vkCreateQueryPool(ctxt.dev, &qpci, nullptr, &query_pool);
 
-  liong::log::info("created timestamp");
+  liong::log::debug("created timestamp");
   return Timestamp { &ctxt, query_pool };
 }
 void destroy_timestamp(Timestamp& timestamp) {
   if (timestamp.query_pool != VK_NULL_HANDLE) {
     vkDestroyQueryPool(timestamp.ctxt->dev, timestamp.query_pool, nullptr);
     timestamp = {};
-    liong::log::info("destroyed timestamp");
+    liong::log::debug("destroyed timestamp");
   }
 }
 double get_timestamp_result_us(const Timestamp& timestamp) {
