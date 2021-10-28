@@ -523,6 +523,13 @@ struct Command {
     struct {
       const RenderPass* pass;
     } cmd_end_pass;
+    struct {
+        uint32_t ivert_input;
+        const Buffer* vert_buf;
+    } cmd_bind_vert_buf;
+    struct {
+        const Buffer* vert_buf;
+    } cmd_bind_idx_buf;
   };
 };
 

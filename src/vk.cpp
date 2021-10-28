@@ -974,15 +974,14 @@ Task create_graph_task(
     pssci.module = frag_shader_mod;
   }
 
-  std::vector<VkVertexInputBindingDescription> vibds;
+ VkVertexInputBindingDescription vibd {};
   std::vector<VkVertexInputAttributeDescription> viads;
   size_t base_offset = 0;
   for (auto i = 0; i < cfg.nvert_input; ++i) {
     auto& vert_input = cfg.vert_inputs[i];
     size_t fmt_size = vert_input.fmt.get_fmt_size();
 
-    VkVertexInputBindingDescription vibd {};
-    vibd.binding = i;
+    vibd.binding = 0;
     vibd.stride = 0; // Will be assigned later.
     switch (cfg.vert_inputs[i].rate) {
     case L_VERTEX_INPUT_RATE_VERTEX:
@@ -995,24 +994,22 @@ Task create_graph_task(
     default:
       liong::panic("unexpected vertex input rate");
     }
-    vibds.emplace_back(std::move(vibd));
 
     VkVertexInputAttributeDescription viad {};
     viad.location = i;
-    viad.binding = i;
+    viad.binding = 0;
     viad.format = _make_img_fmt(vert_input.fmt);
     viad.offset = base_offset;
     viads.emplace_back(std::move(viad));
 
     base_offset += fmt_size;
   }
-  for (auto& vibd : vibds) {
-    vibd.stride = base_offset;
-  }
+  vibd.stride = base_offset;
+
   VkPipelineVertexInputStateCreateInfo pvisci {};
   pvisci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  pvisci.vertexBindingDescriptionCount = (uint32_t)vibds.size();
-  pvisci.pVertexBindingDescriptions = vibds.data();
+  pvisci.vertexBindingDescriptionCount = 1;
+  pvisci.pVertexBindingDescriptions = &vibd;
   pvisci.vertexAttributeDescriptionCount = (uint32_t)viads.size();
   pvisci.pVertexAttributeDescriptions = viads.data();
 
