@@ -230,7 +230,7 @@ public:
       liong::assert(nubo <= 1, "a pipeline can only bind to one uniform block");
       if (nubo != 0) {
         auto ubo = program->getUniformBlock(0);
-        liong::assert(ubo.getBinding(), "uniform block binding point must be 0");
+        liong::assert(ubo.getBinding() == 0, "uniform block binding point must be 0");
         liong::assert(ubo.size != 0, "unexpected zero-sized uniform block");
         ubo_size = ubo.size;
       } else {
@@ -238,14 +238,6 @@ public:
       }
     }
 
-    // Make sure there is at most one vertex input.
-    if (is_graph_pipe) {
-      liong::assert(program->getNumPipeInputs() == 1,
-        "must have exactly one vertex input");
-      const auto& input = program->getPipeInput(0);
-      liong::assert(input.index == 0,
-        "vertex input must be bound to location 0");
-    }
     // Make sure there is exactly one fragment output.
     if (is_graph_pipe) {
       liong::assert(program->getNumPipeOutputs() == 1,
@@ -367,14 +359,6 @@ public:
       }
     }
 
-    // Make sure there is at most one vertex input.
-    if (is_graph_pipe) {
-      liong::assert(program->getNumPipeInputs() == 1,
-        "must have exactly one vertex input");
-      const auto& input = program->getPipeInput(0);
-      liong::assert(input.index == 0,
-        "vertex input must be bound to location 0");
-    }
     // Make sure there is exactly one fragment output.
     if (is_graph_pipe) {
       liong::assert(program->getNumPipeOutputs() == 1,

@@ -189,6 +189,11 @@ L_DEF_FMT(R16G16_UINT, 2, 0x02);
 L_DEF_FMT(R16G16B16_UINT, 3, 0x02);
 L_DEF_FMT(R16G16B16A16_UINT, 4, 0x02);
 
+L_DEF_FMT(R16_SFLOAT, 1, 0x10);
+L_DEF_FMT(R16G16_SFLOAT, 2, 0x10);
+L_DEF_FMT(R16G16B16_SFLOAT, 3, 0x10);
+L_DEF_FMT(R16G16B16A16_SFLOAT, 4, 0x10);
+
 L_DEF_FMT(R32_UINT, 1, 0x03);
 L_DEF_FMT(R32G32_UINT, 2, 0x03);
 L_DEF_FMT(R32G32B32_UINT, 3, 0x03);
@@ -236,6 +241,17 @@ struct BufferView {
   size_t offset;
   size_t size;
 };
+inline BufferView make_buf_view(const Buffer& buf, size_t offset, size_t size) {
+  BufferView out {};
+  out.buf = &buf;
+  out.offset = offset;
+  out.size = size;
+  return out;
+}
+inline BufferView make_buf_view(const Buffer& buf) {
+  const BufferConfig& buf_cfg = get_buf_cfg(buf);
+  return make_buf_view(buf, 0, buf_cfg.size);
+}
 
 L_IMPL_FN void map_buf_mem(
   const BufferView& dst,
@@ -264,10 +280,10 @@ struct ImageConfig {
   std::string label;
   MemoryAccess host_access;
   MemoryAccess dev_access;
-  // Number of rows in the image.
-  size_t nrow;
-  // Number of columns in the image.
-  size_t ncol;
+  // Number of rows, or height of the image.
+  uint32_t height;
+  // Number of columns, or width of the image.
+  uint32_t width;
   // Pixel format of the image.
   PixelFormat fmt;
   // Usage of the image.
@@ -280,11 +296,30 @@ L_IMPL_FN const ImageConfig& get_img_cfg(const Image& img);
 
 struct ImageView {
   const Image* img; // Lifetime bound.
-  uint32_t row_offset;
-  uint32_t col_offset;
-  uint32_t nrow;
-  uint32_t ncol;
+  uint32_t x_offset;
+  uint32_t y_offset;
+  uint32_t width;
+  uint32_t height;
 };
+inline ImageView make_img_view(
+  const Image& img,
+  uint32_t x_offset,
+  uint32_t y_offset,
+  uint32_t width,
+  uint32_t height
+) {
+  ImageView out {};
+  out.img = &img;
+  out.x_offset = x_offset;
+  out.y_offset = y_offset;
+  out.width = width;
+  out.height = height;
+  return out;
+}
+inline ImageView make_img_view(const Image& img) {
+  const ImageConfig& img_cfg = get_img_cfg(img);
+  return make_img_view(img, 0, 0, img_cfg.width, img_cfg.height);
+}
 
 L_IMPL_FN void map_img_mem(
   const ImageView& img,
@@ -393,10 +428,7 @@ L_IMPL_FN void destroy_task(Task& task);
 
 
 L_IMPL_STRUCT struct ResourcePool;
-L_IMPL_FN ResourcePool create_rsc_pool(
-  const Context& ctxt,
-  const Task& task
-);
+L_IMPL_FN ResourcePool create_rsc_pool(const Task& task);
 L_IMPL_FN void destroy_rsc_pool(ResourcePool& rsc_pool);
 L_IMPL_FN void bind_pool_rsc(
   ResourcePool& rsc_pool,
@@ -604,7 +636,7 @@ inline Command cmd_draw(
   cmd.cmd_draw.ninst = ninst;
   return cmd;
 }
-// Draw triangle lists, index by index, where each index points to a vertex. 
+// Draw triangle lists, index by index, where each index points to a vertex.
 inline Command cmd_draw_indexed(
   const Task& task,
   const ResourcePool& rsc_pool,
