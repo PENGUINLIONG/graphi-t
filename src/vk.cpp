@@ -424,13 +424,13 @@ Context create_ctxt(const ContextConfig& cfg) {
 
   VkSamplerCreateInfo sci {};
   sci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-  sci.magFilter = VK_FILTER_NEAREST;
-  sci.minFilter = VK_FILTER_NEAREST;
-  sci.mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST;
+  sci.magFilter = VK_FILTER_LINEAR;
+  sci.minFilter = VK_FILTER_LINEAR;
+  sci.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
   sci.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
   sci.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
   sci.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  sci.unnormalizedCoordinates = VK_TRUE;
+  sci.unnormalizedCoordinates = VK_FALSE;
 
   VkSampler fast_samp;
   VK_ASSERT << vkCreateSampler(dev, &sci, nullptr, &fast_samp);
