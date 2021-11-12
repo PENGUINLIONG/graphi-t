@@ -43,13 +43,13 @@ add_executable(bin2c
     "include/assert.hpp"
     "src/assert.cpp"
     "include/util.hpp"
-    "src/util.cpp")
+    "src/util.cpp" )
 
 # The testbench library.
 include_directories(${INC_DIRS})
 file(GLOB SRCS "${PROJECT_SOURCE_DIR}/src/*")
 file(GLOB INCS "${PROJECT_SOURCE_DIR}/include/*")
-add_library(GraphiT STATIC ${SRCS} ${INCS})
+add_library(GraphiT STATIC ${SRCS} ${INCS} )
 target_link_libraries(GraphiT glslang SPIRV ${LINK_LIBS})
 add_dependencies(GraphiT bin2c)
 

@@ -146,6 +146,12 @@ std::vector<U> map(const std::vector<T>& xs, const std::function<U(const T&)>& f
 
 void sleep_for_us(uint64_t t);
 
+bool starts_with(const std::string& start, const std::string& str);
+bool ends_with(const std::string& end, const std::string& str);
+std::string join(const std::string& sep, const std::vector<std::string>& segs);
+std::vector<std::string> split(char sep, const std::string& str);
+std::string trim(const std::string& str);
+
 } // namespace util
 
 } // namespace liong

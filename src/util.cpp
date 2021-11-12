@@ -97,6 +97,87 @@ void sleep_for_us(uint64_t t) {
   std::this_thread::sleep_for(std::chrono::microseconds(t));
 }
 
+bool starts_with(const std::string& start, const std::string& str) {
+  if (str.size() < start.size()) { return false; }
+  for (size_t i = 0; i < start.size(); ++i) {
+    if (str[i] != start[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+bool ends_with(const std::string& end, const std::string& str) {
+  if (str.size() < end.size()) { return false; }
+  size_t offset = str.size() - end.size();
+  for (size_t i = 0; i < end.size(); ++i) {
+    if (str[offset + i] != end[i]) {
+      return false;
+    }
+  }
+  return true;
+}
+std::string join(const std::string& sep, const std::vector<std::string>& segs) {
+  std::stringstream ss;
+  bool is_first_iter = true;
+  for (const auto& seg : segs) {
+    if (!is_first_iter) {
+      ss << sep;
+    } else {
+      is_first_iter = false;
+    }
+    ss << seg;
+  }
+  return ss.str();
+}
+std::vector<std::string> split(char sep, const std::string& str) {
+  std::vector<std::string> out;
+
+  auto beg = str.begin();
+  auto pos = beg;
+  auto end = str.end();
+
+  while (pos != end) {
+    if (*pos == sep) {
+      if (beg != pos) {
+        out.emplace_back(beg, pos);
+      }
+      ++pos;
+      beg = pos;
+    } else {
+      ++pos;
+    }
+  }
+  if (beg != end) {
+    out.emplace_back(beg, end);
+  }
+
+  return out;
+}
+std::string trim(const std::string& str) {
+  auto beg = str.begin();
+  auto end = str.end();
+
+  char c;
+  while (beg != end) {
+    c = *beg;
+    if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+      ++beg;
+    } else {
+      break;
+    }
+  }
+  auto next_end = end;
+  while (beg != end) {
+    c = *(--next_end);
+    if (c == ' ' || c == '\t' || c == '\r' || c == '\n') {
+      end = next_end;
+    } else {
+      break;
+    }
+  }
+  return std::string(beg, end);
+}
+
 } // namespace util
 
 } // namespace liong
