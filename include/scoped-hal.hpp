@@ -242,6 +242,25 @@ struct Image {
     return MappedImage(view(), map_access);
   }
 };
+struct DepthImage {
+  std::unique_ptr<HAL_IMPL_NAMESPACE::DepthImage> inner;
+
+  DepthImage(const Context& ctxt, const DepthImageConfig& cfg);
+  DepthImage(HAL_IMPL_NAMESPACE::DepthImage&& inner);
+  DepthImage(DepthImage&&) = default;
+  ~DepthImage();
+
+  inline operator HAL_IMPL_NAMESPACE::DepthImage& () {
+    return *inner;
+  }
+  inline operator const HAL_IMPL_NAMESPACE::DepthImage& () const {
+    return *inner;
+  }
+
+  inline const DepthImageConfig& cfg() const {
+    return get_depth_img_cfg(*inner);
+  }
+};
 
 
 

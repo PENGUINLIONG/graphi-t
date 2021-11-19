@@ -675,6 +675,131 @@ const ImageConfig& get_img_cfg(const Image& img) {
 }
 
 
+
+VkFormat _make_depth_fmt(DepthFormat fmt) {
+  if (fmt.nbit_depth == 16 && fmt.nbit_stencil == 0) {
+    return VK_FORMAT_D16_UNORM;
+  }
+  if (fmt.nbit_depth == 24 && fmt.nbit_stencil == 0) {
+    return VK_FORMAT_X8_D24_UNORM_PACK32;
+  }
+  if (fmt.nbit_depth == 32 && fmt.nbit_stencil == 0) {
+    return VK_FORMAT_D32_SFLOAT;
+  }
+  if (fmt.nbit_depth == 0 && fmt.nbit_stencil == 8) {
+    return VK_FORMAT_S8_UINT;
+  }
+  if (fmt.nbit_depth == 16 && fmt.nbit_stencil == 8) {
+    return VK_FORMAT_D16_UNORM_S8_UINT;
+  }
+  if (fmt.nbit_depth == 24 && fmt.nbit_stencil == 8) {
+    return VK_FORMAT_D24_UNORM_S8_UINT;
+  }
+  if (fmt.nbit_depth == 32 && fmt.nbit_stencil == 8) {
+    return VK_FORMAT_D32_SFLOAT_S8_UINT;
+  }
+  liong::panic("unsupported depth format");
+}
+
+DepthImage create_depth_img(
+  const Context& ctxt,
+  const DepthImageConfig& depth_img_cfg
+) {
+  VkFormat fmt = _make_depth_fmt(depth_img_cfg.fmt);
+  VkImageUsageFlags usage =
+    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+    VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
+    VK_IMAGE_USAGE_STORAGE_BIT;
+
+  // Check whether the device support our use case.
+  VkImageFormatProperties ifp;
+  VK_ASSERT << vkGetPhysicalDeviceImageFormatProperties(
+    physdevs[ctxt.ctxt_cfg.dev_idx], fmt, VK_IMAGE_TYPE_2D,
+    VK_IMAGE_TILING_OPTIMAL, usage, 0, &ifp);
+
+  VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+  VkImageCreateInfo ici {};
+  ici.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+  ici.imageType = VK_IMAGE_TYPE_2D;
+  ici.format = fmt;
+  ici.extent.width = (uint32_t)depth_img_cfg.width;
+  ici.extent.height = (uint32_t)depth_img_cfg.height;
+  ici.extent.depth = 1;
+  ici.mipLevels = 1;
+  ici.arrayLayers = 1;
+  ici.samples = VK_SAMPLE_COUNT_1_BIT;
+  ici.tiling = VK_IMAGE_TILING_OPTIMAL;
+  ici.usage = usage;
+  ici.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  ici.initialLayout = layout;
+
+  VkImage img;
+  VK_ASSERT << vkCreateImage(ctxt.dev, &ici, nullptr, &img);
+
+  VkMemoryRequirements mr {};
+  vkGetImageMemoryRequirements(ctxt.dev, img, &mr);
+
+  VkMemoryAllocateInfo mai {};
+  mai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  mai.allocationSize = mr.size;
+  mai.memoryTypeIndex = 0xFF;
+  auto host_access = L_MEMORY_ACCESS_NONE;
+  for (auto mem_ty_idx : ctxt.mem_ty_idxs_by_host_access[host_access]) {
+    if (((1 << mem_ty_idx) & mr.memoryTypeBits) != 0) {
+      mai.memoryTypeIndex = mem_ty_idx;
+      break;
+    }
+  }
+  if (mai.memoryTypeIndex == 0xFF) {
+    panic("depth image has no host access but it cannot be satisfied");
+  }
+
+  VkDeviceMemory devmem;
+  VK_ASSERT << vkAllocateMemory(ctxt.dev, &mai, nullptr, &devmem);
+
+  VK_ASSERT << vkBindImageMemory(ctxt.dev, img, devmem, 0);
+
+  VkImageViewCreateInfo ivci {};
+  ivci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+  ivci.image = img;
+  ivci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  ivci.format = fmt;
+  ivci.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+  ivci.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+  ivci.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+  ivci.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+  ivci.subresourceRange.aspectMask =
+    (depth_img_cfg.fmt.nbit_depth > 0 ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) |
+    (depth_img_cfg.fmt.nbit_stencil > 0 ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
+  ivci.subresourceRange.baseArrayLayer = 0;
+  ivci.subresourceRange.layerCount = 1;
+  ivci.subresourceRange.baseMipLevel = 0;
+  ivci.subresourceRange.levelCount = 1;
+
+  VkImageView img_view;
+  VK_ASSERT << vkCreateImageView(ctxt.dev, &ivci, nullptr, &img_view);
+
+  liong::log::info("created depth image '", depth_img_cfg.label, "'");
+  return DepthImage {
+    &ctxt, devmem, mr.size, img, img_view, depth_img_cfg
+  };
+}
+void destroy_depth_img(DepthImage& depth_img) {
+  vkDestroyImageView(depth_img.ctxt->dev, depth_img.img_view, nullptr);
+  vkDestroyImage(depth_img.ctxt->dev, depth_img.img, nullptr);
+  vkFreeMemory(depth_img.ctxt->dev, depth_img.devmem, nullptr);
+
+  liong::log::info("destroyed depth image '", depth_img.depth_img_cfg.label,
+    "'");
+  depth_img = {};
+}
+const DepthImageConfig& get_depth_img_cfg(const DepthImage& depth_img) {
+  return depth_img.depth_img_cfg;
+}
+
+
+
 void map_img_mem(
   const ImageView& img,
   MemoryAccess map_access,

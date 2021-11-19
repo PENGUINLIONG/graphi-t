@@ -297,6 +297,45 @@ L_IMPL_FN void unmap_img_mem(
 
 
 
+struct DepthFormat {
+  uint8_t nbit_depth;
+  uint8_t nbit_stencil;
+};
+#define L_DEF_DEPTH_FORMAT(nbit_depth, nbit_stencil) \
+  constexpr DepthFormat L_PIXEL_FORMAT_D##nbit_depth##_S##nbit_stencil = \
+    DepthFormat { nbit_depth, nbit_stencil };
+L_DEF_DEPTH_FORMAT(16, 0)
+L_DEF_DEPTH_FORMAT(24, 0)
+L_DEF_DEPTH_FORMAT(32, 0)
+L_DEF_DEPTH_FORMAT(0, 8)
+L_DEF_DEPTH_FORMAT(16, 8)
+L_DEF_DEPTH_FORMAT(24, 8)
+L_DEF_DEPTH_FORMAT(32, 8)
+#undef L_DEF_DEPTH_FORMAT
+
+
+struct DepthImageConfig {
+  std::string label;
+  // Width of the depth image. When used, the image size should match color
+  // attachment size.
+  uint32_t width;
+  // Height of the depth image. When used, the image size should match color
+  // attachment size.
+  uint32_t height;
+  // Pixel color format of depth image.
+  DepthFormat fmt;
+};
+L_IMPL_STRUCT struct DepthImage;
+L_IMPL_FN DepthImage create_depth_img(
+  const Context& ctxt,
+  bool require_depth,
+  bool require_stencil
+);
+L_IMPL_FN void destroy_depth_img(DepthImage& depth_img);
+L_IMPL_FN const DepthImageConfig& get_depth_img_cfg(const DepthImage& depth_img);
+
+
+
 struct DispatchSize {
   uint32_t x, y, z;
 };

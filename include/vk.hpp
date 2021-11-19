@@ -94,6 +94,15 @@ struct Image {
   bool is_staging_img;
 };
 
+struct DepthImage {
+  const Context* ctxt; // Lifetime bound.
+  VkDeviceMemory devmem;
+  size_t devmem_size;
+  VkImage img;
+  VkImageView img_view;
+  DepthImageConfig depth_img_cfg;
+};
+
 struct WorkgroupSizeSpecializationDetail {
   uint32_t x_spec_id;
   uint32_t y_spec_id;
@@ -118,6 +127,12 @@ struct Framebuffer {
   VkRect2D viewport;
   VkFramebuffer framebuf;
   VkClearValue clear_value;
+};
+
+struct ZBuffer {
+  const Context* ctxt;
+  VkImage img;
+  VkImageView img_view;
 };
 
 struct ResourcePool {
