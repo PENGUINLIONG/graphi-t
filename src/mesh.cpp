@@ -23,9 +23,9 @@ Mesh load_obj(const char* path) {
       // Vertex.
       liong::assert(segs.size() == 4, "vertex coordinate field must have 3 components");
       float4 position {
-        std::atof(segs[1].c_str()),
-        std::atof(segs[2].c_str()),
-        std::atof(segs[3].c_str()),
+        (float)std::atof(segs[1].c_str()),
+        (float)std::atof(segs[2].c_str()),
+        (float)std::atof(segs[3].c_str()),
         1.0f,
       };
       out.positions.emplace_back(std::move(position));
@@ -33,8 +33,8 @@ Mesh load_obj(const char* path) {
       liong::assert(segs.size() == 3, "texcoord field must have 2 components");
       // UV coordinates.
       float2 uv {
-        std::atof(segs[1].c_str()),
-        std::atof(segs[2].c_str()),
+        (float)std::atof(segs[1].c_str()),
+        (float)std::atof(segs[2].c_str()),
       };
       out.uvs.emplace_back(std::move(uv));
     } else if (cmd == "f") {
