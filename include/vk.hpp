@@ -115,7 +115,7 @@ struct RenderPass {
   VkRenderPass pass;
   VkFramebuffer framebuf;
   RenderPassConfig pass_cfg;
-  VkClearValue clear_value;
+  std::vector<VkClearValue> clear_values;
 };
 
 struct WorkgroupSizeSpecializationDetail {
