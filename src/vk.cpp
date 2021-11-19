@@ -851,7 +851,7 @@ DepthImage create_depth_img(
 
   liong::log::info("created depth image '", depth_img_cfg.label, "'");
   return DepthImage {
-    &ctxt, devmem, mr.size, img, img_view, depth_img_cfg
+    &ctxt, devmem, (size_t)mr.size, img, img_view, depth_img_cfg
   };
 }
 void destroy_depth_img(DepthImage& depth_img) {
@@ -1184,11 +1184,12 @@ RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg) {
   viewport.extent.width = cfg.width;
   viewport.extent.height = cfg.height;
 
-  VkClearValue clear_value {};
+  std::vector<VkClearValue> clear_values {};
+  clear_values.resize(cfg.attm_cfgs.size());
 
   liong::log::info("created render pass '", cfg.label, "'");
   return RenderPass {
-    &ctxt, std::move(viewport), pass, framebuf, cfg, clear_value
+    &ctxt, std::move(viewport), pass, framebuf, cfg, clear_values
   };
 }
 void destroy_pass(RenderPass& pass) {
@@ -1318,7 +1319,7 @@ Task create_graph_task(
   pdssci.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
   pdssci.depthTestEnable = VK_TRUE;
   pdssci.depthWriteEnable = VK_TRUE;
-  pdssci.depthCompareOp = VK_COMPARE_OP_LESS;
+  pdssci.depthCompareOp = VK_COMPARE_OP_GREATER;
   pdssci.minDepthBounds = 0.0f;
   pdssci.maxDepthBounds = 1.0f;
 
@@ -2215,8 +2216,8 @@ void _record_cmd_begin_pass(TransactionLike& transact, const Command& cmd) {
   rpbi.renderPass = pass.pass;
   rpbi.framebuffer = pass.framebuf;
   rpbi.renderArea.extent = pass.viewport.extent;
-  rpbi.clearValueCount = 1;
-  rpbi.pClearValues = &pass.clear_value;
+  rpbi.clearValueCount = pass.clear_values.size();
+  rpbi.pClearValues = pass.clear_values.data();
   VkSubpassContents sc = in.draw_inline ?
     VK_SUBPASS_CONTENTS_INLINE :
     VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS;

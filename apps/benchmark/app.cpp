@@ -195,10 +195,30 @@ void guarded_main() {
   //segfault. (??? WTF)
   scoped::CommandDrain cmd_drain = ctxt.create_cmd_drain();
 
-  scoped::Image out_img = ctxt.create_attm_img("attm", CFG.height, CFG.width,
+  scoped::Image out_img = ctxt.create_attm_img("attm", CFG.width, CFG.height,
     L_FORMAT_R32G32B32A32_SFLOAT);
+  scoped::DepthImage zbuf = ctxt.create_depth_img("zbuf", CFG.width, CFG.height,
+    L_DEPTH_FORMAT_D16_S0);
 
-  scoped::RenderPass pass = ctxt.create_pass(out_img);
+  std::vector<AttachmentConfig> attm_cfgs;
+  {
+    AttachmentConfig attm_cfg {};
+    attm_cfg.attm_ty = L_ATTACHMENT_TYPE_COLOR;
+    attm_cfg.attm_access =
+            (AttachmentAccess)(L_ATTACHMENT_ACCESS_CLEAR | L_ATTACHMENT_ACCESS_STORE);
+    attm_cfg.color_img = &(const Image&)out_img;
+    attm_cfgs.emplace_back(attm_cfg);
+  }
+  {
+    AttachmentConfig attm_cfg {};
+    attm_cfg.attm_ty = L_ATTACHMENT_TYPE_DEPTH;
+    attm_cfg.attm_access =
+            (AttachmentAccess)(L_ATTACHMENT_ACCESS_LOAD | L_ATTACHMENT_ACCESS_STORE);
+    attm_cfg.depth_img = &(const DepthImage&)zbuf;
+    attm_cfgs.emplace_back(attm_cfg);
+  }
+
+  scoped::RenderPass pass = ctxt.create_pass("pass", attm_cfgs, CFG.width, CFG.height);
 
   std::vector<ResourceType> rsc_tys {
     L_RESOURCE_TYPE_UNIFORM_BUFFER,
@@ -247,6 +267,16 @@ void guarded_main() {
 
     std::vector<Command> cmds {
       cmd_set_submit_ty(L_SUBMIT_TYPE_GRAPHICS),
+      cmd_img_barrier(out_img,
+                      L_IMAGE_USAGE_NONE,
+                      L_IMAGE_USAGE_ATTACHMENT_BIT,
+                      L_MEMORY_ACCESS_NONE,
+                      L_MEMORY_ACCESS_WRITE_ONLY),
+      cmd_depth_img_barrier(zbuf,
+                            L_DEPTH_IMAGE_USAGE_NONE,
+                            L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT,
+                            L_MEMORY_ACCESS_NONE,
+                            L_MEMORY_ACCESS_WRITE_ONLY),
       cmd_write_timestamp(tic),
       cmd_begin_pass(pass, true),
       cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 6, 1),
