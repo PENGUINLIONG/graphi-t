@@ -100,6 +100,24 @@ struct Image {
   bool is_staging_img;
 };
 
+struct DepthImage {
+  const Context* ctxt; // Lifetime bound.
+  VkDeviceMemory devmem;
+  size_t devmem_size;
+  VkImage img;
+  VkImageView img_view;
+  DepthImageConfig depth_img_cfg;
+};
+
+struct RenderPass {
+  const Context* ctxt;
+  VkRect2D viewport;
+  VkRenderPass pass;
+  VkFramebuffer framebuf;
+  RenderPassConfig pass_cfg;
+  VkClearValue clear_value;
+};
+
 struct WorkgroupSizeSpecializationDetail {
   uint32_t x_spec_id;
   uint32_t y_spec_id;
@@ -107,6 +125,7 @@ struct WorkgroupSizeSpecializationDetail {
 };
 struct Task {
   const Context* ctxt;
+  const RenderPass* pass;
   VkDescriptorSetLayout desc_set_layout;
   VkPipelineLayout pipe_layout;
   VkPipeline pipe;
@@ -115,15 +134,6 @@ struct Task {
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   std::string label;
   WorkgroupSizeSpecializationDetail workgrp_spec_detail;
-};
-
-struct RenderPass {
-  const Context* ctxt;
-  const Image* img;
-  VkRenderPass pass;
-  VkRect2D viewport;
-  VkFramebuffer framebuf;
-  VkClearValue clear_value;
 };
 
 struct ResourcePool {

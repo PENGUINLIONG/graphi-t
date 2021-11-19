@@ -735,12 +735,138 @@ void destroy_img(Image& img) {
     vkDestroyImageView(img.ctxt->dev, img.img_view, nullptr);
     vkDestroyImage(img.ctxt->dev, img.img, nullptr);
     vkFreeMemory(img.ctxt->dev, img.devmem, nullptr);
+
     liong::log::debug("destroyed image '", img.img_cfg.label, "'");
     img = {};
   }
 }
 const ImageConfig& get_img_cfg(const Image& img) {
   return img.img_cfg;
+}
+
+
+
+VkFormat _make_depth_fmt(DepthFormat fmt) {
+  if (fmt.nbit_depth == 16 && fmt.nbit_stencil == 0) {
+    return VK_FORMAT_D16_UNORM;
+  }
+  if (fmt.nbit_depth == 24 && fmt.nbit_stencil == 0) {
+    return VK_FORMAT_X8_D24_UNORM_PACK32;
+  }
+  if (fmt.nbit_depth == 32 && fmt.nbit_stencil == 0) {
+    return VK_FORMAT_D32_SFLOAT;
+  }
+  if (fmt.nbit_depth == 0 && fmt.nbit_stencil == 8) {
+    return VK_FORMAT_S8_UINT;
+  }
+  if (fmt.nbit_depth == 16 && fmt.nbit_stencil == 8) {
+    return VK_FORMAT_D16_UNORM_S8_UINT;
+  }
+  if (fmt.nbit_depth == 24 && fmt.nbit_stencil == 8) {
+    return VK_FORMAT_D24_UNORM_S8_UINT;
+  }
+  if (fmt.nbit_depth == 32 && fmt.nbit_stencil == 8) {
+    return VK_FORMAT_D32_SFLOAT_S8_UINT;
+  }
+  liong::panic("unsupported depth format");
+}
+
+DepthImage create_depth_img(
+  const Context& ctxt,
+  const DepthImageConfig& depth_img_cfg
+) {
+  VkFormat fmt = _make_depth_fmt(depth_img_cfg.fmt);
+  VkImageUsageFlags usage =
+    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
+    VK_IMAGE_USAGE_SAMPLED_BIT;
+
+  // Check whether the device support our use case.
+  VkImageFormatProperties ifp;
+  VK_ASSERT << vkGetPhysicalDeviceImageFormatProperties(
+    physdevs[ctxt.ctxt_cfg.dev_idx], fmt, VK_IMAGE_TYPE_2D,
+    VK_IMAGE_TILING_OPTIMAL, usage, 0, &ifp);
+
+  VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
+
+  VkImageCreateInfo ici {};
+  ici.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+  ici.imageType = VK_IMAGE_TYPE_2D;
+  ici.format = fmt;
+  ici.extent.width = (uint32_t)depth_img_cfg.width;
+  ici.extent.height = (uint32_t)depth_img_cfg.height;
+  ici.extent.depth = 1;
+  ici.mipLevels = 1;
+  ici.arrayLayers = 1;
+  ici.samples = VK_SAMPLE_COUNT_1_BIT;
+  ici.tiling = VK_IMAGE_TILING_OPTIMAL;
+  ici.usage = usage;
+  ici.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  ici.initialLayout = layout;
+
+  VkImage img;
+  VK_ASSERT << vkCreateImage(ctxt.dev, &ici, nullptr, &img);
+
+  VkMemoryRequirements mr {};
+  vkGetImageMemoryRequirements(ctxt.dev, img, &mr);
+
+  VkMemoryAllocateInfo mai {};
+  mai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+  mai.allocationSize = mr.size;
+  mai.memoryTypeIndex = 0xFF;
+  auto host_access = L_MEMORY_ACCESS_NONE;
+  for (auto mem_ty_idx : ctxt.mem_ty_idxs_by_host_access[host_access]) {
+    if (((1 << mem_ty_idx) & mr.memoryTypeBits) != 0) {
+      mai.memoryTypeIndex = mem_ty_idx;
+      break;
+    }
+  }
+  if (mai.memoryTypeIndex == 0xFF) {
+    panic("depth image has no host access but it cannot be satisfied");
+  }
+
+  VkDeviceMemory devmem;
+  VK_ASSERT << vkAllocateMemory(ctxt.dev, &mai, nullptr, &devmem);
+
+  VK_ASSERT << vkBindImageMemory(ctxt.dev, img, devmem, 0);
+
+  VkImageViewCreateInfo ivci {};
+  ivci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+  ivci.image = img;
+  ivci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  ivci.format = fmt;
+  ivci.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
+  ivci.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
+  ivci.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
+  ivci.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
+  ivci.subresourceRange.aspectMask =
+    (depth_img_cfg.fmt.nbit_depth > 0 ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) |
+    (depth_img_cfg.fmt.nbit_stencil > 0 ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
+  ivci.subresourceRange.baseArrayLayer = 0;
+  ivci.subresourceRange.layerCount = 1;
+  ivci.subresourceRange.baseMipLevel = 0;
+  ivci.subresourceRange.levelCount = 1;
+
+  VkImageView img_view;
+  VK_ASSERT << vkCreateImageView(ctxt.dev, &ivci, nullptr, &img_view);
+
+  liong::log::info("created depth image '", depth_img_cfg.label, "'");
+  return DepthImage {
+    &ctxt, devmem, mr.size, img, img_view, depth_img_cfg
+  };
+}
+void destroy_depth_img(DepthImage& depth_img) {
+  if (depth_img.img) {
+    vkDestroyImageView(depth_img.ctxt->dev, depth_img.img_view, nullptr);
+    vkDestroyImage(depth_img.ctxt->dev, depth_img.img, nullptr);
+    vkFreeMemory(depth_img.ctxt->dev, depth_img.devmem, nullptr);
+
+    liong::log::info("destroyed depth image '", depth_img.depth_img_cfg.label,
+      "'");
+    depth_img = {};
+  }
+}
+const DepthImageConfig& get_depth_img_cfg(const DepthImage& depth_img) {
+  return depth_img.depth_img_cfg;
 }
 
 
@@ -906,41 +1032,92 @@ Task create_comp_task(
 
   liong::log::debug("created compute task '", cfg.label, "'");
   return Task {
-    &ctxt, desc_set_layout, pipe_layout, pipe,
+    &ctxt, nullptr, desc_set_layout, pipe_layout, pipe,
     std::vector<ResourceType>(cfg.rsc_tys, cfg.rsc_tys + cfg.nrsc_ty),
     { shader_mod }, std::move(desc_pool_sizes), cfg.label };
 }
+VkAttachmentLoadOp _get_load_op(AttachmentAccess attm_access) {
+  if (attm_access & L_ATTACHMENT_ACCESS_CLEAR) {
+    return VK_ATTACHMENT_LOAD_OP_CLEAR;
+  }
+  if (attm_access & L_ATTACHMENT_ACCESS_LOAD) {
+    return VK_ATTACHMENT_LOAD_OP_LOAD;
+  }
+  return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+}
+VkAttachmentStoreOp _get_store_op(AttachmentAccess attm_access) {
+  if (attm_access & L_ATTACHMENT_ACCESS_STORE) {
+    return VK_ATTACHMENT_STORE_OP_STORE;
+  }
+  return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+}
 VkRenderPass _create_pass(
   const Context& ctxt,
-  const Image& attm
+  const std::vector<AttachmentConfig>& attm_cfgs
 ) {
-  std::array<VkAttachmentReference, 1> ars {
-    { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
+  struct SubpassAttachmentReference {
+    std::vector<VkAttachmentReference> color_attm_ref;
+    bool has_depth_attm;
+    VkAttachmentReference depth_attm_ref;
   };
-  std::array<VkAttachmentDescription, 1> ads {};
-  {
-    VkAttachmentDescription& ad = ads[0];
-    ad.format = _make_img_fmt(attm.img_cfg.fmt);
+
+  SubpassAttachmentReference sar {};
+  std::vector<VkAttachmentDescription> ads;
+  for (uint32_t i = 0; i < attm_cfgs.size(); ++i) {
+    const AttachmentConfig& attm_cfg = attm_cfgs.at(i);
+    uint32_t iattm = i;
+
+    VkAttachmentReference ar {};
+    ar.attachment = i;
+    VkAttachmentDescription ad {};
     ad.samples = VK_SAMPLE_COUNT_1_BIT;
-    ad.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    ad.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    // TODO: (penguinliong) Support layout inference in the future.
-    ad.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    ad.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    ad.loadOp = _get_load_op(attm_cfg.attm_access);
+    ad.storeOp = _get_store_op(attm_cfg.attm_access);
+    switch (attm_cfg.attm_ty) {
+    case L_ATTACHMENT_TYPE_COLOR:
+    {
+      const Image& color_img = *attm_cfg.color_img;
+      ar.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      ad.format = _make_img_fmt(color_img.img_cfg.fmt);
+      ad.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      ad.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+      sar.color_attm_ref.emplace_back(std::move(ar));
+      break;
+    }
+    case L_ATTACHMENT_TYPE_DEPTH:
+    {
+      liong::assert(!sar.has_depth_attm,
+        "subpass can only have one depth attachment");
+      const DepthImage& depth_img = *attm_cfg.depth_img;
+      ar.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+      ad.format = _make_depth_fmt(depth_img.depth_img_cfg.fmt);
+      ad.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+      ad.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+      sar.has_depth_attm = true;
+      sar.depth_attm_ref = std::move(ar);
+      break;
+    }
+    default: liong::panic();
+    }
+
+    ads.emplace_back(std::move(ad));
   }
+
   // TODO: (penguinliong) Support input attachments.
-  std::array<VkSubpassDescription, 1> sds {};
+  std::vector<VkSubpassDescription> sds;
   {
-    VkSubpassDescription& sd = sds[0];
+    VkSubpassDescription sd {};
     sd.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     sd.inputAttachmentCount = 0;
     sd.pInputAttachments = nullptr;
-    sd.colorAttachmentCount = (uint32_t)ars.size();
-    sd.pColorAttachments = ars.data();
+    sd.colorAttachmentCount = (uint32_t)sar.color_attm_ref.size();
+    sd.pColorAttachments = sar.color_attm_ref.data();
     sd.pResolveAttachments = nullptr;
-    sd.pDepthStencilAttachment = nullptr;
+    sd.pDepthStencilAttachment =
+      sar.has_depth_attm ? &sar.depth_attm_ref : nullptr;
     sd.preserveAttachmentCount = 0;
     sd.pPreserveAttachments = nullptr;
+    sds.emplace_back(std::move(sd));
   }
   VkRenderPassCreateInfo rpci {};
   rpci.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -957,6 +1134,70 @@ VkRenderPass _create_pass(
 
   return pass;
 }
+VkFramebuffer _create_framebuf(
+  const Context& ctxt,
+  VkRenderPass pass,
+  const std::vector<AttachmentConfig>& attm_cfgs,
+  uint32_t width,
+  uint32_t height
+) {
+  std::vector<VkImageView> attm_img_views;
+  for (const AttachmentConfig& attm_cfg : attm_cfgs) {
+    switch (attm_cfg.attm_ty) {
+    case L_ATTACHMENT_TYPE_COLOR:
+      liong::assert(attm_cfg.color_img->img_cfg.width == width &&
+        attm_cfg.color_img->img_cfg.height == height,
+        "color attachment size mismatches framebuffer size");
+      attm_img_views.emplace_back(attm_cfg.color_img->img_view);
+      break;
+    case L_ATTACHMENT_TYPE_DEPTH:
+      liong::assert(attm_cfg.depth_img->depth_img_cfg.width == width &&
+        attm_cfg.depth_img->depth_img_cfg.height == height,
+        "depth attachment size mismatches framebuffer size");
+      attm_img_views.emplace_back(attm_cfg.depth_img->img_view);
+      break;
+    default: liong::panic("unexpected attachment type");
+    }
+  }
+
+  VkFramebufferCreateInfo fci {};
+  fci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+  fci.renderPass = pass;
+  fci.attachmentCount = attm_img_views.size();
+  fci.pAttachments = attm_img_views.data();
+  fci.width = width;
+  fci.height = height;
+  fci.layers = 1;
+
+  VkFramebuffer framebuf;
+  VK_ASSERT << vkCreateFramebuffer(ctxt.dev, &fci, nullptr, &framebuf);
+
+  return framebuf;
+}
+
+RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg) {
+  VkRenderPass pass = _create_pass(ctxt, cfg.attm_cfgs);
+  VkFramebuffer framebuf = _create_framebuf(ctxt, pass, cfg.attm_cfgs,
+    cfg.width, cfg.height);
+
+  VkRect2D viewport {};
+  viewport.extent.width = cfg.width;
+  viewport.extent.height = cfg.height;
+
+  VkClearValue clear_value {};
+
+  liong::log::info("created render pass '", cfg.label, "'");
+  return RenderPass {
+    &ctxt, std::move(viewport), pass, framebuf, cfg, clear_value
+  };
+}
+void destroy_pass(RenderPass& pass) {
+  vkDestroyFramebuffer(pass.ctxt->dev, pass.framebuf, nullptr);
+  vkDestroyRenderPass(pass.ctxt->dev, pass.pass, nullptr);
+  liong::log::info("destroyed render pass '", pass.pass_cfg.label, "'");
+}
+
+
 
 Task create_graph_task(
   const RenderPass& pass,
@@ -1125,7 +1366,7 @@ Task create_graph_task(
 
   liong::log::debug("created graphics task '", cfg.label, "'");
   return Task {
-    &ctxt, desc_set_layout, pipe_layout, pipe,
+    &ctxt, &pass, desc_set_layout, pipe_layout, pipe,
     std::vector<ResourceType>(cfg.rsc_tys, cfg.rsc_tys + cfg.nrsc_ty),
     { vert_shader_mod, frag_shader_mod },
     std::move(desc_pool_sizes), cfg.label };
@@ -1142,42 +1383,6 @@ void destroy_task(Task& task) {
 
     liong::log::debug("destroyed task '", task.label, "'");
     task = {};
-  }
-}
-
-
-
-RenderPass create_pass(
-  const Context& ctxt,
-  const Image& attm
-) {
-  VkRenderPass pass = _create_pass(ctxt, attm);
-
-  VkFramebufferCreateInfo fci {};
-  fci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-  fci.renderPass = pass;
-  fci.attachmentCount = 1;
-  fci.pAttachments = &attm.img_view;
-  fci.width = attm.img_cfg.width;
-  fci.height = attm.img_cfg.height;
-  fci.layers = 1;
-
-  VkFramebuffer framebuf;
-  VK_ASSERT << vkCreateFramebuffer(ctxt.dev, &fci, nullptr, &framebuf);
-
-  VkRect2D viewport {};
-  viewport.extent.width = attm.img_cfg.width;
-  viewport.extent.height = attm.img_cfg.height;
-
-  liong::log::debug("created render pass");
-  return { &ctxt, &attm, pass, std::move(viewport), framebuf };
-}
-void destroy_pass(RenderPass& pass) {
-  if (pass.pass != VK_NULL_HANDLE) {
-    vkDestroyFramebuffer(pass.ctxt->dev, pass.framebuf, nullptr);
-    vkDestroyRenderPass(pass.ctxt->dev, pass.pass, nullptr);
-    pass = {};
-    liong::log::debug("destroyed render pass");
   }
 }
 
@@ -2029,6 +2234,123 @@ void _record_cmd_end_pass(TransactionLike& transact, const Command& cmd) {
   liong::log::debug("scheduled render pass end");
 }
 
+// TODO: (penguinliong) Check these pipeline stages.
+void _make_depth_img_barrier_src_params(
+  DepthImageUsage usage,
+  MemoryAccess dev_access,
+  VkAccessFlags& access,
+  VkPipelineStageFlags& stage,
+  VkImageLayout& layout
+) {
+  if (dev_access == L_MEMORY_ACCESS_NONE) { return; }
+
+  if (usage == L_IMAGE_USAGE_NONE) {
+    access = 0;
+    stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  }
+  if (usage == L_DEPTH_IMAGE_USAGE_SAMPLED_BIT) {
+    liong::assert(dev_access == L_MEMORY_ACCESS_READ_ONLY,
+      "sampled depth image cannot be written");
+    access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+    stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+  } else if (usage == L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT) {
+    if (L_MEMORY_ACCESS_READ_ONLY) {
+      access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+      stage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+      layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    } else {
+      access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+      stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+      layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    }
+  } else {
+    liong::panic("cannot make image barrier with a set of usage");
+  }
+}
+void _make_depth_img_barrier_dst_params(
+  DepthImageUsage usage,
+  MemoryAccess dev_access,
+  VkAccessFlags& access,
+  VkPipelineStageFlags& stage,
+  VkImageLayout& layout
+) {
+  if (dev_access == L_MEMORY_ACCESS_NONE) { return; }
+
+  if (usage == L_IMAGE_USAGE_NONE) {
+    access = 0;
+    stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  }
+  if (usage == L_DEPTH_IMAGE_USAGE_SAMPLED_BIT) {
+    liong::assert(dev_access == L_MEMORY_ACCESS_READ_ONLY,
+      "sampled depth image cannot be written");
+    access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+    stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+  } else if (usage == L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT) {
+    if (L_MEMORY_ACCESS_READ_ONLY) {
+      access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+      stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+      layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    } else {
+      access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+      stage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+      layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    }
+  } else {
+    liong::panic("cannot make image barrier with a set of usage");
+  }
+}
+void _record_cmd_depth_img_barrier(
+  TransactionLike& transact,
+  const Command& cmd
+) {
+  const auto& in = cmd.cmd_depth_img_barrier;
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
+
+  VkAccessFlags src_access = 0;
+  VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+  VkImageLayout src_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  _make_depth_img_barrier_src_params(in.src_usage, in.src_dev_access,
+    src_access, src_stage, src_layout);
+
+  VkAccessFlags dst_access = 0;
+  VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+  VkImageLayout dst_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  _make_depth_img_barrier_dst_params(in.dst_usage, in.dst_dev_access,
+    dst_access, dst_stage, dst_layout);
+
+  VkImageMemoryBarrier imb {};
+  imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  imb.image = in.depth_img->img;
+  imb.srcAccessMask = src_access;
+  imb.dstAccessMask = dst_access;
+  imb.oldLayout = src_layout;
+  imb.newLayout = dst_layout;
+  imb.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  imb.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  imb.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+  imb.subresourceRange.baseArrayLayer = 0;
+  imb.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+  imb.subresourceRange.baseMipLevel = 0;
+  imb.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+
+  vkCmdPipelineBarrier(
+    cmdbuf,
+    src_stage,
+    dst_stage,
+    0,
+    0, nullptr,
+    0, nullptr,
+    1, &imb);
+
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    liong::log::debug("schedule depth image barrier");
+  }
+}
+
 // Returns whether the submit queue to submit has changed.
 void _record_cmd(TransactionLike& transact, const Command& cmd) {
   switch (cmd.cmd_ty) {
@@ -2073,6 +2395,9 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
     break;
   case L_COMMAND_TYPE_END_RENDER_PASS:
     _record_cmd_end_pass(transact, cmd);
+    break;
+  case L_COMMAND_TYPE_DEPTH_IMAGE_BARRIER:
+    _record_cmd_depth_img_barrier(transact, cmd);
     break;
   default:
     liong::log::warn("ignored unknown command: ", cmd.cmd_ty);

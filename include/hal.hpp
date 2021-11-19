@@ -340,6 +340,48 @@ L_IMPL_FN RenderPass create_pass(
   const Image& img
 );
 L_IMPL_FN void destroy_pass(RenderPass& pass);
+struct DepthFormat {
+  uint8_t nbit_depth;
+  uint8_t nbit_stencil;
+};
+#define L_DEF_DEPTH_FORMAT(nbit_depth, nbit_stencil) \
+  constexpr DepthFormat L_DEPTH_FORMAT_D##nbit_depth##_S##nbit_stencil = \
+    DepthFormat { nbit_depth, nbit_stencil };
+L_DEF_DEPTH_FORMAT(16, 0)
+L_DEF_DEPTH_FORMAT(24, 0)
+L_DEF_DEPTH_FORMAT(32, 0)
+L_DEF_DEPTH_FORMAT(0, 8)
+L_DEF_DEPTH_FORMAT(16, 8)
+L_DEF_DEPTH_FORMAT(24, 8)
+L_DEF_DEPTH_FORMAT(32, 8)
+#undef L_DEF_DEPTH_FORMAT
+
+enum DepthImageUsageBits {
+  L_DEPTH_IMAGE_USAGE_NONE = 0,
+  L_DEPTH_IMAGE_USAGE_SAMPLED_BIT = (1 << 0),
+  L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT = (1 << 1),
+};
+typedef uint32_t DepthImageUsage;
+struct DepthImageConfig {
+  std::string label;
+  // Width of the depth image. When used, the image size should match color
+  // attachment size.
+  uint32_t width;
+  // Height of the depth image. When used, the image size should match color
+  // attachment size.
+  uint32_t height;
+  // Pixel color format of depth image.
+  DepthFormat fmt;
+  // Usage of the depth image.
+  DepthImageUsage usage;
+};
+L_IMPL_STRUCT struct DepthImage;
+L_IMPL_FN DepthImage create_depth_img(
+  const Context& ctxt,
+  const DepthImageConfig& depth_img_cfg
+);
+L_IMPL_FN void destroy_depth_img(DepthImage& depth_img);
+L_IMPL_FN const DepthImageConfig& get_depth_img_cfg(const DepthImage& depth_img);
 
 
 
@@ -371,6 +413,56 @@ struct ComputeTaskConfig {
   // Local group size; number of threads in a workgroup.
   DispatchSize workgrp_size;
 };
+
+
+
+enum AttachmentType {
+  L_ATTACHMENT_TYPE_COLOR,
+  L_ATTACHMENT_TYPE_DEPTH,
+};
+enum AttachmentAccess {
+  // Don't care about the access pattern
+  L_ATTACHMENT_ACCESS_DONT_CARE = 0b0000,
+  // When the attachment is read-accessed, the previous value of the pixel is
+  // ignored and is overwritten by a specified value.
+  L_ATTACHMENT_ACCESS_CLEAR = 0b0001,
+  // When the attachment is read-accessed, the previous value of the pixel is
+  // loaded from memory.
+  L_ATTACHMENT_ACCESS_LOAD = 0b0010,
+  // When the attachment is write-accessed, the shader output is written to
+  // memory.
+  L_ATTACHMENT_ACCESS_STORE = 0b0100,
+  // When the attachment is read-accessed, the previous value of the pixel is
+  // loaded as subpass data.
+  // TOOD: (penguinliong) Implement framebuffer fetch.
+  L_ATTACHMENT_ACCESS_FETCH = 0b1000,
+};
+struct AttachmentConfig {
+  // Attachment access pattern.
+  AttachmentAccess attm_access;
+  // Attachment type.
+  AttachmentType attm_ty;
+  // The image to be used as an attachment.
+  union {
+    const Image* color_img;
+    const DepthImage* depth_img;
+  };
+};
+struct RenderPassConfig {
+  std::string label;
+  // Width of attachments.
+  uint32_t width;
+  // Height of attachments.
+  uint32_t height;
+  // Configurations of attachments that will be used in the render pass.
+  std::vector<AttachmentConfig> attm_cfgs;
+};
+L_IMPL_STRUCT struct RenderPass;
+RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg);
+void destroy_pass(RenderPass& pass);
+
+
+
 enum Topology {
   L_TOPOLOGY_POINT = 1,
   L_TOPOLOGY_LINE = 2,
@@ -480,6 +572,7 @@ enum CommandType {
   L_COMMAND_TYPE_IMAGE_BARRIER,
   L_COMMAND_TYPE_BEGIN_RENDER_PASS,
   L_COMMAND_TYPE_END_RENDER_PASS,
+  L_COMMAND_TYPE_DEPTH_IMAGE_BARRIER,
 };
 enum SubmitType {
   L_SUBMIT_TYPE_COMPUTE,
@@ -562,6 +655,13 @@ struct Command {
     struct {
         const Buffer* vert_buf;
     } cmd_bind_idx_buf;
+    struct {
+      const DepthImage* depth_img;
+      MemoryAccess src_dev_access;
+      MemoryAccess dst_dev_access;
+      DepthImageUsage src_usage;
+      DepthImageUsage dst_usage;
+    } cmd_depth_img_barrier;
   };
 };
 
@@ -718,6 +818,22 @@ inline Command cmd_end_pass(
   Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_END_RENDER_PASS;
   cmd.cmd_end_pass.pass = &pass;
+  return cmd;
+}
+inline Command cmd_depth_img_barrier(
+  const DepthImage& depth_img,
+  DepthImageUsage src_usage,
+  DepthImageUsage dst_usage,
+  MemoryAccess src_dev_access,
+  MemoryAccess dst_dev_access
+) {
+  Command cmd {};
+  cmd.cmd_ty = L_COMMAND_TYPE_DEPTH_IMAGE_BARRIER;
+  cmd.cmd_depth_img_barrier.depth_img = &depth_img;
+  cmd.cmd_depth_img_barrier.src_dev_access = src_dev_access;
+  cmd.cmd_depth_img_barrier.dst_dev_access = dst_dev_access;
+  cmd.cmd_depth_img_barrier.src_usage = src_usage;
+  cmd.cmd_depth_img_barrier.dst_usage = dst_usage;
   return cmd;
 }
 
