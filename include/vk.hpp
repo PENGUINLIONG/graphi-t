@@ -103,6 +103,15 @@ struct DepthImage {
   DepthImageConfig depth_img_cfg;
 };
 
+struct RenderPass {
+  const Context* ctxt;
+  VkRect2D viewport;
+  VkRenderPass pass;
+  VkFramebuffer framebuf;
+  RenderPassConfig pass_cfg;
+  VkClearValue clear_value;
+};
+
 struct WorkgroupSizeSpecializationDetail {
   uint32_t x_spec_id;
   uint32_t y_spec_id;
@@ -110,10 +119,10 @@ struct WorkgroupSizeSpecializationDetail {
 };
 struct Task {
   const Context* ctxt;
+  const RenderPass* pass;
   VkDescriptorSetLayout desc_set_layout;
   VkPipelineLayout pipe_layout;
   VkPipeline pipe;
-  VkRenderPass pass;
   std::vector<VkShaderModule> shader_mods;
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   std::string label;
@@ -127,12 +136,6 @@ struct Framebuffer {
   VkRect2D viewport;
   VkFramebuffer framebuf;
   VkClearValue clear_value;
-};
-
-struct ZBuffer {
-  const Context* ctxt;
-  VkImage img;
-  VkImageView img_view;
 };
 
 struct ResourcePool {

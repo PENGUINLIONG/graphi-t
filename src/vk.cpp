@@ -708,8 +708,7 @@ DepthImage create_depth_img(
   VkFormat fmt = _make_depth_fmt(depth_img_cfg.fmt);
   VkImageUsageFlags usage =
     VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-    VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
-    VK_IMAGE_USAGE_STORAGE_BIT;
+    VK_IMAGE_USAGE_SAMPLED_BIT;
 
   // Check whether the device support our use case.
   VkImageFormatProperties ifp;
@@ -961,40 +960,90 @@ Task create_comp_task(
 
   liong::log::info("created compute task '", cfg.label, "'");
   return Task {
-    &ctxt, desc_set_layout, pipe_layout, pipe, VK_NULL_HANDLE, { shader_mod },
+    &ctxt, nullptr, desc_set_layout, pipe_layout, pipe, { shader_mod },
     std::move(desc_pool_sizes), cfg.label,
   };
 }
-VkRenderPass _create_pass(
-  const Context& ctxt
-) {
-  std::array<VkAttachmentReference, 1> ars {
-    { 0, VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL },
-  };
-  std::array<VkAttachmentDescription, 1> ads {};
-  {
-    VkAttachmentDescription& ad = ads[0];
-    ad.format = VK_FORMAT_R32G32B32A32_SFLOAT;
-    ad.samples = VK_SAMPLE_COUNT_1_BIT;
-    ad.loadOp = VK_ATTACHMENT_LOAD_OP_CLEAR;
-    ad.storeOp = VK_ATTACHMENT_STORE_OP_STORE;
-    // TODO: (penguinliong) Support layout inference in the future.
-    ad.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    ad.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+VkAttachmentLoadOp _get_load_op(AttachmentAccess attm_access) {
+  if (attm_access & L_ATTACHMENT_ACCESS_CLEAR) {
+    return VK_ATTACHMENT_LOAD_OP_CLEAR;
   }
+  if (attm_access & L_ATTACHMENT_ACCESS_LOAD) {
+    return VK_ATTACHMENT_LOAD_OP_LOAD;
+  }
+  return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
+}
+VkAttachmentStoreOp _get_store_op(AttachmentAccess attm_access) {
+  if (attm_access & L_ATTACHMENT_ACCESS_STORE) {
+    return VK_ATTACHMENT_STORE_OP_STORE;
+  }
+  return VK_ATTACHMENT_STORE_OP_DONT_CARE;
+}
+VkRenderPass _create_pass(
+  const Context& ctxt,
+  const std::vector<AttachmentConfig>& attm_cfgs
+) {
+  struct SubpassAttachmentReference {
+    std::vector<VkAttachmentReference> color_attm_ref;
+    bool has_depth_attm;
+    VkAttachmentReference depth_attm_ref;
+  };
+
+  SubpassAttachmentReference sar {};
+  std::vector<VkAttachmentDescription> ads;
+  for (uint32_t i = 0; i < attm_cfgs.size(); ++i) {
+    const AttachmentConfig& attm_cfg = attm_cfgs.at(i);
+    uint32_t iattm = i;
+
+    VkAttachmentReference ar {};
+    ar.attachment = i;
+    VkAttachmentDescription ad {};
+    ad.samples = VK_SAMPLE_COUNT_1_BIT;
+    ad.loadOp = _get_load_op(attm_cfg.attm_access);
+    ad.storeOp = _get_store_op(attm_cfg.attm_access);
+    switch (attm_cfg.attm_ty) {
+    case L_ATTACHMENT_TYPE_COLOR:
+    {
+      const Image& color_img = *attm_cfg.color_img;
+      ar.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      ad.format = _make_img_fmt(color_img.img_cfg.fmt);
+      ad.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+      ad.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+      sar.color_attm_ref.emplace_back(std::move(ar));
+      break;
+    }
+    case L_ATTACHMENT_TYPE_DEPTH:
+    {
+      const DepthImage& depth_img = *attm_cfg.depth_img;
+      ar.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+      ad.format = _make_depth_fmt(depth_img.depth_img_cfg.fmt);
+      ad.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+      ad.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+      sar.has_depth_attm = true;
+      sar.depth_attm_ref = std::move(ar);
+      break;
+    }
+    default: liong::panic();
+    }
+
+    ads.emplace_back(std::move(ad));
+  }
+
   // TODO: (penguinliong) Support input attachments.
-  std::array<VkSubpassDescription, 1> sds {};
+  std::vector<VkSubpassDescription> sds;
   {
-    VkSubpassDescription& sd = sds[0];
+    VkSubpassDescription sd {};
     sd.pipelineBindPoint = VK_PIPELINE_BIND_POINT_GRAPHICS;
     sd.inputAttachmentCount = 0;
     sd.pInputAttachments = nullptr;
-    sd.colorAttachmentCount = (uint32_t)ars.size();
-    sd.pColorAttachments = ars.data();
+    sd.colorAttachmentCount = (uint32_t)sar.color_attm_ref.size();
+    sd.pColorAttachments = sar.color_attm_ref.data();
     sd.pResolveAttachments = nullptr;
-    sd.pDepthStencilAttachment = nullptr;
+    sd.pDepthStencilAttachment =
+      sar.has_depth_attm ? &sar.depth_attm_ref : nullptr;
     sd.preserveAttachmentCount = 0;
     sd.pPreserveAttachments = nullptr;
+    sds.emplace_back(std::move(sd));
   }
   VkRenderPassCreateInfo rpci {};
   rpci.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
@@ -1011,11 +1060,77 @@ VkRenderPass _create_pass(
 
   return pass;
 }
+VkFramebuffer _create_framebuf(
+  const Context& ctxt,
+  VkRenderPass pass,
+  const std::vector<AttachmentConfig>& attm_cfgs,
+  uint32_t width,
+  uint32_t height
+) {
+  std::vector<VkImageView> attm_img_views;
+  for (const AttachmentConfig& attm_cfg : attm_cfgs) {
+    switch (attm_cfg.attm_ty) {
+    case L_ATTACHMENT_TYPE_COLOR:
+      liong::assert(attm_cfg.color_img->img_cfg.ncol == width &&
+        attm_cfg.color_img->img_cfg.nrow == height,
+        "color attachment size mismatches framebuffer size");
+      attm_img_views.emplace_back(attm_cfg.color_img->img_view);
+      break;
+    case L_ATTACHMENT_TYPE_DEPTH:
+      liong::assert(attm_cfg.depth_img->depth_img_cfg.width == width &&
+        attm_cfg.depth_img->depth_img_cfg.height == height,
+        "depth attachment size mismatches framebuffer size");
+      attm_img_views.emplace_back(attm_cfg.depth_img->img_view);
+      break;
+    default: liong::panic("unexpected attachment type");
+    }
+  }
+
+  VkFramebufferCreateInfo fci {};
+  fci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+  fci.renderPass = pass;
+  fci.attachmentCount = attm_img_views.size();
+  fci.pAttachments = attm_img_views.data();
+  fci.width = width;
+  fci.height = height;
+  fci.layers = 1;
+
+  VkFramebuffer framebuf;
+  VK_ASSERT << vkCreateFramebuffer(ctxt.dev, &fci, nullptr, &framebuf);
+
+  return framebuf;
+}
+
+RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg) {
+  VkRenderPass pass = _create_pass(ctxt, cfg.attm_cfgs);
+  VkFramebuffer framebuf = _create_framebuf(ctxt, pass, cfg.attm_cfgs,
+    cfg.width, cfg.height);
+
+  VkRect2D viewport {};
+  viewport.extent.width = cfg.width;
+  viewport.extent.height = cfg.height;
+
+  VkClearValue clear_value {};
+
+  liong::log::info("created render pass '", cfg.label, "'");
+  return RenderPass {
+    &ctxt, std::move(viewport), pass, framebuf, cfg, clear_value
+  };
+}
+void destroy_pass(RenderPass& pass) {
+  vkDestroyFramebuffer(pass.ctxt->dev, pass.framebuf, nullptr);
+  vkDestroyRenderPass(pass.ctxt->dev, pass.pass, nullptr);
+  liong::log::info("destroyed render pass '", pass.pass_cfg.label, "'");
+}
+
+
 
 Task create_graph_task(
-  const Context& ctxt,
+  const RenderPass& pass,
   const GraphicsTaskConfig& cfg
 ) {
+  const Context& ctxt = *pass.ctxt;
+
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   VkDescriptorSetLayout desc_set_layout =
     _create_desc_set_layout(ctxt, cfg.rsc_tys, cfg.nrsc_ty, desc_pool_sizes);
@@ -1024,7 +1139,6 @@ Task create_graph_task(
     _create_shader_mod(ctxt, cfg.vert_code, cfg.vert_code_size);
   VkShaderModule frag_shader_mod =
     _create_shader_mod(ctxt, cfg.frag_code, cfg.frag_code_size);
-  VkRenderPass pass = _create_pass(ctxt);
 
   VkPipelineShaderStageCreateInfo psscis[2] {};
   {
@@ -1142,7 +1256,7 @@ Task create_graph_task(
   gpci.pColorBlendState = &pcbsci;
   gpci.pDynamicState = &pdsci;
   gpci.layout = pipe_layout;
-  gpci.renderPass = pass;
+  gpci.renderPass = pass.pass;
   gpci.subpass = 0;
 
   VkPipeline pipe;
@@ -1151,15 +1265,12 @@ Task create_graph_task(
 
   liong::log::info("created graphics task '", cfg.label, "'");
   return Task {
-    &ctxt, desc_set_layout, pipe_layout, pipe, pass,
+    &ctxt, &pass, desc_set_layout, pipe_layout, pipe,
     { vert_shader_mod, frag_shader_mod }, std::move(desc_pool_sizes), cfg.label,
   };
 }
 void destroy_task(Task& task) {
   vkDestroyPipeline(task.ctxt->dev, task.pipe, nullptr);
-  if (task.pass != VK_NULL_HANDLE) {
-    vkDestroyRenderPass(task.ctxt->dev, task.pass, nullptr);
-  }
   for (const VkShaderModule& shader_mod : task.shader_mods) {
     vkDestroyShaderModule(task.ctxt->dev, shader_mod, nullptr);
   }
@@ -1169,38 +1280,6 @@ void destroy_task(Task& task) {
 
   liong::log::info("destroyed task '", task.label, "'");
   task = {};
-}
-
-
-
-Framebuffer create_framebuf(
-  const Context& ctxt,
-  const Task& task,
-  const Image& attm
-) {
-  VkFramebufferCreateInfo fci {};
-  fci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-  fci.renderPass = task.pass;
-  fci.attachmentCount = 1;
-  fci.pAttachments = &attm.img_view;
-  fci.width = (uint32_t)attm.img_cfg.ncol;
-  fci.height = (uint32_t)attm.img_cfg.nrow;
-  fci.layers = 1;
-
-  VkFramebuffer framebuf;
-  VK_ASSERT << vkCreateFramebuffer(ctxt.dev, &fci, nullptr, &framebuf);
-
-  VkRect2D viewport {};
-  viewport.extent.width = (uint32_t)attm.img_cfg.ncol;
-  viewport.extent.height = (uint32_t)attm.img_cfg.nrow;
-
-  liong::log::info("created framebuffer");
-  return { &ctxt, &task, &attm, std::move(viewport), framebuf };
-}
-void destroy_framebuf(Framebuffer& framebuf) {
-  vkDestroyFramebuffer(framebuf.ctxt->dev, framebuf.framebuf, nullptr);
-  framebuf.framebuf = nullptr;
-  liong::log::info("destroyed framebuffer");
 }
 
 
@@ -1667,29 +1746,29 @@ void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
     *cmd.cmd_draw.task : *cmd.cmd_draw_indexed.task;
   const auto& rsc_pool = cmd.cmd_ty == L_COMMAND_TYPE_DRAW ?
     *cmd.cmd_draw.rsc_pool : *cmd.cmd_draw_indexed.rsc_pool;
-  const auto& framebuf = cmd.cmd_ty == L_COMMAND_TYPE_DRAW ?
-    *cmd.cmd_draw.framebuf : *cmd.cmd_draw_indexed.framebuf;
+  const auto& pass = cmd.cmd_ty == L_COMMAND_TYPE_DRAW ?
+    *cmd.cmd_draw.pass : *cmd.cmd_draw_indexed.pass;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
 
   // TODO: (penguinliong) Move this to a specialized command.
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
     VkRenderPassBeginInfo rpbi {};
     rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    rpbi.renderPass = task.pass;
-    rpbi.framebuffer = framebuf.framebuf;
-    rpbi.renderArea.extent = framebuf.viewport.extent;
+    rpbi.renderPass = pass.pass;
+    rpbi.framebuffer = pass.framebuf;
+    rpbi.renderArea.extent = pass.viewport.extent;
     rpbi.clearValueCount = 1;
-    rpbi.pClearValues = &framebuf.clear_value;
+    rpbi.pClearValues = &pass.clear_value;
 
     vkCmdBeginRenderPass(cmdbuf, &rpbi, VK_SUBPASS_CONTENTS_INLINE);
   } else {
     auto& last_submit = transact.submit_details.back();
     liong::assert(last_submit.pass_detail.pass == VK_NULL_HANDLE,
       "secondary command buffer can only contain one render pass");
-    last_submit.pass_detail.pass = task.pass;
-    last_submit.pass_detail.framebuf = framebuf.framebuf;
-    last_submit.pass_detail.render_area = framebuf.viewport.extent;
-    last_submit.pass_detail.clear_value = framebuf.clear_value;
+    last_submit.pass_detail.pass = pass.pass;
+    last_submit.pass_detail.framebuf = pass.framebuf;
+    last_submit.pass_detail.render_area = pass.viewport.extent;
+    last_submit.pass_detail.clear_value = pass.clear_value;
   }
 
   vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS, task.pipe);
@@ -1698,11 +1777,11 @@ void _record_cmd_draw_common(TransactionLike& transact, const Command& cmd) {
       task.pipe_layout, 0, 1, &rsc_pool.desc_set, 0, nullptr);
   }
   VkRect2D scissor {};
-  scissor.extent = framebuf.viewport.extent;
+  scissor.extent = pass.viewport.extent;
   vkCmdSetScissor(cmdbuf, 0, 1, &scissor);
   VkViewport viewport {};
-  viewport.width = (float)framebuf.viewport.extent.width;
-  viewport.height = (float)framebuf.viewport.extent.height;
+  viewport.width = (float)pass.viewport.extent.width;
+  viewport.height = (float)pass.viewport.extent.height;
   viewport.minDepth = 0.0f;
   viewport.maxDepth = 1.0f;
   vkCmdSetViewport(cmdbuf, 0, 1, &viewport);

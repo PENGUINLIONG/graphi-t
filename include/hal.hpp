@@ -302,7 +302,7 @@ struct DepthFormat {
   uint8_t nbit_stencil;
 };
 #define L_DEF_DEPTH_FORMAT(nbit_depth, nbit_stencil) \
-  constexpr DepthFormat L_PIXEL_FORMAT_D##nbit_depth##_S##nbit_stencil = \
+  constexpr DepthFormat L_DEPTH_FORMAT_D##nbit_depth##_S##nbit_stencil = \
     DepthFormat { nbit_depth, nbit_stencil };
 L_DEF_DEPTH_FORMAT(16, 0)
 L_DEF_DEPTH_FORMAT(24, 0)
@@ -328,8 +328,7 @@ struct DepthImageConfig {
 L_IMPL_STRUCT struct DepthImage;
 L_IMPL_FN DepthImage create_depth_img(
   const Context& ctxt,
-  bool require_depth,
-  bool require_stencil
+  const DepthImageConfig& depth_img_cfg
 );
 L_IMPL_FN void destroy_depth_img(DepthImage& depth_img);
 L_IMPL_FN const DepthImageConfig& get_depth_img_cfg(const DepthImage& depth_img);
@@ -364,6 +363,56 @@ struct ComputeTaskConfig {
   // Local group size; number of threads in a workgroup.
   DispatchSize workgrp_size;
 };
+
+
+
+enum AttachmentType {
+  L_ATTACHMENT_TYPE_COLOR,
+  L_ATTACHMENT_TYPE_DEPTH,
+};
+enum AttachmentAccess {
+  // Don't care about the access pattern
+  L_ATTACHMENT_ACCESS_DONT_CARE = 0b0000,
+  // When the attachment is read-accessed, the previous value of the pixel is
+  // ignored and is overwritten by a specified value.
+  L_ATTACHMENT_ACCESS_CLEAR = 0b0001,
+  // When the attachment is read-accessed, the previous value of the pixel is
+  // loaded from memory.
+  L_ATTACHMENT_ACCESS_LOAD = 0b0010,
+  // When the attachment is write-accessed, the shader output is written to
+  // memory.
+  L_ATTACHMENT_ACCESS_STORE = 0b0100,
+  // When the attachment is read-accessed, the previous value of the pixel is
+  // loaded as subpass data.
+  // TOOD: (penguinliong) Implement framebuffer fetch.
+  L_ATTACHMENT_ACCESS_FETCH = 0b1000,
+};
+struct AttachmentConfig {
+  // Attachment access pattern.
+  AttachmentAccess attm_access;
+  // Attachment type.
+  AttachmentType attm_ty;
+  // The image to be used as an attachment.
+  union {
+    const Image* color_img;
+    const DepthImage* depth_img;
+  };
+};
+struct RenderPassConfig {
+  std::string label;
+  // Width of attachments.
+  uint32_t width;
+  // Height of attachments.
+  uint32_t height;
+  // Configurations of attachments that will be used in the render pass.
+  std::vector<AttachmentConfig> attm_cfgs;
+};
+L_IMPL_STRUCT struct RenderPass;
+RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg);
+void destroy_pass(RenderPass& pass);
+
+
+
 enum Topology {
   L_TOPOLOGY_POINT = 1,
   L_TOPOLOGY_LINE = 2,
@@ -372,6 +421,8 @@ enum Topology {
 struct GraphicsTaskConfig {
   // Human-readable label of the task.
   std::string label;
+  // Render pass that the task will be used in.
+  const RenderPass* pass;
   // Name of the vertex stage entry point. Ignored if the platform does not
   // require an entry point name.
   std::string vert_entry_name;
@@ -401,7 +452,7 @@ L_IMPL_FN Task create_comp_task(
   const ComputeTaskConfig& cfg
 );
 L_IMPL_FN Task create_graph_task(
-  const Context& ctxt,
+  const RenderPass& pass,
   const GraphicsTaskConfig& cfg
 );
 L_IMPL_FN void destroy_task(Task& task);
@@ -511,7 +562,7 @@ struct Command {
     struct {
       const Task* task;
       const ResourcePool* rsc_pool;
-      const Framebuffer* framebuf;
+      const RenderPass* pass;
       const BufferView* verts;
       uint32_t nvert;
       uint32_t ninst;
@@ -519,7 +570,7 @@ struct Command {
     struct {
       const Task* task;
       const ResourcePool* rsc_pool;
-      const Framebuffer* framebuf;
+      const RenderPass* pass;
       const BufferView* verts;
       const BufferView* idxs;
       uint32_t nidx;
@@ -601,18 +652,18 @@ inline Command cmd_dispatch(
 
 // Draw triangle lists, vertex by vertex.
 inline Command cmd_draw(
+  const RenderPass& pass,
   const Task& task,
   const ResourcePool& rsc_pool,
   const BufferView& verts,
   uint32_t nvert,
-  uint32_t ninst,
-  const Framebuffer& framebuf
+  uint32_t ninst
 ) {
   Command cmd;
   cmd.cmd_ty = L_COMMAND_TYPE_DRAW;
   cmd.cmd_draw.task = &task;
   cmd.cmd_draw.rsc_pool = &rsc_pool;
-  cmd.cmd_draw.framebuf = &framebuf;
+  cmd.cmd_draw.pass = &pass;
   cmd.cmd_draw.verts = &verts;
   cmd.cmd_draw.nvert = nvert;
   cmd.cmd_draw.ninst = ninst;
@@ -620,19 +671,19 @@ inline Command cmd_draw(
 }
 // Draw triangle lists, index by index, where each index points to a vertex. 
 inline Command cmd_draw_indexed(
+  const RenderPass& pass,
   const Task& task,
   const ResourcePool& rsc_pool,
   const BufferView& idxs,
   const BufferView& verts,
   uint32_t nidx,
-  uint32_t ninst,
-  const Framebuffer& framebuf
+  uint32_t ninst
 ) {
   Command cmd;
   cmd.cmd_ty = L_COMMAND_TYPE_DRAW_INDEXED;
   cmd.cmd_draw_indexed.task = &task;
   cmd.cmd_draw_indexed.rsc_pool = &rsc_pool;
-  cmd.cmd_draw_indexed.framebuf = &framebuf;
+  cmd.cmd_draw_indexed.pass = &pass;
   cmd.cmd_draw_indexed.verts = &verts;
   cmd.cmd_draw_indexed.idxs = &idxs;
   cmd.cmd_draw_indexed.nidx = nidx;

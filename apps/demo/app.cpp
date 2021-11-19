@@ -209,12 +209,13 @@ void guarded_main2() {
 
   scoped::Context ctxt("ctxt", 0);
 
-  std::vector<ResourceType> rsc_tys {
-    L_RESOURCE_TYPE_UNIFORM_BUFFER,
-  };
 
-  scoped::Task task = ctxt.create_graph_task("graph_task", "main", art.vert_spv,
-    "main", art.frag_spv, L_TOPOLOGY_TRIANGLE, rsc_tys);
+  constexpr uint32_t FRAMEBUF_NCOL = 4;
+  constexpr uint32_t FRAMEBUF_NROW = 4;
+
+
+
+
 
   scoped::Buffer ubo = ctxt.create_uniform_buf("ubo", 4 * sizeof(float));
   {
@@ -225,9 +226,6 @@ void guarded_main2() {
     float* ubo_data = (float*)mapped;
     std::memcpy(ubo_data, data, sizeof(data));
   }
-
-  scoped::ResourcePool rsc_pool = task.create_rsc_pool();
-  rsc_pool.bind(0, ubo.view());
 
   scoped::Buffer verts = ctxt.create_vert_buf("verts", 3 * 4 * sizeof(float));
   {
@@ -251,14 +249,34 @@ void guarded_main2() {
     std::memcpy(idxs_data, data, sizeof(data));
   }
 
-
-  constexpr uint32_t FRAMEBUF_NCOL = 4;
-  constexpr uint32_t FRAMEBUF_NROW = 4;
-
+  scoped::DepthImage zbuf = ctxt.create_depth_img("zbuf", 4, 4,
+    L_DEPTH_FORMAT_D16_S0);
   scoped::Image out_img = ctxt.create_attm_img("attm", 4, 4,
     L_FORMAT_R32G32B32A32_SFLOAT);
 
-  scoped::Framebuffer framebuf = task.create_framebuf(out_img);
+
+
+
+  std::vector<AttachmentConfig> attm_cfgs;
+  {
+    AttachmentConfig attm_cfg {};
+    attm_cfg.attm_ty = L_ATTACHMENT_TYPE_COLOR;
+    attm_cfg.attm_access =
+      (AttachmentAccess)(L_ATTACHMENT_ACCESS_CLEAR | L_ATTACHMENT_ACCESS_STORE);
+    attm_cfg.color_img = &(const Image&)out_img;
+    attm_cfgs.emplace_back(attm_cfg);
+  }
+  scoped::RenderPass pass =
+    ctxt.create_pass("pass", attm_cfgs, FRAMEBUF_NCOL, FRAMEBUF_NROW);
+
+  std::vector<ResourceType> rsc_tys {
+    L_RESOURCE_TYPE_UNIFORM_BUFFER,
+  };
+  scoped::Task task = pass.create_graph_task("graph_task", "main", art.vert_spv,
+    "main", art.frag_spv, L_TOPOLOGY_TRIANGLE, rsc_tys);
+
+  scoped::ResourcePool rsc_pool = task.create_rsc_pool();
+  rsc_pool.bind(0, ubo.view());
 
   scoped::Buffer out_buf = ctxt.create_staging_buf("out_buf",
     FRAMEBUF_NCOL * FRAMEBUF_NROW * 4 * sizeof(float));
@@ -274,7 +292,7 @@ void guarded_main2() {
       L_IMAGE_USAGE_ATTACHMENT_BIT,
       L_MEMORY_ACCESS_NONE,
       L_MEMORY_ACCESS_WRITE_ONLY),
-    cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 3, 1, framebuf),
+    cmd_draw_indexed(pass, task, rsc_pool, idxs.view(), verts.view(), 3, 1),
     cmd_write_timestamp(toc),
     cmd_copy_img2buf(out_img.view(), out_buf.view()),
   };

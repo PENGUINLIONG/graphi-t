@@ -35,7 +35,28 @@ Task Context::create_comp_task(
   comp_task_cfg.workgrp_size = workgrp_size;
   return HAL_IMPL_NAMESPACE::create_comp_task(*inner, comp_task_cfg);
 }
-Task Context::create_graph_task(
+
+RenderPass::RenderPass(const Context& ctxt, const RenderPassConfig& cfg) :
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::RenderPass>(create_pass(ctxt, cfg))) {}
+RenderPass::RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner) :
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::RenderPass>(inner)) {}
+RenderPass::~RenderPass() { HAL_IMPL_NAMESPACE::destroy_pass(*inner); }
+
+RenderPass Context::create_pass(
+  const std::string& label,
+  const std::vector<AttachmentConfig>& attm_cfgs,
+  uint32_t width,
+  uint32_t height
+) const {
+  RenderPassConfig pass_cfg {};
+  pass_cfg.label = label;
+  pass_cfg.attm_cfgs = attm_cfgs;
+  pass_cfg.width = width;
+  pass_cfg.height = height;
+  return HAL_IMPL_NAMESPACE::create_pass(*inner, pass_cfg);
+}
+
+Task RenderPass::create_graph_task(
   const std::string& label,
   const std::string& vert_entry_point,
   const void* vert_code,
@@ -200,6 +221,20 @@ Image Context::create_attm_img(
   return create_img(label, L_IMAGE_USAGE_ATTACHMENT_BIT, nrow, ncol, fmt);
 }
 
+DepthImage Context::create_depth_img(
+  const std::string& label,
+  uint32_t width,
+  uint32_t height,
+  DepthFormat depth_fmt
+) const {
+  DepthImageConfig depth_img_cfg {};
+  depth_img_cfg.label = label;
+  depth_img_cfg.width = width;
+  depth_img_cfg.height = height;
+  depth_img_cfg.fmt = depth_fmt;
+  return HAL_IMPL_NAMESPACE::create_depth_img(*inner, depth_img_cfg);
+}
+
 void _copy_img_tile(
   void* dst,
   size_t dst_row_pitch,
@@ -313,6 +348,15 @@ Image::~Image() { HAL_IMPL_NAMESPACE::destroy_img(*inner); }
 
 
 
+DepthImage::DepthImage(const Context& ctxt, const DepthImageConfig& cfg) :
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::DepthImage>(
+    create_depth_img(*ctxt.inner, cfg))) {}
+DepthImage::DepthImage(HAL_IMPL_NAMESPACE::DepthImage&& inner) :
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::DepthImage>(inner)) {}
+DepthImage::~DepthImage() { HAL_IMPL_NAMESPACE::destroy_depth_img(*inner); }
+
+
+
 Task::Task(const Context& ctxt, const ComputeTaskConfig& cfg) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::Task>(
     create_comp_task(*ctxt.inner, cfg))) {}
@@ -323,21 +367,6 @@ Task::~Task() { destroy_task(*inner); }
 ResourcePool Task::create_rsc_pool() const {
   return HAL_IMPL_NAMESPACE::create_rsc_pool(*inner->ctxt, *inner);
 }
-Framebuffer Task::create_framebuf(const Image& attm) const {
-  return HAL_IMPL_NAMESPACE::create_framebuf(*inner->ctxt, *inner, *attm.inner);
-}
-
-
-
-Framebuffer::Framebuffer(
-  const Context& ctxt,
-  const Task& task,
-  const Image& attm
-) : inner(std::make_unique<HAL_IMPL_NAMESPACE::Framebuffer>(
-  create_framebuf(*ctxt.inner, *task.inner, *attm.inner))) {}
-Framebuffer::Framebuffer(HAL_IMPL_NAMESPACE::Framebuffer&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Framebuffer>(inner)) {}
-Framebuffer::~Framebuffer() { destroy_framebuf(*inner); }
 
 
 
