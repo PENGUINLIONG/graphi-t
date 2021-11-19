@@ -9,12 +9,9 @@ namespace mesh {
 
 using namespace vmath;
 
-Mesh load_obj(const char* path) {
+Mesh parse_obj(const std::string& obj) {
   Mesh out {};
-
-  auto txt = liong::util::load_text(path);
-  auto lines = liong::util::split('\n', txt);
-
+  auto lines = liong::util::split('\n', obj);
   for (const auto& line : lines) {
     auto segs = liong::util::split(' ', liong::util::trim(line));
     const auto& cmd = segs[0];
@@ -22,19 +19,18 @@ Mesh load_obj(const char* path) {
     if (cmd == "v") {
       // Vertex.
       liong::assert(segs.size() == 4, "vertex coordinate field must have 3 components");
-      float4 position {
-        std::atof(segs[1].c_str()),
-        std::atof(segs[2].c_str()),
-        std::atof(segs[3].c_str()),
-        1.0f,
+      float3 position {
+        (float)std::atof(segs[1].c_str()),
+        (float)std::atof(segs[2].c_str()),
+        (float)std::atof(segs[3].c_str()),
       };
       out.positions.emplace_back(std::move(position));
     } else if (cmd == "vt") {
       liong::assert(segs.size() == 3, "texcoord field must have 2 components");
       // UV coordinates.
       float2 uv {
-        std::atof(segs[1].c_str()),
-        std::atof(segs[2].c_str()),
+        (float)std::atof(segs[1].c_str()),
+        (float)std::atof(segs[2].c_str()),
       };
       out.uvs.emplace_back(std::move(uv));
     } else if (cmd == "f") {
@@ -43,6 +39,8 @@ Mesh load_obj(const char* path) {
       auto idx2 = liong::util::split('/', segs[2]);
       auto idx3 = liong::util::split('/', segs[3]);
       liong::assert(idx1[0] == idx1[1], "position indices must match texcoord indices");
+      liong::assert(idx2[0] == idx2[1], "position indices must match texcoord indices");
+      liong::assert(idx3[0] == idx3[1], "position indices must match texcoord indices");
       uint16_t i1 = std::atoi(idx1[0].c_str());
       uint16_t i2 = std::atoi(idx2[0].c_str());
       uint16_t i3 = std::atoi(idx3[0].c_str());
@@ -52,6 +50,10 @@ Mesh load_obj(const char* path) {
     }
   }
   return out;
+}
+Mesh load_obj(const char* path) {
+  auto txt = liong::util::load_text(path);
+  return parse_obj(txt);
 }
 
 
