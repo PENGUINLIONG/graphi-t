@@ -183,17 +183,29 @@ Image Context::create_attm_img(
 }
 
 DepthImage Context::create_depth_img(
-  const std::string& label,
-  uint32_t width,
-  uint32_t height,
-  DepthFormat depth_fmt
+    const std::string& label,
+    DepthImageUsage usage,
+    uint32_t width,
+    uint32_t height,
+    DepthFormat depth_fmt
 ) const {
   DepthImageConfig depth_img_cfg {};
   depth_img_cfg.label = label;
   depth_img_cfg.width = width;
   depth_img_cfg.height = height;
   depth_img_cfg.fmt = depth_fmt;
+  depth_img_cfg.usage = usage;
   return HAL_IMPL_NAMESPACE::create_depth_img(*inner, depth_img_cfg);
+}
+DepthImage Context::create_depth_img(
+    const std::string& label,
+    uint32_t width,
+    uint32_t height,
+    DepthFormat depth_fmt
+) const {
+  DepthImageUsage usage =
+    L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT | L_DEPTH_IMAGE_USAGE_SAMPLED_BIT;
+  return create_depth_img(label, usage, width, height, depth_fmt);
 }
 
 void _copy_img_tile(

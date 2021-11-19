@@ -1086,6 +1086,8 @@ VkRenderPass _create_pass(
     }
     case L_ATTACHMENT_TYPE_DEPTH:
     {
+      liong::assert(!sar.has_depth_attm,
+        "subpass can only have one depth attachment");
       const DepthImage& depth_img = *attm_cfg.depth_img;
       ar.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
       ad.format = _make_depth_fmt(depth_img.depth_img_cfg.fmt);
@@ -2232,6 +2234,123 @@ void _record_cmd_end_pass(TransactionLike& transact, const Command& cmd) {
   liong::log::debug("scheduled render pass end");
 }
 
+// TODO: (penguinliong) Check these pipeline stages.
+void _make_depth_img_barrier_src_params(
+  DepthImageUsage usage,
+  MemoryAccess dev_access,
+  VkAccessFlags& access,
+  VkPipelineStageFlags& stage,
+  VkImageLayout& layout
+) {
+  if (dev_access == L_MEMORY_ACCESS_NONE) { return; }
+
+  if (usage == L_IMAGE_USAGE_NONE) {
+    access = 0;
+    stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+    layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  }
+  if (usage == L_DEPTH_IMAGE_USAGE_SAMPLED_BIT) {
+    liong::assert(dev_access == L_MEMORY_ACCESS_READ_ONLY,
+      "sampled depth image cannot be written");
+    access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+    stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+  } else if (usage == L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT) {
+    if (L_MEMORY_ACCESS_READ_ONLY) {
+      access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+      stage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+      layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    } else {
+      access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+      stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+      layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    }
+  } else {
+    liong::panic("cannot make image barrier with a set of usage");
+  }
+}
+void _make_depth_img_barrier_dst_params(
+  DepthImageUsage usage,
+  MemoryAccess dev_access,
+  VkAccessFlags& access,
+  VkPipelineStageFlags& stage,
+  VkImageLayout& layout
+) {
+  if (dev_access == L_MEMORY_ACCESS_NONE) { return; }
+
+  if (usage == L_IMAGE_USAGE_NONE) {
+    access = 0;
+    stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+    layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  }
+  if (usage == L_DEPTH_IMAGE_USAGE_SAMPLED_BIT) {
+    liong::assert(dev_access == L_MEMORY_ACCESS_READ_ONLY,
+      "sampled depth image cannot be written");
+    access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+    stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
+  } else if (usage == L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT) {
+    if (L_MEMORY_ACCESS_READ_ONLY) {
+      access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
+      stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
+      layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    } else {
+      access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+      stage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+      layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    }
+  } else {
+    liong::panic("cannot make image barrier with a set of usage");
+  }
+}
+void _record_cmd_depth_img_barrier(
+  TransactionLike& transact,
+  const Command& cmd
+) {
+  const auto& in = cmd.cmd_depth_img_barrier;
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
+
+  VkAccessFlags src_access = 0;
+  VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
+  VkImageLayout src_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  _make_depth_img_barrier_src_params(in.src_usage, in.src_dev_access,
+    src_access, src_stage, src_layout);
+
+  VkAccessFlags dst_access = 0;
+  VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+  VkImageLayout dst_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  _make_depth_img_barrier_dst_params(in.dst_usage, in.dst_dev_access,
+    dst_access, dst_stage, dst_layout);
+
+  VkImageMemoryBarrier imb {};
+  imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  imb.image = in.depth_img->img;
+  imb.srcAccessMask = src_access;
+  imb.dstAccessMask = dst_access;
+  imb.oldLayout = src_layout;
+  imb.newLayout = dst_layout;
+  imb.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  imb.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  imb.subresourceRange.aspectMask = VK_IMAGE_ASPECT_DEPTH_BIT;
+  imb.subresourceRange.baseArrayLayer = 0;
+  imb.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+  imb.subresourceRange.baseMipLevel = 0;
+  imb.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+
+  vkCmdPipelineBarrier(
+    cmdbuf,
+    src_stage,
+    dst_stage,
+    0,
+    0, nullptr,
+    0, nullptr,
+    1, &imb);
+
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    liong::log::debug("schedule depth image barrier");
+  }
+}
+
 // Returns whether the submit queue to submit has changed.
 void _record_cmd(TransactionLike& transact, const Command& cmd) {
   switch (cmd.cmd_ty) {
@@ -2276,6 +2395,9 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
     break;
   case L_COMMAND_TYPE_END_RENDER_PASS:
     _record_cmd_end_pass(transact, cmd);
+    break;
+  case L_COMMAND_TYPE_DEPTH_IMAGE_BARRIER:
+    _record_cmd_depth_img_barrier(transact, cmd);
     break;
   default:
     liong::log::warn("ignored unknown command: ", cmd.cmd_ty);

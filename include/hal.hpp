@@ -356,7 +356,12 @@ L_DEF_DEPTH_FORMAT(24, 8)
 L_DEF_DEPTH_FORMAT(32, 8)
 #undef L_DEF_DEPTH_FORMAT
 
-
+enum DepthImageUsageBits {
+  L_DEPTH_IMAGE_USAGE_NONE = 0,
+  L_DEPTH_IMAGE_USAGE_SAMPLED_BIT = (1 << 0),
+  L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT = (1 << 1),
+};
+typedef uint32_t DepthImageUsage;
 struct DepthImageConfig {
   std::string label;
   // Width of the depth image. When used, the image size should match color
@@ -367,6 +372,8 @@ struct DepthImageConfig {
   uint32_t height;
   // Pixel color format of depth image.
   DepthFormat fmt;
+  // Usage of the depth image.
+  DepthImageUsage usage;
 };
 L_IMPL_STRUCT struct DepthImage;
 L_IMPL_FN DepthImage create_depth_img(
@@ -565,6 +572,7 @@ enum CommandType {
   L_COMMAND_TYPE_IMAGE_BARRIER,
   L_COMMAND_TYPE_BEGIN_RENDER_PASS,
   L_COMMAND_TYPE_END_RENDER_PASS,
+  L_COMMAND_TYPE_DEPTH_IMAGE_BARRIER,
 };
 enum SubmitType {
   L_SUBMIT_TYPE_COMPUTE,
@@ -647,6 +655,13 @@ struct Command {
     struct {
         const Buffer* vert_buf;
     } cmd_bind_idx_buf;
+    struct {
+      const DepthImage* depth_img;
+      MemoryAccess src_dev_access;
+      MemoryAccess dst_dev_access;
+      DepthImageUsage src_usage;
+      DepthImageUsage dst_usage;
+    } cmd_depth_img_barrier;
   };
 };
 
@@ -803,6 +818,22 @@ inline Command cmd_end_pass(
   Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_END_RENDER_PASS;
   cmd.cmd_end_pass.pass = &pass;
+  return cmd;
+}
+inline Command cmd_depth_img_barrier(
+  const DepthImage& depth_img,
+  DepthImageUsage src_usage,
+  DepthImageUsage dst_usage,
+  MemoryAccess src_dev_access,
+  MemoryAccess dst_dev_access
+) {
+  Command cmd {};
+  cmd.cmd_ty = L_COMMAND_TYPE_DEPTH_IMAGE_BARRIER;
+  cmd.cmd_depth_img_barrier.depth_img = &depth_img;
+  cmd.cmd_depth_img_barrier.src_dev_access = src_dev_access;
+  cmd.cmd_depth_img_barrier.dst_dev_access = dst_dev_access;
+  cmd.cmd_depth_img_barrier.src_usage = src_usage;
+  cmd.cmd_depth_img_barrier.dst_usage = dst_usage;
   return cmd;
 }
 

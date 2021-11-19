@@ -268,6 +268,14 @@ void guarded_main2() {
     attm_cfg.color_img = &(const Image&)out_img;
     attm_cfgs.emplace_back(attm_cfg);
   }
+  {
+    AttachmentConfig attm_cfg {};
+    attm_cfg.attm_ty = L_ATTACHMENT_TYPE_DEPTH;
+    attm_cfg.attm_access =
+      (AttachmentAccess)(L_ATTACHMENT_ACCESS_LOAD | L_ATTACHMENT_ACCESS_STORE);
+    attm_cfg.depth_img = &(const DepthImage&)zbuf;
+    attm_cfgs.emplace_back(attm_cfg);
+  }
   scoped::RenderPass pass =
     ctxt.create_pass("pass", attm_cfgs, FRAMEBUF_WIDTH, FRAMEBUF_HEIGHT);
 
@@ -292,15 +300,25 @@ void guarded_main2() {
   std::vector<Command> cmds {
     cmd_set_submit_ty(L_SUBMIT_TYPE_GRAPHICS),
     dev_timer.cmd_tic(),
-    cmd_begin_pass(pass, true),
     cmd_img_barrier(out_img,
       L_IMAGE_USAGE_NONE,
       L_IMAGE_USAGE_ATTACHMENT_BIT,
       L_MEMORY_ACCESS_NONE,
       L_MEMORY_ACCESS_WRITE_ONLY),
+    cmd_depth_img_barrier(zbuf,
+      L_DEPTH_IMAGE_USAGE_NONE,
+      L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT,
+      L_MEMORY_ACCESS_NONE,
+      L_MEMORY_ACCESS_WRITE_ONLY),
+    cmd_begin_pass(pass, true),
     cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 3, 1),
     cmd_end_pass(pass),
     dev_timer.cmd_toc(),
+    cmd_img_barrier(out_img,
+      L_IMAGE_USAGE_STORAGE_BIT,
+      L_IMAGE_USAGE_STAGING_BIT,
+      L_MEMORY_ACCESS_WRITE_ONLY,
+      L_MEMORY_ACCESS_READ_ONLY),
     cmd_copy_img2buf(out_img.view(), out_buf.view()),
   };
 

@@ -493,6 +493,13 @@ public:
   ) const;
   DepthImage create_depth_img(
     const std::string& label,
+    DepthImageUsage usage,
+    uint32_t width,
+    uint32_t height,
+    DepthFormat depth_fmt
+  ) const;
+  DepthImage create_depth_img(
+    const std::string& label,
     uint32_t width,
     uint32_t height,
     DepthFormat depth_fmt
