@@ -210,9 +210,13 @@ void guarded_main2() {
 
   scoped::Context ctxt("ctxt", 0);
 
-  std::vector<ResourceType> rsc_tys {
-    L_RESOURCE_TYPE_UNIFORM_BUFFER,
-  };
+
+  constexpr uint32_t FRAMEBUF_WIDTH = 4;
+  constexpr uint32_t FRAMEBUF_HEIGHT = 4;
+
+
+
+
 
   scoped::Buffer ubo = ctxt.create_uniform_buf("ubo", 4 * sizeof(float));
   {
@@ -223,22 +227,6 @@ void guarded_main2() {
     float* ubo_data = (float*)mapped;
     std::memcpy(ubo_data, data, sizeof(data));
   }
-
-  constexpr uint32_t FRAMEBUF_NCOL = 4;
-  constexpr uint32_t FRAMEBUF_NROW = 4;
-
-  scoped::Image out_img = ctxt.create_attm_img("attm", 4, 4,
-    L_FORMAT_R32G32B32A32_SFLOAT);
-
-  scoped::Buffer out_buf = ctxt.create_staging_buf("out_buf",
-    FRAMEBUF_NCOL * FRAMEBUF_NROW * 4 * sizeof(float));
-
-  scoped::RenderPass pass = ctxt.create_pass(out_img);
-  scoped::Task task = pass.create_graph_task("graph_task", "main", art.vert_spv,
-    "main", art.frag_spv, { VertexInput { L_FORMAT_R32G32B32A32_SFLOAT, L_VERTEX_INPUT_RATE_VERTEX }}, L_TOPOLOGY_TRIANGLE, rsc_tys);
-
-  scoped::ResourcePool rsc_pool = task.create_rsc_pool();
-  rsc_pool.bind(0, ubo.view());
 
   scoped::Buffer verts = ctxt.create_vert_buf("verts", 3 * 4 * sizeof(float));
   {
@@ -263,13 +251,50 @@ void guarded_main2() {
   }
 
   ext::DeviceTimer dev_timer(ctxt);
+  scoped::DepthImage zbuf = ctxt.create_depth_img("zbuf", 4, 4,
+    L_DEPTH_FORMAT_D16_S0);
+  scoped::Image out_img = ctxt.create_attm_img("attm", 4, 4,
+    L_FORMAT_R32G32B32A32_SFLOAT);
+
+
+
+
+  std::vector<AttachmentConfig> attm_cfgs;
+  {
+    AttachmentConfig attm_cfg {};
+    attm_cfg.attm_ty = L_ATTACHMENT_TYPE_COLOR;
+    attm_cfg.attm_access =
+      (AttachmentAccess)(L_ATTACHMENT_ACCESS_CLEAR | L_ATTACHMENT_ACCESS_STORE);
+    attm_cfg.color_img = &(const Image&)out_img;
+    attm_cfgs.emplace_back(attm_cfg);
+  }
+  scoped::RenderPass pass =
+    ctxt.create_pass("pass", attm_cfgs, FRAMEBUF_WIDTH, FRAMEBUF_HEIGHT);
+
+  std::vector<VertexInput> vert_ins {
+    VertexInput { L_FORMAT_R32G32B32A32_SFLOAT, L_VERTEX_INPUT_RATE_VERTEX }
+  };
+  std::vector<ResourceType> rsc_tys {
+    L_RESOURCE_TYPE_UNIFORM_BUFFER,
+  };
+  scoped::Task task = pass.create_graph_task("graph_task", "main", art.vert_spv,
+    "main", art.frag_spv, vert_ins, L_TOPOLOGY_TRIANGLE, rsc_tys);
+
+  scoped::ResourcePool rsc_pool = task.create_rsc_pool();
+  rsc_pool.bind(0, ubo.view());
+
+  scoped::Buffer out_buf = ctxt.create_staging_buf("out_buf",
+    FRAMEBUF_WIDTH * FRAMEBUF_HEIGHT * 4 * sizeof(float));
+
+
+
 
   std::vector<Command> cmds {
     cmd_set_submit_ty(L_SUBMIT_TYPE_GRAPHICS),
     dev_timer.cmd_tic(),
     cmd_begin_pass(pass, true),
     cmd_img_barrier(out_img,
-      L_IMAGE_USAGE_ATTACHMENT_BIT,
+      L_IMAGE_USAGE_NONE,
       L_IMAGE_USAGE_ATTACHMENT_BIT,
       L_MEMORY_ACCESS_NONE,
       L_MEMORY_ACCESS_WRITE_ONLY),
@@ -288,7 +313,7 @@ void guarded_main2() {
   {
     scoped::MappedBuffer mapped = out_buf.map(L_MEMORY_ACCESS_READ_ONLY);
     const float* out_data = (const float*)mapped;
-    liong::util::save_bmp(out_data, FRAMEBUF_NCOL, FRAMEBUF_NROW, "out_img.bmp");
+    liong::util::save_bmp(out_data, FRAMEBUF_WIDTH, FRAMEBUF_HEIGHT, "out_img.bmp");
   }
 }
 
