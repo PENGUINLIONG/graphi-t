@@ -769,6 +769,7 @@ VkFormat _make_depth_fmt(DepthFormat fmt) {
     return VK_FORMAT_D32_SFLOAT_S8_UINT;
   }
   liong::panic("unsupported depth format");
+  return VK_FORMAT_UNDEFINED;
 }
 
 DepthImage create_depth_img(
@@ -1186,6 +1187,22 @@ RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg) {
 
   std::vector<VkClearValue> clear_values {};
   clear_values.resize(cfg.attm_cfgs.size());
+  for (size_t i = 0; i < cfg.attm_cfgs.size(); ++i) {
+    auto& clear_value = clear_values[i];
+    switch (cfg.attm_cfgs[i].attm_ty) {
+    case L_ATTACHMENT_TYPE_COLOR:
+      clear_value.color.float32[0] = 0.0f;
+      clear_value.color.float32[0] = 0.0f;
+      clear_value.color.float32[0] = 0.0f;
+      clear_value.color.float32[0] = 0.0f;
+      break;
+    case L_ATTACHMENT_TYPE_DEPTH:
+      clear_value.depthStencil.depth = 1.0f;
+      clear_value.depthStencil.stencil = 0;
+      break;
+    default: liong::panic();
+    }
+  }
 
   liong::log::info("created render pass '", cfg.label, "'");
   return RenderPass {
@@ -1307,7 +1324,7 @@ Task create_graph_task(
   VkPipelineRasterizationStateCreateInfo prsci {};
   prsci.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
   prsci.cullMode = VK_CULL_MODE_NONE;
-  prsci.frontFace = VK_FRONT_FACE_COUNTER_CLOCKWISE;
+  prsci.frontFace = VK_FRONT_FACE_CLOCKWISE;
   prsci.polygonMode = VK_POLYGON_MODE_FILL;
   prsci.lineWidth = 1.0f;
 
@@ -1319,7 +1336,7 @@ Task create_graph_task(
   pdssci.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
   pdssci.depthTestEnable = VK_TRUE;
   pdssci.depthWriteEnable = VK_TRUE;
-  pdssci.depthCompareOp = VK_COMPARE_OP_GREATER;
+  pdssci.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
   pdssci.minDepthBounds = 0.0f;
   pdssci.maxDepthBounds = 1.0f;
 
