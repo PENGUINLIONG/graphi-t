@@ -132,13 +132,13 @@ uint32_t _get_mem_prior(
   MemoryAccess host_access,
   VkMemoryPropertyFlags mem_prop
 ) {
-  if (host_access == L_MEMORY_ACCESS_NONE) {
+  if (host_access == 0) {
     if (mem_prop & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
       return 1;
     } else {
       return 0;
     }
-  } else if (host_access == L_MEMORY_ACCESS_READ_ONLY) {
+  } else if (host_access == L_MEMORY_ACCESS_READ_BIT) {
     static const std::vector<VkMemoryPropertyFlags> PRIORITY_LUT {
       VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
         VK_MEMORY_PROPERTY_HOST_CACHED_BIT |
@@ -162,7 +162,7 @@ uint32_t _get_mem_prior(
       if (mem_prop == PRIORITY_LUT[i]) { return PRIORITY_LUT.size() - i; }
     }
     return 0;
-  } else if (host_access == L_MEMORY_ACCESS_WRITE_ONLY) {
+  } else if (host_access == L_MEMORY_ACCESS_WRITE_BIT) {
     static const std::vector<VkMemoryPropertyFlags> PRIORITY_LUT {
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
@@ -186,7 +186,7 @@ uint32_t _get_mem_prior(
       if (mem_prop == PRIORITY_LUT[i]) { return PRIORITY_LUT.size() - i; }
     }
     return 0;
-  } else if (host_access == L_MEMORY_ACCESS_READ_WRITE) {
+  } else if (host_access == L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT) {
     static const std::vector<VkMemoryPropertyFlags> PRIORITY_LUT {
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
@@ -814,7 +814,7 @@ DepthImage create_depth_img(
   mai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
   mai.allocationSize = mr.size;
   mai.memoryTypeIndex = 0xFF;
-  auto host_access = L_MEMORY_ACCESS_NONE;
+  auto host_access = 0;
   for (auto mem_ty_idx : ctxt.mem_ty_idxs_by_host_access[host_access]) {
     if (((1 << mem_ty_idx) & mr.memoryTypeBits) != 0) {
       mai.memoryTypeIndex = mem_ty_idx;
@@ -1891,16 +1891,16 @@ void _make_buf_barrier_params(
   VkAccessFlags& access,
   VkPipelineStageFlags stage
 ) {
-  if (dev_access == L_MEMORY_ACCESS_NONE) { return; }
+  if (dev_access == 0) { return; }
 
   if (usage == 0) {
     liong::panic("buffer barrier must be specified with a usage");
   } else if (usage == L_BUFFER_USAGE_STAGING_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
       // Transfer source.
       access = VK_ACCESS_TRANSFER_READ_BIT;
       stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    } else if (dev_access == L_MEMORY_ACCESS_WRITE_ONLY) {
+    } else if (dev_access == L_MEMORY_ACCESS_WRITE_BIT) {
       // Transfer destination.
       access = VK_ACCESS_TRANSFER_WRITE_BIT;
       stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
@@ -1908,21 +1908,21 @@ void _make_buf_barrier_params(
       liong::panic("buffer used for staging can't be both read and written");
     }
   } else if (usage == L_BUFFER_USAGE_VERTEX_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
       access = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
       stage = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
     } else {
       liong::panic("buffer used for vertex input cannot be written");
     }
   } else if (usage == L_BUFFER_USAGE_INDEX_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
       access = VK_ACCESS_INDEX_READ_BIT;
       stage = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
     } else {
       liong::panic("buffer used for index input cannot be written");
     }
   } else if (usage == L_BUFFER_USAGE_UNIFORM_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
       access = VK_ACCESS_UNIFORM_READ_BIT;
       stage =
         VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
@@ -1932,7 +1932,7 @@ void _make_buf_barrier_params(
       liong::panic("buffer used for uniform cannot be written");
     }
   } else if (usage == L_BUFFER_USAGE_STORAGE_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
       access = VK_ACCESS_SHADER_READ_BIT;
       stage =
         VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
@@ -1960,19 +1960,19 @@ void _make_img_barrier_src_params(
   VkPipelineStageFlags& stage,
   VkImageLayout& layout
 ) {
-  if (dev_access == L_MEMORY_ACCESS_NONE) { return; }
+  if (dev_access == 0) { return; }
 
   if (usage == L_IMAGE_USAGE_NONE) {
     access = 0;
     stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
     layout = VK_IMAGE_LAYOUT_UNDEFINED;
   } else if (usage == L_IMAGE_USAGE_STAGING_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
       // Transfer source.
       access = VK_ACCESS_TRANSFER_READ_BIT;
       stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
       layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    } else if (dev_access == L_MEMORY_ACCESS_WRITE_ONLY) {
+    } else if (dev_access == L_MEMORY_ACCESS_WRITE_BIT) {
       // Transfer destination.
       access = VK_ACCESS_TRANSFER_WRITE_BIT;
       stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
@@ -1982,7 +1982,7 @@ void _make_img_barrier_src_params(
       return;
     }
   } else if (usage == L_IMAGE_USAGE_ATTACHMENT_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
       // Input attachment.
       access = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
       stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
@@ -1994,7 +1994,7 @@ void _make_img_barrier_src_params(
       layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     }
   } else if (usage == L_IMAGE_USAGE_SAMPLED_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
       // Sampled image.
       access = VK_ACCESS_SHADER_READ_BIT;
       stage =
@@ -2006,14 +2006,14 @@ void _make_img_barrier_src_params(
       return;
     }
   } else if (usage == L_IMAGE_USAGE_STORAGE_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
       // Read-only storage image.
       access = VK_ACCESS_SHADER_READ_BIT;
       stage =
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
       layout = VK_IMAGE_LAYOUT_GENERAL;
-    } else if (dev_access == L_MEMORY_ACCESS_WRITE_ONLY) {
+    } else if (dev_access == L_MEMORY_ACCESS_WRITE_BIT) {
       // Write-only storage image.
       access = VK_ACCESS_SHADER_WRITE_BIT;
       stage =
@@ -2029,7 +2029,7 @@ void _make_img_barrier_src_params(
       layout = VK_IMAGE_LAYOUT_GENERAL;
     }
   } else if (usage == L_IMAGE_USAGE_PRESENT_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
       access = 0;
       stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
       layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
@@ -2049,19 +2049,19 @@ void _make_img_barrier_dst_params(
   VkPipelineStageFlags& stage,
   VkImageLayout& layout
 ) {
-  if (dev_access == L_MEMORY_ACCESS_NONE) { return; }
+  if (dev_access == 0) { return; }
 
   if (usage == L_IMAGE_USAGE_NONE) {
     access = 0;
     stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
     layout = VK_IMAGE_LAYOUT_UNDEFINED;
   } if (usage == L_IMAGE_USAGE_STAGING_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
       // Transfer source.
       access = VK_ACCESS_TRANSFER_READ_BIT;
       stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
       layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    } else if (dev_access == L_MEMORY_ACCESS_WRITE_ONLY) {
+    } else if (dev_access == L_MEMORY_ACCESS_WRITE_BIT) {
       // Transfer destination.
       access = VK_ACCESS_TRANSFER_WRITE_BIT;
       stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
@@ -2070,7 +2070,7 @@ void _make_img_barrier_dst_params(
       liong::panic("image used for staging can't be both read and written");
     }
   } else if (usage == L_IMAGE_USAGE_ATTACHMENT_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
       // Input attachment.
       access = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
       stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
@@ -2082,7 +2082,7 @@ void _make_img_barrier_dst_params(
       layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
     }
   } else if (usage == L_IMAGE_USAGE_SAMPLED_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
       // Sampled image.
       access = VK_ACCESS_SHADER_READ_BIT;
       stage =
@@ -2093,14 +2093,14 @@ void _make_img_barrier_dst_params(
       liong::panic("image used for sampling cannot be written");
     }
   } else if (usage == L_IMAGE_USAGE_STORAGE_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
       // Read-only storage image.
       access = VK_ACCESS_SHADER_READ_BIT;
       stage =
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
       layout = VK_IMAGE_LAYOUT_GENERAL;
-    } else if (dev_access == L_MEMORY_ACCESS_WRITE_ONLY) {
+    } else if (dev_access == L_MEMORY_ACCESS_WRITE_BIT) {
       // Write-only storage image.
       access = VK_ACCESS_SHADER_WRITE_BIT;
       stage =
@@ -2116,7 +2116,7 @@ void _make_img_barrier_dst_params(
       layout = VK_IMAGE_LAYOUT_GENERAL;
     }
   } else if (usage == L_IMAGE_USAGE_PRESENT_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_ONLY) {
+    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
       access = 0;
       stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
       layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
@@ -2260,7 +2260,7 @@ void _make_depth_img_barrier_src_params(
   VkPipelineStageFlags& stage,
   VkImageLayout& layout
 ) {
-  if (dev_access == L_MEMORY_ACCESS_NONE) { return; }
+  if (dev_access == 0) { return; }
 
   if (usage == L_IMAGE_USAGE_NONE) {
     access = 0;
@@ -2268,13 +2268,13 @@ void _make_depth_img_barrier_src_params(
     layout = VK_IMAGE_LAYOUT_UNDEFINED;
   }
   if (usage == L_DEPTH_IMAGE_USAGE_SAMPLED_BIT) {
-    liong::assert(dev_access == L_MEMORY_ACCESS_READ_ONLY,
+    liong::assert(dev_access == L_MEMORY_ACCESS_READ_BIT,
       "sampled depth image cannot be written");
     access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
     stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
     layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
   } else if (usage == L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT) {
-    if (L_MEMORY_ACCESS_READ_ONLY) {
+    if (L_MEMORY_ACCESS_READ_BIT) {
       access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
       stage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
       layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
@@ -2294,7 +2294,7 @@ void _make_depth_img_barrier_dst_params(
   VkPipelineStageFlags& stage,
   VkImageLayout& layout
 ) {
-  if (dev_access == L_MEMORY_ACCESS_NONE) { return; }
+  if (dev_access == 0) { return; }
 
   if (usage == L_IMAGE_USAGE_NONE) {
     access = 0;
@@ -2302,13 +2302,13 @@ void _make_depth_img_barrier_dst_params(
     layout = VK_IMAGE_LAYOUT_UNDEFINED;
   }
   if (usage == L_DEPTH_IMAGE_USAGE_SAMPLED_BIT) {
-    liong::assert(dev_access == L_MEMORY_ACCESS_READ_ONLY,
+    liong::assert(dev_access == L_MEMORY_ACCESS_READ_BIT,
       "sampled depth image cannot be written");
     access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
     stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
     layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
   } else if (usage == L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT) {
-    if (L_MEMORY_ACCESS_READ_ONLY) {
+    if (L_MEMORY_ACCESS_READ_BIT) {
       access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
       stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
       layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
