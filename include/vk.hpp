@@ -6,9 +6,11 @@
 #include <chrono>
 #include <vulkan/vulkan.h>
 #define HAL_IMPL_NAMESPACE vk
-#include "scoped-hal.hpp"
+#include "hal/scoped-hal.hpp"
 
 namespace liong {
+
+namespace vk {
 
 class VkException : public std::exception {
   std::string msg;
@@ -23,11 +25,9 @@ struct VkAssert {
     return *this;
   }
 };
-#define VK_ASSERT (::liong::VkAssert{})
+#define VK_ASSERT (::liong::vk::VkAssert{})
 
 
-
-namespace vk {
 
 struct PhysicalDeviceStub {
   VkPhysicalDevice physdev;

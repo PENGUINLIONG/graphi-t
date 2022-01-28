@@ -7,10 +7,12 @@
 #include "log.hpp"
 #include "timer.hpp"
 #define HAL_IMPL_NAMESPACE vk
-#include "scoped-hal-impl.hpp"
+#include "hal/scoped-hal-impl.hpp"
 #undef HAL_IMPL_NAMESPACE
 
 namespace liong {
+
+namespace vk {
 
 VkException::VkException(VkResult code) {
   switch (code) {
@@ -33,8 +35,6 @@ VkException::VkException(VkResult code) {
 const char* VkException::what() const noexcept { return msg.c_str(); }
 
 
-
-namespace vk {
 
 VkInstance inst = nullptr;
 std::vector<VkPhysicalDevice> physdevs {};

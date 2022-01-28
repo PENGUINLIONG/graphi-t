@@ -1,5 +1,5 @@
 #pragma once
-#include "hal.hpp"
+#include "hal/hal.hpp"
 
 #ifndef HAL_IMPL_NAMESPACE
 static_assert(false, "please specify the implementation namespace (e.g. `vk`)");
