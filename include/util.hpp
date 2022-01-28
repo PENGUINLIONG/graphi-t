@@ -8,6 +8,7 @@
 #include <sstream>
 #include <fstream>
 #include <functional>
+#include <chrono>
 
 namespace liong {
 
@@ -143,6 +144,22 @@ std::vector<U> map(const std::vector<T>& xs, const std::function<U(const T&)>& f
   }
   return out;
 }
+
+struct Timer {
+  std::chrono::time_point<std::chrono::high_resolution_clock> beg, end;
+
+  inline void tic() {
+      beg = std::chrono::high_resolution_clock::now();
+  }
+  inline void toc() {
+      end = std::chrono::high_resolution_clock::now();
+  }
+
+  inline double us() const {
+    std::chrono::duration<double, std::micro> dt = end - beg;
+    return dt.count();
+  }
+};
 
 void sleep_for_us(uint64_t t);
 
