@@ -1,5 +1,6 @@
 // Simple device-side timer for on-device profiling
 // @PENGUINLIONG
+#pragma once
 #include "hal/hal.hpp"
 
 #ifndef HAL_IMPL_NAMESPACE

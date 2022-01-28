@@ -1,5 +1,6 @@
 // # Index and Size Processing Utilities
 // @PENGUINLIONG
+#pragma once
 
 namespace liong {
 

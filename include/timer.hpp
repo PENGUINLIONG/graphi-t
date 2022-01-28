@@ -1,5 +1,6 @@
 // Simple timer used for profiling CPU procedures.
 // @PENGUINLIONG
+#pragma once
 #include <chrono>
 
 namespace liong {
