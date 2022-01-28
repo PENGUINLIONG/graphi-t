@@ -2,6 +2,7 @@
 // @PENGUINLIONG
 #pragma once
 #include <vector>
+#include <string>
 #include "vmath.hpp"
 
 namespace liong {

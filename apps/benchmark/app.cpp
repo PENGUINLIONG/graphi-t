@@ -110,7 +110,7 @@ void copy_buf2host(
     return;
   }
   liong::assert(src.size >= size, "src buffer size is too small");
-  scoped::MappedBuffer mapped(src, L_MEMORY_ACCESS_READ_ONLY);
+  scoped::MappedBuffer mapped(src, L_MEMORY_ACCESS_READ_BIT);
   std::memcpy(dst, (const void*)mapped, size);
 }
 void copy_host2buf(
@@ -123,7 +123,7 @@ void copy_host2buf(
     return;
   }
   liong::assert(dst.size >= size, "dst buffser size is too small");
-  scoped::MappedBuffer mapped(dst, L_MEMORY_ACCESS_WRITE_ONLY);
+  scoped::MappedBuffer mapped(dst, L_MEMORY_ACCESS_WRITE_BIT);
   std::memcpy((void*)mapped, mapped, size);
 }
 
@@ -241,7 +241,7 @@ void guarded_main() {
       -1,  1, 0, 1,
        1,  1, 0, 1,
     };
-    scoped::MappedBuffer mapped = verts.map(L_MEMORY_ACCESS_WRITE_ONLY);
+    scoped::MappedBuffer mapped = verts.map(L_MEMORY_ACCESS_WRITE_BIT);
     float* verts_data = (float*)mapped;
     std::memcpy(verts_data, data, sizeof(data));
   }
@@ -252,7 +252,7 @@ void guarded_main() {
       0, 1, 2,
       0, 2, 3,
     };
-    scoped::MappedBuffer mapped = idxs.map(L_MEMORY_ACCESS_WRITE_ONLY);
+    scoped::MappedBuffer mapped = idxs.map(L_MEMORY_ACCESS_WRITE_BIT);
     uint16_t* idxs_data = (uint16_t*)mapped;
     std::memcpy(idxs_data, data, sizeof(data));
   }
@@ -270,13 +270,13 @@ void guarded_main() {
       cmd_img_barrier(out_img,
                       L_IMAGE_USAGE_NONE,
                       L_IMAGE_USAGE_ATTACHMENT_BIT,
-                      L_MEMORY_ACCESS_NONE,
-                      L_MEMORY_ACCESS_WRITE_ONLY),
+                      0,
+                      L_MEMORY_ACCESS_WRITE_BIT),
       cmd_depth_img_barrier(zbuf,
                             L_DEPTH_IMAGE_USAGE_NONE,
                             L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT,
-                            L_MEMORY_ACCESS_NONE,
-                            L_MEMORY_ACCESS_WRITE_ONLY),
+                            0,
+                            L_MEMORY_ACCESS_WRITE_BIT),
       cmd_write_timestamp(tic),
       cmd_begin_pass(pass, true),
       cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 6, 1),
@@ -293,7 +293,7 @@ void guarded_main() {
 
     // Dump output image.
     {
-      scoped::MappedBuffer mapped = out_buf.map(L_MEMORY_ACCESS_READ_ONLY);
+      scoped::MappedBuffer mapped = out_buf.map(L_MEMORY_ACCESS_READ_BIT);
       const float* out_data = (const float*)mapped;
       liong::util::save_bmp(out_data, CFG.width, CFG.height, "out_img.bmp");
     }

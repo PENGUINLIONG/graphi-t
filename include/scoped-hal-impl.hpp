@@ -51,16 +51,16 @@ Buffer Context::create_buf(
   MemoryAccess host_access = 0;
   MemoryAccess dev_access = 0;
   if (usage & L_BUFFER_USAGE_STAGING_BIT) {
-    host_access |= L_MEMORY_ACCESS_READ_WRITE;
-    dev_access |= L_MEMORY_ACCESS_READ_WRITE;
+    host_access |= L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT;
+    dev_access |= L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT;
   }
   if (usage & L_BUFFER_USAGE_UNIFORM_BIT) {
     host_access |= L_MEMORY_ACCESS_WRITE_BIT;
     dev_access |= L_MEMORY_ACCESS_READ_BIT;
   }
   if (usage & L_BUFFER_USAGE_STORAGE_BIT) {
-    host_access |= L_MEMORY_ACCESS_READ_WRITE;
-    dev_access |= L_MEMORY_ACCESS_READ_WRITE;
+    host_access |= L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT;
+    dev_access |= L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT;
   }
   if (usage & L_BUFFER_USAGE_VERTEX_BIT) {
     host_access |= L_MEMORY_ACCESS_WRITE_BIT;
@@ -123,17 +123,17 @@ Image Context::create_img(
   size_t width,
   PixelFormat fmt
 ) const {
-  MemoryAccess host_access = L_MEMORY_ACCESS_NONE;
-  MemoryAccess dev_access = L_MEMORY_ACCESS_NONE;
+  MemoryAccess host_access = 0;
+  MemoryAccess dev_access = 0;
   if (usage & L_IMAGE_USAGE_STAGING_BIT) {
-    host_access |= L_MEMORY_ACCESS_READ_WRITE;
+    host_access |= L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT;
     dev_access |= L_MEMORY_ACCESS_READ_BIT; 
   }
   if (usage & L_IMAGE_USAGE_SAMPLED_BIT) {
     dev_access |= L_MEMORY_ACCESS_READ_BIT;
   }
   if (usage & L_IMAGE_USAGE_STORAGE_BIT) {
-    dev_access |= L_MEMORY_ACCESS_READ_WRITE;
+    dev_access |= L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT;
   }
   if (usage & L_IMAGE_USAGE_ATTACHMENT_BIT) {
     dev_access |= L_MEMORY_ACCESS_WRITE_BIT;
