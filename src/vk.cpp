@@ -910,13 +910,12 @@ void unmap_img_mem(
 
 VkDescriptorSetLayout _create_desc_set_layout(
   const Context& ctxt,
-  const ResourceType* rsc_tys,
-  size_t nrsc_ty,
+  const std::vector<ResourceType> rsc_tys,
   std::vector<VkDescriptorPoolSize>& desc_pool_sizes
 ) {
   std::vector<VkDescriptorSetLayoutBinding> dslbs;
   std::map<VkDescriptorType, uint32_t> desc_counter;
-  for (auto i = 0; i < nrsc_ty; ++i) {
+  for (auto i = 0; i < rsc_tys.size(); ++i) {
     const auto& rsc_ty = rsc_tys[i];
 
     VkDescriptorSetLayoutBinding dslb {};
@@ -1000,7 +999,7 @@ Task create_comp_task(
 ) {
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   VkDescriptorSetLayout desc_set_layout = _create_desc_set_layout(ctxt,
-    cfg.rsc_tys, cfg.nrsc_ty, desc_pool_sizes);
+    cfg.rsc_tys, desc_pool_sizes);
   VkPipelineLayout pipe_layout = _create_pipe_layout(ctxt, desc_set_layout);
   VkShaderModule shader_mod = _create_shader_mod(ctxt, cfg.code, cfg.code_size);
 
@@ -1034,8 +1033,7 @@ Task create_comp_task(
 
   log::debug("created compute task '", cfg.label, "'");
   return Task {
-    &ctxt, nullptr, desc_set_layout, pipe_layout, pipe,
-    std::vector<ResourceType>(cfg.rsc_tys, cfg.rsc_tys + cfg.nrsc_ty),
+    &ctxt, nullptr, desc_set_layout, pipe_layout, pipe, cfg.rsc_tys,
     { shader_mod }, std::move(desc_pool_sizes), cfg.label };
 }
 VkAttachmentLoadOp _get_load_op(AttachmentAccess attm_access) {
@@ -1225,7 +1223,7 @@ Task create_graph_task(
 
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   VkDescriptorSetLayout desc_set_layout =
-    _create_desc_set_layout(ctxt, cfg.rsc_tys, cfg.nrsc_ty, desc_pool_sizes);
+    _create_desc_set_layout(ctxt, cfg.rsc_tys, desc_pool_sizes);
   VkPipelineLayout pipe_layout = _create_pipe_layout(ctxt, desc_set_layout);
   VkShaderModule vert_shader_mod =
     _create_shader_mod(ctxt, cfg.vert_code, cfg.vert_code_size);
@@ -1251,7 +1249,7 @@ Task create_graph_task(
  VkVertexInputBindingDescription vibd {};
   std::vector<VkVertexInputAttributeDescription> viads;
   size_t base_offset = 0;
-  for (auto i = 0; i < cfg.nvert_input; ++i) {
+  for (auto i = 0; i < cfg.vert_inputs.size(); ++i) {
     auto& vert_input = cfg.vert_inputs[i];
     size_t fmt_size = vert_input.fmt.get_fmt_size();
 
@@ -1384,10 +1382,9 @@ Task create_graph_task(
 
   log::debug("created graphics task '", cfg.label, "'");
   return Task {
-    &ctxt, &pass, desc_set_layout, pipe_layout, pipe,
-    std::vector<ResourceType>(cfg.rsc_tys, cfg.rsc_tys + cfg.nrsc_ty),
-    { vert_shader_mod, frag_shader_mod },
-    std::move(desc_pool_sizes), cfg.label };
+    &ctxt, &pass, desc_set_layout, pipe_layout, pipe, cfg.rsc_tys,
+    { vert_shader_mod, frag_shader_mod }, std::move(desc_pool_sizes), cfg.label
+  };
 }
 void destroy_task(Task& task) {
   if (task.pipe != VK_NULL_HANDLE) {

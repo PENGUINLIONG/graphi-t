@@ -123,8 +123,10 @@ void guarded_main() {
 
   scoped::Context ctxt("ctxt", 0);
 
-  scoped::Task task = ctxt.create_comp_task("comp_task", "main", art.comp_spv,
-    { 1, 1, 1 }, { L_RESOURCE_TYPE_STORAGE_BUFFER });
+  scoped::Task task = scoped::ComputeTaskBuilder("comp_task")
+    .comp(art.comp_spv)
+    .rsc(L_RESOURCE_TYPE_STORAGE_BUFFER)
+    .build(ctxt);
 
   scoped::Buffer buf = ctxt.create_storage_buf("buf", 16 * sizeof(float));
 
@@ -258,35 +260,19 @@ void guarded_main2() {
 
 
 
+  scoped::RenderPass pass = scoped::RenderPassBuilder("pass")
+    .width(FRAMEBUF_WIDTH)
+    .height(FRAMEBUF_HEIGHT)
+    .clear_store_attm(out_img)
+    .clear_store_attm(zbuf)
+    .build(ctxt);
 
-  std::vector<AttachmentConfig> attm_cfgs;
-  {
-    AttachmentConfig attm_cfg {};
-    attm_cfg.attm_ty = L_ATTACHMENT_TYPE_COLOR;
-    attm_cfg.attm_access =
-      (AttachmentAccess)(L_ATTACHMENT_ACCESS_CLEAR | L_ATTACHMENT_ACCESS_STORE);
-    attm_cfg.color_img = &(const Image&)out_img;
-    attm_cfgs.emplace_back(attm_cfg);
-  }
-  {
-    AttachmentConfig attm_cfg {};
-    attm_cfg.attm_ty = L_ATTACHMENT_TYPE_DEPTH;
-    attm_cfg.attm_access =
-      (AttachmentAccess)(L_ATTACHMENT_ACCESS_LOAD | L_ATTACHMENT_ACCESS_STORE);
-    attm_cfg.depth_img = &(const DepthImage&)zbuf;
-    attm_cfgs.emplace_back(attm_cfg);
-  }
-  scoped::RenderPass pass =
-    ctxt.create_pass("pass", attm_cfgs, FRAMEBUF_WIDTH, FRAMEBUF_HEIGHT);
-
-  std::vector<VertexInput> vert_ins {
-    VertexInput { L_FORMAT_R32G32B32A32_SFLOAT, L_VERTEX_INPUT_RATE_VERTEX }
-  };
-  std::vector<ResourceType> rsc_tys {
-    L_RESOURCE_TYPE_UNIFORM_BUFFER,
-  };
-  scoped::Task task = pass.create_graph_task("graph_task", "main", art.vert_spv,
-    "main", art.frag_spv, vert_ins, L_TOPOLOGY_TRIANGLE, rsc_tys);
+  scoped::Task task = scoped::GraphicsTaskBuilder("graph_task")
+    .vert(art.vert_spv)
+    .frag(art.frag_spv)
+    .per_vert_input(L_FORMAT_R32G32B32A32_SFLOAT)
+    .rsc(L_RESOURCE_TYPE_UNIFORM_BUFFER)
+    .build(pass);
 
   scoped::ResourcePool rsc_pool = task.create_rsc_pool();
   rsc_pool.bind(0, ubo.view());

@@ -165,6 +165,107 @@ struct Task {
 
   ResourcePool create_rsc_pool() const;
 };
+struct ComputeTaskBuilder {
+  using Self = ComputeTaskBuilder;
+
+  ComputeTaskConfig inner;
+
+  inline ComputeTaskBuilder(const std::string& label = "") : inner() {
+    inner.label = label;
+    inner.entry_name = "main";
+    inner.workgrp_size.x = 1;
+    inner.workgrp_size.y = 1;
+    inner.workgrp_size.z = 1;
+  }
+
+  inline Self& comp(const void* code, size_t code_size) {
+    inner.code = code;
+    inner.code_size = code_size;
+    return *this;
+  }
+  inline Self& comp_entry_name(const std::string& entry_name) {
+    inner.entry_name = entry_name;
+    return *this;
+  }
+  inline Self& rsc(ResourceType rsc_ty) {
+    inner.rsc_tys.emplace_back(rsc_ty);
+    return *this;
+  }
+  inline Self& workgrp_size(uint32_t x, uint32_t y, uint32_t z) {
+    inner.workgrp_size.x = x;
+    inner.workgrp_size.y = y;
+    inner.workgrp_size.z = z;
+    return *this;
+  }
+
+  template<typename TContainer>
+  inline Self& comp(const TContainer& buf) {
+    return comp(buf.data(), buf.size() * sizeof(TContainer::value_type));
+  }
+
+  Task build(const Context& ctxt);
+};
+struct GraphicsTaskBuilder {
+  using Self = GraphicsTaskBuilder;
+
+  GraphicsTaskConfig inner;
+
+  inline GraphicsTaskBuilder(const std::string& label = "") : inner() {
+    inner.label = label;
+    inner.topo = L_TOPOLOGY_TRIANGLE;
+    inner.vert_entry_name = "main";
+    inner.frag_entry_name = "main";
+  }
+
+  inline Self& vert(const void* code, size_t code_size) {
+    inner.vert_code = code;
+    inner.vert_code_size = code_size;
+    return *this;
+  }
+  inline Self& vert_entry_name(const std::string& entry_name) {
+    inner.vert_entry_name = entry_name;
+    return *this;
+  }
+  inline Self& frag(const void* code, size_t code_size) {
+    inner.frag_code = code;
+    inner.frag_code_size = code_size;
+    return *this;
+  }
+  inline Self& frag_entry_name(const std::string& entry_name) {
+    inner.frag_entry_name = entry_name;
+    return *this;
+  }
+  inline Self& topo(Topology topo) {
+    inner.topo = topo;
+    return *this;
+  }
+  inline Self& vert_input(PixelFormat fmt, VertexInputRate rate) {
+    inner.vert_inputs.emplace_back(VertexInput { fmt, rate });
+    return *this;
+  }
+  inline Self& rsc(const ResourceType& rsc_ty) {
+    inner.rsc_tys.emplace_back(rsc_ty);
+    return *this;
+  }
+
+  template<typename TContainer>
+  inline Self& vert(const TContainer& buf) {
+    return vert(buf.data(), buf.size() * sizeof(TContainer::value_type));
+  }
+  template<typename TContainer>
+  inline Self& frag(const TContainer& buf) {
+    return frag(buf.data(), buf.size() * sizeof(TContainer::value_type));
+  }
+
+  inline Self& per_vert_input(PixelFormat fmt) {
+    return vert_input(fmt, L_VERTEX_INPUT_RATE_VERTEX);
+  }
+  inline Self& per_inst_input(PixelFormat fmt) {
+    return vert_input(fmt, L_VERTEX_INPUT_RATE_INSTANCE);
+  }
+
+  Task build(const RenderPass& pass);
+};
 
 
 
@@ -375,7 +476,62 @@ public:
       topo, rsc_tys);
   }
 };
+struct RenderPassBuilder {
+  using Self = RenderPassBuilder;
 
+  RenderPassConfig inner;
+
+  inline RenderPassBuilder(const std::string& label = "") : inner() {
+    inner.label = label;
+    inner.width = 1;
+    inner.height = 1;
+    inner.attm_cfgs.reserve(1);
+  }
+
+  inline Self& width(uint32_t width) {
+    inner.width = width;
+    return *this;
+  }
+  inline Self& height(uint32_t height) {
+    inner.height = height;
+    return *this;
+  }
+  inline Self& attm(AttachmentAccess access, const Image& color_img) {
+    AttachmentConfig attm_cfg {};
+    attm_cfg.attm_ty = L_ATTACHMENT_TYPE_COLOR;
+    attm_cfg.attm_access = access;
+    attm_cfg.color_img = &(const HAL_IMPL_NAMESPACE::Image&)color_img;
+    inner.attm_cfgs.emplace_back(attm_cfg);
+    return *this;
+  }
+  inline Self& attm(AttachmentAccess access, const DepthImage& depth_img) {
+    AttachmentConfig attm_cfg {};
+    attm_cfg.attm_ty = L_ATTACHMENT_TYPE_DEPTH;
+    attm_cfg.attm_access = access;
+    attm_cfg.depth_img = &(const HAL_IMPL_NAMESPACE::DepthImage&)depth_img;
+    inner.attm_cfgs.emplace_back(attm_cfg);
+    return *this;
+  }
+
+  inline Self& load_store_attm(const Image& color_img) {
+    auto access = L_ATTACHMENT_ACCESS_LOAD | L_ATTACHMENT_ACCESS_STORE;
+    return attm((AttachmentAccess)access, color_img);
+  }
+  inline Self& clear_store_attm(const Image& color_img) {
+    auto access = L_ATTACHMENT_ACCESS_CLEAR | L_ATTACHMENT_ACCESS_STORE;
+    return attm((AttachmentAccess)access, color_img);
+  }
+  inline Self& load_store_attm(const DepthImage& depth_img) {
+    auto access = L_ATTACHMENT_ACCESS_LOAD | L_ATTACHMENT_ACCESS_STORE;
+    return attm((AttachmentAccess)access, depth_img);
+  }
+  inline Self& clear_store_attm(const DepthImage& depth_img) {
+    auto access = L_ATTACHMENT_ACCESS_CLEAR | L_ATTACHMENT_ACCESS_STORE;
+    return attm((AttachmentAccess)access, depth_img);
+  }
+
+  RenderPass build(const Context& ctxt);
+};
 
 
 struct Context {
