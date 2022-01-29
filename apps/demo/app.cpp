@@ -128,7 +128,12 @@ void guarded_main() {
     .rsc(L_RESOURCE_TYPE_STORAGE_BUFFER)
     .build();
 
-  scoped::Buffer buf = ctxt.create_storage_buf("buf", 16 * sizeof(float));
+  scoped::Buffer buf = ctxt.build_buf("buf")
+    .size(16 * sizeof(float))
+    .storage()
+    .streaming()
+    .read_back()
+    .build();
 
   scoped::ResourcePool rsc_pool = task.create_rsc_pool();
   rsc_pool.bind(0, buf.view());
@@ -220,7 +225,11 @@ void guarded_main2() {
 
 
 
-  scoped::Buffer ubo = ctxt.create_uniform_buf("ubo", 4 * sizeof(float));
+  scoped::Buffer ubo = ctxt.build_buf("ubo")
+    .size(4 * sizeof(float))
+    .uniform()
+    .streaming()
+    .build();
   {
     float data[4] {
       0, 1, 0, 1
@@ -230,7 +239,11 @@ void guarded_main2() {
     std::memcpy(ubo_data, data, sizeof(data));
   }
 
-  scoped::Buffer verts = ctxt.create_vert_buf("verts", 3 * 4 * sizeof(float));
+  scoped::Buffer verts = ctxt.build_buf("verts")
+    .size(3 * 4 * sizeof(float))
+    .vertex()
+    .streaming()
+    .build();
   {
     float data[12] {
        1, -1, 0, 1,
@@ -242,7 +255,11 @@ void guarded_main2() {
     std::memcpy(verts_data, data, sizeof(data));
   }
 
-  scoped::Buffer idxs = ctxt.create_idx_buf("idxs", 3 * 4 * sizeof(uint16_t));
+  scoped::Buffer idxs = ctxt.build_buf("idxs")
+    .size(3 * 4 * sizeof(uint16_t))
+    .index()
+    .streaming()
+    .build();
   {
     uint16_t data[3] {
       0, 1, 2
@@ -277,8 +294,10 @@ void guarded_main2() {
   scoped::ResourcePool rsc_pool = task.create_rsc_pool();
   rsc_pool.bind(0, ubo.view());
 
-  scoped::Buffer out_buf = ctxt.create_staging_buf("out_buf",
-    FRAMEBUF_WIDTH * FRAMEBUF_HEIGHT * 4 * sizeof(float));
+  scoped::Buffer out_buf = ctxt.build_buf("out_buf")
+    .size(FRAMEBUF_WIDTH * FRAMEBUF_HEIGHT * 4 * sizeof(float))
+    .read_back()
+    .build();
 
 
 

@@ -27,80 +27,8 @@ ComputeTaskBuilder Context::build_comp_task(const std::string& label) const {
 RenderPassBuilder Context::build_pass(const std::string& label) const {
   return RenderPassBuilder(*this, label);
 }
-
-
-Buffer Context::create_buf(
-  const std::string& label,
-  BufferUsage usage,
-  size_t size,
-  size_t align
-) const {
-  MemoryAccess host_access = 0;
-  MemoryAccess dev_access = 0;
-  if (usage & L_BUFFER_USAGE_STAGING_BIT) {
-    host_access |= L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT;
-    dev_access |= L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT;
-  }
-  if (usage & L_BUFFER_USAGE_UNIFORM_BIT) {
-    host_access |= L_MEMORY_ACCESS_WRITE_BIT;
-    dev_access |= L_MEMORY_ACCESS_READ_BIT;
-  }
-  if (usage & L_BUFFER_USAGE_STORAGE_BIT) {
-    host_access |= L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT;
-    dev_access |= L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT;
-  }
-  if (usage & L_BUFFER_USAGE_VERTEX_BIT) {
-    host_access |= L_MEMORY_ACCESS_WRITE_BIT;
-    dev_access |= L_MEMORY_ACCESS_READ_BIT;
-  }
-  if (usage & L_BUFFER_USAGE_INDEX_BIT) {
-    host_access |= L_MEMORY_ACCESS_WRITE_BIT;
-    dev_access |= L_MEMORY_ACCESS_READ_BIT;
-  }
-
-  BufferConfig buf_cfg {};
-  buf_cfg.label = label;
-  buf_cfg.size = size;
-  buf_cfg.align = align;
-  buf_cfg.host_access = host_access;
-  buf_cfg.dev_access = dev_access;
-  buf_cfg.usage = usage;
-  return HAL_IMPL_NAMESPACE::create_buf(*inner, buf_cfg);
-}
-Buffer Context::create_staging_buf(
-  const std::string& label,
-  size_t size,
-  size_t align
-) const {
-  return create_buf(label, L_BUFFER_USAGE_STAGING_BIT, size, align);
-}
-Buffer Context::create_uniform_buf(
-  const std::string& label,
-  size_t size,
-  size_t align
-) const {
-  return create_buf(label, L_BUFFER_USAGE_UNIFORM_BIT, size, align);
-}
-Buffer Context::create_storage_buf(
-  const std::string& label,
-  size_t size,
-  size_t align
-) const {
-  return create_buf(label, L_BUFFER_USAGE_STORAGE_BIT, size, align);
-}
-Buffer Context::create_vert_buf(
-  const std::string& label,
-  size_t size,
-  size_t align
-) const {
-  return create_buf(label, L_BUFFER_USAGE_VERTEX_BIT, size, align);
-}
-Buffer Context::create_idx_buf(
-  const std::string& label,
-  size_t size,
-  size_t align
-) const {
-  return create_buf(label, L_BUFFER_USAGE_INDEX_BIT, size, align);
+BufferBuilder Context::build_buf(const std::string& label) const {
+  return BufferBuilder(*this, label);
 }
 
 Image Context::create_img(
@@ -301,6 +229,9 @@ Buffer::~Buffer() {
   if (!dont_destroy && inner != nullptr) {
     HAL_IMPL_NAMESPACE::destroy_buf(*inner);
   }
+}
+Buffer BufferBuilder::build() {
+  return create_buf(parent, inner);
 }
 
 

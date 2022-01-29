@@ -435,6 +435,70 @@ struct Buffer {
     return MappedBuffer(view(), map_access);
   }
 };
+struct BufferBuilder {
+  using Self = BufferBuilder;
+
+  const Context& parent;
+  BufferConfig inner;
+
+  BufferBuilder(
+    const Context& ctxt,
+    const std::string& label = ""
+  ) : parent(ctxt), inner() {
+    inner.label = label;
+    inner.align = 1;
+  }
+
+  inline Self& host_access(MemoryAccess access) {
+    inner.host_access |= access;
+    return *this;
+  }
+  inline Self& dev_access(MemoryAccess access) {
+    inner.dev_access |= access;
+    return *this;
+  }
+  inline Self& size(size_t size) {
+    inner.size = size;
+    return *this;
+  }
+  inline Self& align(size_t align) {
+    inner.align = align;
+    return *this;
+  }
+  inline Self& usage(BufferUsage usage) {
+    inner.usage |= usage;
+    return *this;
+  }
+
+  inline Self& streaming() {
+    return usage(L_BUFFER_USAGE_STAGING_BIT)
+      .host_access(L_MEMORY_ACCESS_WRITE_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+  }
+  inline Self& read_back() {
+    return usage(L_BUFFER_USAGE_STAGING_BIT)
+      .host_access(L_MEMORY_ACCESS_READ_BIT)
+      .dev_access(L_MEMORY_ACCESS_WRITE_BIT);
+  }
+  inline Self& uniform() {
+    return usage(L_BUFFER_USAGE_UNIFORM_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+  }
+  inline Self& storage() {
+    return usage(L_BUFFER_USAGE_STORAGE_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT);
+  }
+  inline Self& vertex() {
+    return usage(L_BUFFER_USAGE_VERTEX_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+  }
+  inline Self& index() {
+    return usage(L_BUFFER_USAGE_INDEX_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+  }
+
+  Buffer build();
+};
 
 
 
@@ -542,40 +606,9 @@ public:
     return get_ctxt_cfg(*inner);
   }
 
-  ComputeTaskBuilder build_comp_task(const std::string& label) const;
-  RenderPassBuilder build_pass(const std::string& label) const;
-
-  Buffer create_buf(
-    const std::string& label,
-    BufferUsage usage,
-    size_t size,
-    size_t align
-  ) const;
-  Buffer create_staging_buf(
-    const std::string& label,
-    size_t size,
-    size_t align = 1
-  ) const;
-  Buffer create_uniform_buf(
-    const std::string& label,
-    size_t size,
-    size_t align = 1
-  ) const;
-  Buffer create_storage_buf(
-    const std::string& label,
-    size_t size,
-    size_t align = 1
-  ) const;
-  Buffer create_vert_buf(
-    const std::string& label,
-    size_t size,
-    size_t align = 1
-  ) const;
-  Buffer create_idx_buf(
-    const std::string& label,
-    size_t size,
-    size_t align = 1
-  ) const;
+  ComputeTaskBuilder build_comp_task(const std::string& label = "") const;
+  RenderPassBuilder build_pass(const std::string& label = "") const;
+  BufferBuilder build_buf(const std::string& label = "") const;
 
   Image create_img(
     const std::string& label,
