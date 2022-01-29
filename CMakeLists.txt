@@ -54,7 +54,6 @@ endif()
 add_executable(bin2c
     "bin2c.cpp"
     "include/assert.hpp"
-    "src/assert.cpp"
     "include/util.hpp"
     "src/util.cpp" )
 

@@ -34,7 +34,7 @@ template<typename ... TArgs>
 void log(LogLevel lv, const TArgs& ... msg) {
   if (detail::log_callback != nullptr && lv >= detail::filter_lv) {
     std::string indent(detail::indent, ' ');
-    detail::log_callback(lv, liong::util::format(indent, msg...));
+    detail::log_callback(lv, util::format(indent, msg...));
   }
 }
 

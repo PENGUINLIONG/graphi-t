@@ -9,16 +9,19 @@ namespace liong {
 class AssertionFailedException : public std::exception {
   std::string msg;
 public:
-  AssertionFailedException(const std::string& msg);
+  inline AssertionFailedException(const std::string& msg) :
+    msg(msg) {}
 
-  const char* what() const noexcept override;
+  const char* what() const noexcept override {
+    return msg.c_str();
+  }
 };
 
 template<typename ... TArgs>
 inline void assert(bool pred, const TArgs& ... args) {
 #ifndef NDEBUG
   if (!pred) {
-    throw AssertionFailedException(liong::util::format(args ...));
+    throw AssertionFailedException(util::format(args ...));
   }
 #endif
 }

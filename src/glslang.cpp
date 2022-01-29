@@ -18,13 +18,13 @@ void initialize() {
     return;
   }
 
-  liong::assert(::glslang::InitializeProcess(), "cannot initialize glslang");
+  assert(::glslang::InitializeProcess(), "cannot initialize glslang");
   ::glslang::Version glslang_ver = ::glslang::GetVersion();
-  liong::log::info("glslang version: ", glslang_ver.major, ".",
+  log::info("glslang version: ", glslang_ver.major, ".",
     glslang_ver.minor, ".", glslang_ver.patch);
 
   const char* glsl_ver_str = ::glslang::GetGlslVersionString();
-  liong::log::info("supported glsl version: ", glsl_ver_str);
+  log::info("supported glsl version: ", glsl_ver_str);
 
   is_initialized = true;
 }
@@ -187,11 +187,11 @@ public:
     if (!shader->preprocess(&builtin_rsc, ver, ENoProfile, false, false,
       MSG_OPTS, &dummy, includer)
     ) {
-      liong::panic("preprocessing failed: ", shader->getInfoLog());
+      panic("preprocessing failed: ", shader->getInfoLog());
     }
 
     if (!shader->parse(&builtin_rsc, ver, false, MSG_OPTS, includer)) {
-      liong::panic("compilation failed: ", shader->getInfoLog());
+      panic("compilation failed: ", shader->getInfoLog());
     }
 
     program->addShader(&*shader);
@@ -200,7 +200,7 @@ public:
   }
   void link() {
     if (!program->link(MSG_OPTS)) {
-      liong::panic("link failed: ", program->getInfoLog());
+      panic("link failed: ", program->getInfoLog());
     }
   }
   std::vector<uint32_t> to_spv(EShLanguage stage) {
@@ -219,15 +219,15 @@ public:
 
     std::string msg = logger.getAllMessages();
     if (msg.size() != 0) {
-      liong::log::warn("compiler reported issues when translating glsl into "
-        "spirv", msg);
+      log::warn("compiler reported issues when translating glsl into spirv",
+        msg);
     }
 
     return spv;
   }
   void reflect(size_t& ubo_size) {
     if (!program->buildReflection(MSG_OPTS)) {
-      liong::panic("reflection failed: ", program->getInfoLog());
+      panic("reflection failed: ", program->getInfoLog());
     }
     // Uncomment this line to print reflection details:
     //program->dumpReflection();
@@ -237,11 +237,11 @@ public:
     // Collect uniform block size.
     {
       uint32_t nubo = program->getNumUniformBlocks();
-      liong::assert(nubo <= 1, "a pipeline can only bind to one uniform block");
+      assert(nubo <= 1, "a pipeline can only bind to one uniform block");
       if (nubo != 0) {
         auto ubo = program->getUniformBlock(0);
-        liong::assert(ubo.getBinding() == 0, "uniform block binding point must be 0");
-        liong::assert(ubo.size != 0, "unexpected zero-sized uniform block");
+        assert(ubo.getBinding() == 0, "uniform block binding point must be 0");
+        assert(ubo.size != 0, "unexpected zero-sized uniform block");
         ubo_size = ubo.size;
       } else {
         ubo_size = 0;
@@ -250,11 +250,10 @@ public:
 
     // Make sure there is exactly one fragment output.
     if (is_graph_pipe) {
-      liong::assert(program->getNumPipeOutputs() == 1,
-        "must have exactly one fragment output");
+      assert(program->getNumPipeOutputs() == 1, "must have exactly one "
+        "fragment output");
       const auto output = program->getPipeOutput(0);
-      liong::assert(output.index == 0,
-        "fragment output must be bound to location 0");
+      assert(output.index == 0, "fragment output must be bound to location 0");
     }
   }
 };
@@ -308,11 +307,11 @@ public:
     if (!shader->preprocess(&builtin_rsc, ver, ENoProfile, false, false,
       MSG_OPTS, &dummy, includer)
     ) {
-      liong::panic("preprocessing failed: ", shader->getInfoLog());
+      panic("preprocessing failed: ", shader->getInfoLog());
     }
 
     if (!shader->parse(&builtin_rsc, ver, false, MSG_OPTS, includer)) {
-      liong::panic("compilation failed: ", shader->getInfoLog());
+      panic("compilation failed: ", shader->getInfoLog());
     }
 
     program->addShader(&*shader);
@@ -321,7 +320,7 @@ public:
   }
   void link() {
     if (!program->link(MSG_OPTS)) {
-      liong::panic("link failed: ", program->getInfoLog());
+      panic("link failed: ", program->getInfoLog());
     }
   }
   std::vector<uint32_t> to_spv(EShLanguage stage) {
@@ -340,7 +339,7 @@ public:
 
     std::string msg = logger.getAllMessages();
     if (msg.size() != 0) {
-      liong::log::warn("compiler reported issues when translating glsl into "
+      log::warn("compiler reported issues when translating glsl into "
         "spirv", msg);
     }
 
@@ -348,7 +347,7 @@ public:
   }
   void reflect(size_t& ubo_size) {
     if (!program->buildReflection(MSG_OPTS)) {
-      liong::panic("reflection failed: ", program->getInfoLog());
+      panic("reflection failed: ", program->getInfoLog());
     }
     // Uncomment this line to print reflection details:
     //program->dumpReflection();
@@ -358,11 +357,11 @@ public:
     // Collect uniform block size.
     {
       uint32_t nubo = program->getNumUniformBlocks();
-      liong::assert(nubo <= 1, "a pipeline can only bind to one uniform block");
+      assert(nubo <= 1, "a pipeline can only bind to one uniform block");
       if (nubo != 0) {
         auto ubo = program->getUniformBlock(0);
-        liong::assert(ubo.getBinding(), "uniform block binding point must be 0");
-        liong::assert(ubo.size != 0, "unexpected zero-sized uniform block");
+        assert(ubo.getBinding(), "uniform block binding point must be 0");
+        assert(ubo.size != 0, "unexpected zero-sized uniform block");
         ubo_size = ubo.size;
       } else {
         ubo_size = 0;
@@ -371,10 +370,10 @@ public:
 
     // Make sure there is exactly one fragment output.
     if (is_graph_pipe) {
-      liong::assert(program->getNumPipeOutputs() == 1,
+      assert(program->getNumPipeOutputs() == 1,
         "must have exactly one fragment output");
       const auto output = program->getPipeOutput(0);
-      liong::assert(output.index == 0,
+      assert(output.index == 0,
         "fragment output must be bound to location 0");
     }
   }
