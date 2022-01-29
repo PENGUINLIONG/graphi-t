@@ -83,17 +83,16 @@ void parse_args(int argc, const char** argv) {
   while (i < argc || iarg_entry >= 0) {
     if (iarg_entry >= 0) {
       auto& parse_cfg = arg_cfg.parse_cfgs[iarg_entry];
-      liong::assert(parse_cfg.parser(argv + i, parse_cfg.dst),
-        "unable to parse argument");
-      liong::assert((argc - i >= parse_cfg.narg),
-        "no enough argument segments");
+      assert(parse_cfg.parser(argv + i, parse_cfg.dst), "unable to parse "
+        "argument");
+      assert((argc - i >= parse_cfg.narg), "no enough argument segments");
       i += parse_cfg.narg;
       iarg_entry = -1;
     } else {
       const char* arg = argv[i];
       if (arg[0] != '-') {
         // Free argument.
-        liong::panic("free argument is currently unsupported");
+        panic("free argument is currently unsupported");
       } else if (arg[1] != '-') {
         if (arg[1] == 'h') { print_help(); }
         // Short flag argument.

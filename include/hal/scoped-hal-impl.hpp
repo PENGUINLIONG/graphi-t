@@ -1,5 +1,5 @@
 #pragma once
-#include "scoped-hal.hpp"
+#include "hal/scoped-hal.hpp"
 
 #ifndef HAL_IMPL_NAMESPACE
 static_assert(false, "please specify the implementation namespace (e.g. `vk`)");
@@ -247,13 +247,13 @@ MappedImage::MappedImage(const ImageView& view, MemoryAccess map_access) :
 
   bool need_stage_buf = false;
   if (view.width != img_cfg.width || view.height != img_cfg.height) {
-    liong::log::warn("only a portion of the image is mapped; staging buffer "
-      "will be used to relayout data on the host side");
+    log::warn("only a portion of the image is mapped; staging buffer will be "
+      "used to relayout data on the host side");
     need_stage_buf = true;
   } else if (row_pitch != expected_pitch) {
-    liong::log::warn("image allocation size is not aligned to required "
-      "pitch (expect=", expected_pitch, ", actual=", row_pitch, "); staging "
-      "buffer will be used to relayout data on the host side");
+    log::warn("image allocation size is not aligned to required pitch (expect=",
+      expected_pitch, ", actual=", row_pitch, "); staging buffer will be used "
+      "to relayout data on the host side");
     need_stage_buf = true;
   }
   if (need_stage_buf) {

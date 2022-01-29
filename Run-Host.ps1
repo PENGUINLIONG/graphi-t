@@ -7,7 +7,7 @@ if (-not(Test-Path "build-windows-x64")) {
 }
 
 Push-Location "build-windows-x64"
-cmake -G"Visual Studio 16 2019" ..
+cmake ..
 cmake --build . -t $AppName
 Pop-Location
 

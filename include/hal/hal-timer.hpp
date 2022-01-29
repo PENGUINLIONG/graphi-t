@@ -1,6 +1,7 @@
 // Simple device-side timer for on-device profiling
 // @PENGUINLIONG
-#include "hal.hpp"
+#pragma once
+#include "hal/hal.hpp"
 
 #ifndef HAL_IMPL_NAMESPACE
 static_assert(false, "please specify the implementation namespace (e.g. `vk`)");

@@ -4,6 +4,7 @@
 #include <cmath>
 #include <limits>
 #include <algorithm>
+#include "log.hpp"
 
 namespace liong {
 
@@ -29,7 +30,7 @@ public:
   }
   operator T() const {
     if (!has_value()) {
-      liong::log::warn("`MinStats` has not collected any data yet");
+      log::warn("`MinStats` has not collected any data yet");
     }
     return mn_;
   }
@@ -58,7 +59,7 @@ public:
   }
   operator T() const {
     if (!has_value()) {
-      liong::log::warn("`MaxStats` has not collected any data yet");
+      log::warn("`MaxStats` has not collected any data yet");
     }
     return mx_;
   }
@@ -83,7 +84,7 @@ public:
   }
   operator T() const {
     if (!has_value()) {
-      liong::log::warn("`AvgStats` has not collected any data yet");
+      log::warn("`AvgStats` has not collected any data yet");
     }
     return sum_ / n_;
   }
@@ -108,7 +109,7 @@ public:
   }
   operator T() const {
     if (!has_value()) {
-      liong::log::warn("`StdStats` has not collected any data yet");
+      log::warn("`StdStats` has not collected any data yet");
     }
     T avg = avg_;
     T sqr_sum = 0;
@@ -143,7 +144,7 @@ public:
   }
   operator T() {
     if (!has_value()) {
-      liong::log::warn("`MedianStats` has not collected any data yet");
+      log::warn("`MedianStats` has not collected any data yet");
     }
     std::sort(values_.begin(), values_.end());
     size_t imid = values_.size() / 2;
@@ -180,7 +181,7 @@ public:
   }
   operator value_t() const {
     if (!has_value()) {
-      liong::log::warn("`GeomDeltaStats` has not collected enough data yet");
+      log::warn("`GeomDeltaStats` has not collected enough data yet");
     }
     return ratio_;
   }
@@ -214,7 +215,7 @@ public:
   }
   operator value_t() const {
     if (!has_value()) {
-      liong::log::warn("`ArithDeltaStats` has not collected enough data yet");
+      log::warn("`ArithDeltaStats` has not collected enough data yet");
     }
     return delta_;
   }

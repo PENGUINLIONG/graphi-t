@@ -1,14 +1,19 @@
 // # Vulkan implementation of HAL
 // @PENGUINLIONG
 #pragma once
+
+#if GFT_WITH_VULKAN
+
 #include <array>
 #include <map>
 #include <chrono>
 #include <vulkan/vulkan.h>
 #define HAL_IMPL_NAMESPACE vk
-#include "scoped-hal.hpp"
+#include "hal/scoped-hal.hpp"
 
 namespace liong {
+
+namespace vk {
 
 class VkException : public std::exception {
   std::string msg;
@@ -23,11 +28,8 @@ struct VkAssert {
     return *this;
   }
 };
-#define VK_ASSERT (::liong::VkAssert{})
 
 
-
-namespace vk {
 
 struct PhysicalDeviceStub {
   VkPhysicalDevice physdev;
@@ -57,15 +59,15 @@ struct Context {
 
   inline size_t get_queue_rsc_idx(SubmitType submit_ty) const {
     auto it = submit_detail_idx_by_submit_ty.find((uint32_t)submit_ty);
-    liong::assert(it != submit_detail_idx_by_submit_ty.end(),
-      "submit type ", submit_ty, " is not available");
+    assert(it != submit_detail_idx_by_submit_ty.end(), "submit type ",
+      submit_ty, " is not available");
     return it->second;
   }
   inline const ContextSubmitDetail& get_submit_detail(
     SubmitType submit_ty
   ) const {
     auto i = get_queue_rsc_idx(submit_ty);
-    liong::assert(i < submit_details.size(), "unsupported submit type");
+    assert(i < submit_details.size(), "unsupported submit type");
     return submit_details[i];
   }
   inline uint32_t get_submit_ty_qfam_idx(SubmitType submit_ty) const {
@@ -180,3 +182,5 @@ struct Timestamp {
 } // namespace vk
 
 } // namespace liong
+
+#endif // GFT_WITH_VULKAN

@@ -1,16 +1,17 @@
+#if GFT_WITH_VULKAN
+
 #include <map>
 #include <set>
 #include <algorithm>
-#include "vk.hpp"
+#include "vk.hpp" // Defines `HAL_IMPL_NAMESPACE`.
 #include "assert.hpp"
 #include "util.hpp"
 #include "log.hpp"
-#include "timer.hpp"
-#define HAL_IMPL_NAMESPACE vk
-#include "scoped-hal-impl.hpp"
-#undef HAL_IMPL_NAMESPACE
+#include "hal/scoped-hal-impl.hpp" // `HAL_IMPL_AMESPACE` used here.
 
 namespace liong {
+
+namespace vk {
 
 VkException::VkException(VkResult code) {
   switch (code) {
@@ -32,9 +33,9 @@ VkException::VkException(VkResult code) {
 
 const char* VkException::what() const noexcept { return msg.c_str(); }
 
+#define VK_ASSERT (::liong::vk::VkAssert{})
 
 
-namespace vk {
 
 VkInstance inst = nullptr;
 std::vector<VkPhysicalDevice> physdevs {};
@@ -44,7 +45,7 @@ std::vector<std::string> physdev_descs {};
 
 void initialize() {
   if (inst != VK_NULL_HANDLE) {
-    liong::log::warn("ignored redundant vulkan module initialization");
+    log::warn("ignored redundant vulkan module initialization");
     return;
   }
   VkApplicationInfo app_info {};
@@ -75,15 +76,15 @@ void initialize() {
   for (const auto& inst_ext : inst_exts) {
     inst_ext_names.emplace_back(inst_ext.extensionName);
   }
-  liong::log::debug("enabled instance extensions: ", liong::util::join(", ", inst_ext_names));
+  log::debug("enabled instance extensions: ", util::join(", ", inst_ext_names));
 
   static std::vector<const char*> layers;
   for (const auto& inst_layer : inst_layers) {
-    liong::log::debug("found layer ", inst_layer.layerName);
+    log::debug("found layer ", inst_layer.layerName);
 #if !defined(NDEBUG)
     if (std::strcmp("VK_LAYER_KHRONOS_validation", inst_layer.layerName) == 0) {
       layers.emplace_back("VK_LAYER_KHRONOS_validation");
-      liong::log::debug("vulkan validation layer is enabled");
+      log::debug("vulkan validation layer is enabled");
     }
 #endif // !defined(NDEBUG)
   }
@@ -120,7 +121,7 @@ void initialize() {
       VK_VERSION_MINOR(physdev_prop.apiVersion), ")");
     physdev_descs.emplace_back(std::move(desc));
   }
-  liong::log::info("vulkan backend initialized");
+  log::info("vulkan backend initialized");
 }
 std::string desc_dev(uint32_t idx) {
   return idx < physdev_descs.size() ? physdev_descs[idx] : std::string {};
@@ -211,7 +212,7 @@ uint32_t _get_mem_prior(
     }
     return 0;
   } else {
-    liong::panic("unexpected host access pattern");
+    panic("unexpected host access pattern");
     return 0;
   }
 }
@@ -219,7 +220,7 @@ Context create_ctxt(const ContextConfig& cfg) {
   if (inst == VK_NULL_HANDLE) {
     initialize();
   }
-  liong::assert(cfg.dev_idx < physdevs.size(),
+  assert(cfg.dev_idx < physdevs.size(),
     "wanted vulkan device does not exists (#", cfg.dev_idx, " of ",
       physdevs.size(), " available devices)");
   auto physdev = physdevs[cfg.dev_idx];
@@ -231,8 +232,8 @@ Context create_ctxt(const ContextConfig& cfg) {
   vkGetPhysicalDeviceProperties(physdev, &physdev_prop);
 
   if (physdev_prop.limits.timestampComputeAndGraphics == VK_FALSE) {
-    liong::log::warn("context '", cfg.label, "' device does not support "
-      "timestamps, the following command won't be available: WRITE_TIMESTAMP");
+    log::warn("context '", cfg.label, "' device does not support timestamps, "
+      "the following command won't be available: WRITE_TIMESTAMP");
   }
 
   // Collect queue families and use as few queues as possible (for less sync).
@@ -252,7 +253,7 @@ Context create_ctxt(const ContextConfig& cfg) {
     const auto& qfam_prop = qfam_props[i];
     auto queue_flags = qfam_prop.queueFlags;
     if (qfam_prop.queueCount == 0) {
-      liong::log::warn("ignored queue family #", i, " with zero queue count");
+      log::warn("ignored queue family #", i, " with zero queue count");
     }
 
     std::vector<const char*> qfam_cap_lit{};
@@ -271,10 +272,10 @@ Context create_ctxt(const ContextConfig& cfg) {
     if ((queue_flags & VK_QUEUE_PROTECTED_BIT) != 0) {
       qfam_cap_lit.push_back("PROTECTED");
     }
-    liong::log::debug("discovered queue families #", i, ": ",
-      liong::util::join(" | ", qfam_cap_lit));
+    log::debug("discovered queue families #", i, ": ",
+      util::join(" | ", qfam_cap_lit));
 
-    uint32_t nset_bit = liong::util::count_set_bits(queue_flags);
+    uint32_t nset_bit = util::count_set_bits(queue_flags);
     auto it = qfam_map.find(nset_bit);
     if (it == qfam_map.end()) {
       it = qfam_map.emplace_hint(it,
@@ -282,7 +283,7 @@ Context create_ctxt(const ContextConfig& cfg) {
     }
     it->second.emplace_back(QueueFamilyTrait { i, queue_flags });
   }
-  liong::assert(!qfam_props.empty(), "cannot find any queue family on device #",
+  assert(!qfam_props.empty(), "cannot find any queue family on device #",
     cfg.dev_idx);
 
   struct SubmitTypeQueueRequirement {
@@ -334,9 +335,9 @@ Context create_ctxt(const ContextConfig& cfg) {
     }
 
     if (qfam_idx_alloc == VK_QUEUE_FAMILY_IGNORED) {
-      liong::log::warn("cannot find a suitable queue family for ",
+      log::warn("cannot find a suitable queue family for ",
         submit_ty_queue_req.submit_ty_name, ", the following commands won't be "
-        "available: ", liong::util::join(", ", submit_ty_queue_req.cmd_names));
+        "available: ", util::join(", ", submit_ty_queue_req.cmd_names));
     }
   }
 
@@ -376,7 +377,8 @@ Context create_ctxt(const ContextConfig& cfg) {
   for (const auto& dev_ext : dev_exts) {
     dev_ext_names.emplace_back(dev_ext.extensionName);
   }
-  liong::log::debug("enabled device extensions: ", liong::util::join(", ", dev_ext_names));
+  log::debug("enabled device extensions: ",
+    util::join(", ", dev_ext_names));
 
   VkDeviceCreateInfo dci {};
   dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -403,14 +405,14 @@ Context create_ctxt(const ContextConfig& cfg) {
 
   // Priority -> memory type.
   std::array<std::vector<uint32_t>, 4> mem_ty_idxs_by_host_access {
-    liong::util::arrange(mem_prop.memoryTypeCount),
-    liong::util::arrange(mem_prop.memoryTypeCount),
-    liong::util::arrange(mem_prop.memoryTypeCount),
-    liong::util::arrange(mem_prop.memoryTypeCount),
+    util::arrange(mem_prop.memoryTypeCount),
+    util::arrange(mem_prop.memoryTypeCount),
+    util::arrange(mem_prop.memoryTypeCount),
+    util::arrange(mem_prop.memoryTypeCount),
   };
   for (int host_access = 0; host_access < 4; ++host_access) {
     auto& mem_ty_idxs = mem_ty_idxs_by_host_access[host_access];
-    std::vector<uint32_t> priors = liong::util::map<uint32_t, uint32_t>(
+    std::vector<uint32_t> priors = util::map<uint32_t, uint32_t>(
       mem_ty_idxs,
       [&](const uint32_t& i) -> uint32_t {
         const auto& mem_ty = mem_prop.memoryTypes[i];
@@ -435,7 +437,7 @@ Context create_ctxt(const ContextConfig& cfg) {
   VkSampler fast_samp;
   VK_ASSERT << vkCreateSampler(dev, &sci, nullptr, &fast_samp);
 
-  liong::log::debug("created vulkan context '", cfg.label, "' on device #",
+  log::debug("created vulkan context '", cfg.label, "' on device #",
     cfg.dev_idx, ": ", physdev_descs[cfg.dev_idx]);
   return Context {
     dev, physdev, std::move(physdev_prop), std::move(submit_details),
@@ -447,7 +449,7 @@ void destroy_ctxt(Context& ctxt) {
   if (ctxt.dev != VK_NULL_HANDLE) {
     vkDestroySampler(ctxt.dev, ctxt.fast_samp, nullptr);
     vkDestroyDevice(ctxt.dev, nullptr);
-    liong::log::debug("destroyed vulkan context '", ctxt.ctxt_cfg.label, "'");
+    log::debug("destroyed vulkan context '", ctxt.ctxt_cfg.label, "'");
   }
   ctxt = {};
 }
@@ -514,14 +516,14 @@ Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg) {
 
   VK_ASSERT << vkBindBufferMemory(ctxt.dev, buf, devmem, 0);
 
-  liong::log::debug("created buffer '", buf_cfg.label, "'");
+  log::debug("created buffer '", buf_cfg.label, "'");
   return Buffer { &ctxt, devmem, buf, buf_cfg };
 }
 void destroy_buf(Buffer& buf) {
   if (buf.buf != VK_NULL_HANDLE) {
     vkDestroyBuffer(buf.ctxt->dev, buf.buf, nullptr);
     vkFreeMemory(buf.ctxt->dev, buf.devmem, nullptr);
-    liong::log::debug("destroyed buffer '", buf.buf_cfg.label, "'");
+    log::debug("destroyed buffer '", buf.buf_cfg.label, "'");
     buf = {};
   }
 }
@@ -538,15 +540,15 @@ void map_buf_mem(
 ) {
   VK_ASSERT << vkMapMemory(buf.buf->ctxt->dev, buf.buf->devmem, buf.offset,
     buf.size, 0, &mapped);
-  liong::log::debug("mapped buffer '", buf.buf->buf_cfg.label, "' from ",
-    buf.offset, " to ", buf.offset + buf.size);
+  log::debug("mapped buffer '", buf.buf->buf_cfg.label, "' from ", buf.offset,
+    " to ", buf.offset + buf.size);
 }
 void unmap_buf_mem(
   const BufferView& buf,
   void* mapped
 ) {
   vkUnmapMemory(buf.buf->ctxt->dev, buf.buf->devmem);
-  liong::log::debug("unmapped buffer '", buf.buf->buf_cfg.label, "'");
+  log::debug("unmapped buffer '", buf.buf->buf_cfg.label, "'");
 }
 
 
@@ -644,8 +646,8 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   }
   // KEEP THIS AT THE END.
   if (img_cfg.usage & L_IMAGE_USAGE_STAGING_BIT) {
-    liong::assert((img_cfg.usage & (~L_IMAGE_USAGE_STAGING_BIT)) == 0,
-      "staging image can only be used for transfer");
+    assert((img_cfg.usage & (~L_IMAGE_USAGE_STAGING_BIT)) == 0, "staging image "
+      "can only be used for transfer");
     usage |=
       VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -724,7 +726,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
     VK_ASSERT << vkCreateImageView(ctxt.dev, &ivci, nullptr, &img_view);
   }
 
-  liong::log::debug("created image '", img_cfg.label, "'");
+  log::debug("created image '", img_cfg.label, "'");
   uint32_t qfam_idx = ctxt.get_submit_ty_qfam_idx(init_submit_ty);
   return Image {
     &ctxt, devmem, img, img_view, img_cfg, is_staging_img
@@ -736,7 +738,7 @@ void destroy_img(Image& img) {
     vkDestroyImage(img.ctxt->dev, img.img, nullptr);
     vkFreeMemory(img.ctxt->dev, img.devmem, nullptr);
 
-    liong::log::debug("destroyed image '", img.img_cfg.label, "'");
+    log::debug("destroyed image '", img.img_cfg.label, "'");
     img = {};
   }
 }
@@ -768,7 +770,7 @@ VkFormat _make_depth_fmt(DepthFormat fmt) {
   if (fmt.nbit_depth == 32 && fmt.nbit_stencil == 8) {
     return VK_FORMAT_D32_SFLOAT_S8_UINT;
   }
-  liong::panic("unsupported depth format");
+  panic("unsupported depth format");
   return VK_FORMAT_UNDEFINED;
 }
 
@@ -850,7 +852,7 @@ DepthImage create_depth_img(
   VkImageView img_view;
   VK_ASSERT << vkCreateImageView(ctxt.dev, &ivci, nullptr, &img_view);
 
-  liong::log::info("created depth image '", depth_img_cfg.label, "'");
+  log::info("created depth image '", depth_img_cfg.label, "'");
   return DepthImage {
     &ctxt, devmem, (size_t)mr.size, img, img_view, depth_img_cfg
   };
@@ -861,8 +863,7 @@ void destroy_depth_img(DepthImage& depth_img) {
     vkDestroyImage(depth_img.ctxt->dev, depth_img.img, nullptr);
     vkFreeMemory(depth_img.ctxt->dev, depth_img.devmem, nullptr);
 
-    liong::log::info("destroyed depth image '", depth_img.depth_img_cfg.label,
-      "'");
+    log::info("destroyed depth image '", depth_img.depth_img_cfg.label, "'");
     depth_img = {};
   }
 }
@@ -892,8 +893,8 @@ void map_img_mem(
     sl.size, 0, &mapped);
   row_pitch = sl.rowPitch;
 
-  liong::log::debug("mapped image '", img.img->img_cfg.label, "' from (",
-    img.x_offset, ", ", img.y_offset, ") to (", img.x_offset + img.width, ", ",
+  log::debug("mapped image '", img.img->img_cfg.label, "' from (", img.x_offset,
+    ", ", img.y_offset, ") to (", img.x_offset + img.width, ", ",
     img.y_offset + img.height, ")");
 }
 void unmap_img_mem(
@@ -901,7 +902,7 @@ void unmap_img_mem(
   void* mapped
 ) {
   vkUnmapMemory(img.img->ctxt->dev, img.img->devmem);
-  liong::log::debug("unmapped image '", img.img->img_cfg.label, "'");
+  log::debug("unmapped image '", img.img->img_cfg.label, "'");
 }
 
 
@@ -938,7 +939,7 @@ VkDescriptorSetLayout _create_desc_set_layout(
       dslb.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
       break;
     default:
-      liong::panic("unexpected resource type");
+      panic("unexpected resource type");
     }
     desc_counter[dslb.descriptorType] += 1;
 
@@ -1031,7 +1032,7 @@ Task create_comp_task(
   VK_ASSERT << vkCreateComputePipelines(ctxt.dev, VK_NULL_HANDLE, 1, &cpci,
     nullptr, &pipe);
 
-  liong::log::debug("created compute task '", cfg.label, "'");
+  log::debug("created compute task '", cfg.label, "'");
   return Task {
     &ctxt, nullptr, desc_set_layout, pipe_layout, pipe,
     std::vector<ResourceType>(cfg.rsc_tys, cfg.rsc_tys + cfg.nrsc_ty),
@@ -1087,8 +1088,7 @@ VkRenderPass _create_pass(
     }
     case L_ATTACHMENT_TYPE_DEPTH:
     {
-      liong::assert(!sar.has_depth_attm,
-        "subpass can only have one depth attachment");
+      assert(!sar.has_depth_attm, "subpass can only have one depth attachment");
       const DepthImage& depth_img = *attm_cfg.depth_img;
       ar.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
       ad.format = _make_depth_fmt(depth_img.depth_img_cfg.fmt);
@@ -1098,7 +1098,7 @@ VkRenderPass _create_pass(
       sar.depth_attm_ref = std::move(ar);
       break;
     }
-    default: liong::panic();
+    default: panic();
     }
 
     ads.emplace_back(std::move(ad));
@@ -1146,18 +1146,18 @@ VkFramebuffer _create_framebuf(
   for (const AttachmentConfig& attm_cfg : attm_cfgs) {
     switch (attm_cfg.attm_ty) {
     case L_ATTACHMENT_TYPE_COLOR:
-      liong::assert(attm_cfg.color_img->img_cfg.width == width &&
+      assert(attm_cfg.color_img->img_cfg.width == width &&
         attm_cfg.color_img->img_cfg.height == height,
         "color attachment size mismatches framebuffer size");
       attm_img_views.emplace_back(attm_cfg.color_img->img_view);
       break;
     case L_ATTACHMENT_TYPE_DEPTH:
-      liong::assert(attm_cfg.depth_img->depth_img_cfg.width == width &&
+      assert(attm_cfg.depth_img->depth_img_cfg.width == width &&
         attm_cfg.depth_img->depth_img_cfg.height == height,
         "depth attachment size mismatches framebuffer size");
       attm_img_views.emplace_back(attm_cfg.depth_img->img_view);
       break;
-    default: liong::panic("unexpected attachment type");
+    default: panic("unexpected attachment type");
     }
   }
 
@@ -1200,11 +1200,11 @@ RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg) {
       clear_value.depthStencil.depth = 1.0f;
       clear_value.depthStencil.stencil = 0;
       break;
-    default: liong::panic();
+    default: panic();
     }
   }
 
-  liong::log::info("created render pass '", cfg.label, "'");
+  log::info("created render pass '", cfg.label, "'");
   return RenderPass {
     &ctxt, std::move(viewport), pass, framebuf, cfg, clear_values
   };
@@ -1212,7 +1212,7 @@ RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg) {
 void destroy_pass(RenderPass& pass) {
   vkDestroyFramebuffer(pass.ctxt->dev, pass.framebuf, nullptr);
   vkDestroyRenderPass(pass.ctxt->dev, pass.pass, nullptr);
-  liong::log::info("destroyed render pass '", pass.pass_cfg.label, "'");
+  log::info("destroyed render pass '", pass.pass_cfg.label, "'");
 }
 
 
@@ -1263,10 +1263,10 @@ Task create_graph_task(
       break;
     case L_VERTEX_INPUT_RATE_INSTANCE:
       vibd.inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
-      liong::panic("instanced draw is currently unsupported");
+      panic("instanced draw is currently unsupported");
       break;
     default:
-      liong::panic("unexpected vertex input rate");
+      panic("unexpected vertex input rate");
     }
 
     VkVertexInputAttributeDescription viad {};
@@ -1300,7 +1300,7 @@ Task create_graph_task(
     piasci.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     break;
   default:
-    liong::panic("unexpected topology (", cfg.topo, ")");
+    panic("unexpected topology (", cfg.topo, ")");
   }
   piasci.primitiveRestartEnable = VK_FALSE;
 
@@ -1382,7 +1382,7 @@ Task create_graph_task(
   VK_ASSERT << vkCreateGraphicsPipelines(ctxt.dev, VK_NULL_HANDLE, 1, &gpci,
     nullptr, &pipe);
 
-  liong::log::debug("created graphics task '", cfg.label, "'");
+  log::debug("created graphics task '", cfg.label, "'");
   return Task {
     &ctxt, &pass, desc_set_layout, pipe_layout, pipe,
     std::vector<ResourceType>(cfg.rsc_tys, cfg.rsc_tys + cfg.nrsc_ty),
@@ -1399,7 +1399,7 @@ void destroy_task(Task& task) {
     vkDestroyPipelineLayout(task.ctxt->dev, task.pipe_layout, nullptr);
     vkDestroyDescriptorSetLayout(task.ctxt->dev, task.desc_set_layout, nullptr);
 
-    liong::log::debug("destroyed task '", task.label, "'");
+    log::debug("destroyed task '", task.label, "'");
     task = {};
   }
 }
@@ -1408,7 +1408,7 @@ void destroy_task(Task& task) {
 
 ResourcePool create_rsc_pool(const Task& task) {
   if (task.desc_pool_sizes.size() == 0) {
-    liong::log::debug("created resource pool with no entry");
+    log::debug("created resource pool with no entry");
     return ResourcePool { &task, VK_NULL_HANDLE, VK_NULL_HANDLE };
   }
 
@@ -1432,13 +1432,13 @@ ResourcePool create_rsc_pool(const Task& task) {
   VkDescriptorSet desc_set;
   VK_ASSERT << vkAllocateDescriptorSets(dev, &dsai, &desc_set);
 
-  liong::log::debug("created resource pool");
+  log::debug("created resource pool");
   return ResourcePool { &task, desc_pool, desc_set };
 }
 void destroy_rsc_pool(ResourcePool& rsc_pool) {
   if (rsc_pool.desc_pool != VK_NULL_HANDLE) {
     vkDestroyDescriptorPool(rsc_pool.task->ctxt->dev, rsc_pool.desc_pool, nullptr);
-    liong::log::debug("destroyed resource pool");
+    log::debug("destroyed resource pool");
     rsc_pool = {};
   }
 }
@@ -1447,8 +1447,8 @@ void bind_pool_rsc(
   uint32_t idx,
   const BufferView& buf_view
 ) {
-  liong::assert(rsc_pool.desc_pool != VK_NULL_HANDLE,
-    "cannot bind to empty resource pool");
+  assert(rsc_pool.desc_pool != VK_NULL_HANDLE, "cannot bind to empty resource "
+    "pool");
 
   VkDescriptorBufferInfo dbi {};
   dbi.buffer = buf_view.buf->buf;
@@ -1468,12 +1468,12 @@ void bind_pool_rsc(
   case L_RESOURCE_TYPE_STORAGE_BUFFER:
     write_desc_set.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
     break;
-  default: liong::panic("unexpected buffer resource type");
+  default: panic("unexpected buffer resource type");
   }
   write_desc_set.pBufferInfo = &dbi;
 
   vkUpdateDescriptorSets(rsc_pool.task->ctxt->dev, 1, &write_desc_set, 0, nullptr);
-  liong::log::debug("bound pool resource #", idx, " to buffer '",
+  log::debug("bound pool resource #", idx, " to buffer '",
     buf_view.buf->buf_cfg.label, "'");
 }
 void bind_pool_rsc(
@@ -1481,8 +1481,8 @@ void bind_pool_rsc(
   uint32_t idx,
   const ImageView& img_view
 ) {
-  liong::assert(rsc_pool.desc_pool != VK_NULL_HANDLE,
-    "cannot bind to empty resource pool");
+  assert(rsc_pool.desc_pool != VK_NULL_HANDLE, "cannot bind to empty resource "
+    "pool");
 
   VkDescriptorImageInfo dii {};
   dii.imageView = img_view.img->img_view;
@@ -1502,12 +1502,12 @@ void bind_pool_rsc(
     write_desc_set.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
     dii.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
     break;
-  default: liong::panic("unexpected image resource type");
+  default: panic("unexpected image resource type");
   }
   write_desc_set.pImageInfo = &dii;
 
   vkUpdateDescriptorSets(rsc_pool.task->ctxt->dev, 1, &write_desc_set, 0, nullptr);
-  liong::log::debug("bound pool resource #", idx, " to image '",
+  log::debug("bound pool resource #", idx, " to image '",
     img_view.img->img_cfg.label, "'");
 }
 
@@ -1639,8 +1639,8 @@ VkCommandBuffer _get_cmdbuf(
   SubmitType submit_ty
 ) {
   if (submit_ty == L_SUBMIT_TYPE_ANY) {
-    liong::assert(!transact.submit_details.empty(),
-      "cannot infer submit type for submit-type-independent command");
+    assert(!transact.submit_details.empty(), "cannot infer submit type for "
+      "submit-type-independent command");
     submit_ty = transact.submit_details.back().submit_ty;
   }
   const auto& submit_detail = transact.ctxt->get_submit_detail(submit_ty);
@@ -1677,7 +1677,7 @@ void _record_cmd_set_submit_ty(
   SubmitType submit_ty = cmd.cmd_set_submit_ty.submit_ty;
   _get_cmdbuf(transact, submit_ty);
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::debug("command drain submit type is set");
+    log::debug("command drain submit type is set");
   }
 }
 void _record_cmd_inline_transact(
@@ -1696,7 +1696,7 @@ void _record_cmd_inline_transact(
     vkCmdExecuteCommands(cmdbuf, 1, &submit_detail.cmdbuf);
   }
 
-  liong::log::debug("scheduled inline transaction '",
+  log::debug("scheduled inline transaction '",
     cmd.cmd_inline_transact.transact->label, "'");
 }
 
@@ -1723,7 +1723,7 @@ void _record_cmd_copy_buf2img(TransactionLike& transact, const Command& cmd) {
   vkCmdCopyBufferToImage(cmdbuf, src.buf->buf, dst.img->img,
     VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bic);
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::debug("scheduled copy from buffer '", src.buf->buf_cfg.label,
+    log::debug("scheduled copy from buffer '", src.buf->buf_cfg.label,
       "' to image '", dst.img->img_cfg.label, "'");
   }
 }
@@ -1750,7 +1750,7 @@ void _record_cmd_copy_img2buf(TransactionLike& transact, const Command& cmd) {
   vkCmdCopyImageToBuffer(cmdbuf, src.img->img,
     VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst.buf->buf, 1, &bic);
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::debug("scheduled copy from image '", src.img->img_cfg.label,
+    log::debug("scheduled copy from image '", src.img->img_cfg.label,
       "' to buffer '", dst.buf->buf_cfg.label, "'");
   }
 }
@@ -1768,7 +1768,7 @@ void _record_cmd_copy_buf(TransactionLike& transact, const Command& cmd) {
 
   vkCmdCopyBuffer(cmdbuf, src.buf->buf, dst.buf->buf, 1, &bc);
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::debug("scheduled copy from buffer '", src.buf->buf_cfg.label,
+    log::debug("scheduled copy from buffer '", src.buf->buf_cfg.label,
       "' to buffer '", dst.buf->buf_cfg.label, "'");
   }
 }
@@ -1800,7 +1800,7 @@ void _record_cmd_copy_img(TransactionLike& transact, const Command& cmd) {
   vkCmdCopyImage(cmdbuf, src.img->img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
     dst.img->img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &ic);
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::debug("scheduled copy from image '", src.img->img_cfg.label,
+    log::debug("scheduled copy from image '", src.img->img_cfg.label,
       "' to image '", dst.img->img_cfg.label, "'");
   }
 }
@@ -1812,7 +1812,7 @@ void _record_cmd_dispatch(TransactionLike& transact, const Command& cmd) {
   const auto& nworkgrp = in.nworkgrp;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_COMPUTE);
 
-  //liong::log::warn("workgroup size is ignored; actual workgroup size is "
+  //log::warn("workgroup size is ignored; actual workgroup size is "
   //  "specified in shader");
   vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_COMPUTE, task.pipe);
   if (rsc_pool.desc_set != VK_NULL_HANDLE) {
@@ -1821,7 +1821,7 @@ void _record_cmd_dispatch(TransactionLike& transact, const Command& cmd) {
   }
   vkCmdDispatch(cmdbuf, nworkgrp.x, nworkgrp.y, nworkgrp.z);
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::debug("scheduled compute task '", task.label, "' for execution");
+    log::debug("scheduled compute task '", task.label, "' for execution");
   }
 }
 
@@ -1841,8 +1841,7 @@ void _record_cmd_draw(TransactionLike& transact, const Command& cmd) {
   vkCmdDraw(cmdbuf, in.nvert, in.ninst, 0, 0);
 
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::debug("scheduled graphics task '", in.task->label, "' for "
-      "execution");
+    log::debug("scheduled graphics task '", in.task->label, "' for execution");
   }
 }
 void _record_cmd_draw_indexed(TransactionLike& transact, const Command& cmd) {
@@ -1864,8 +1863,7 @@ void _record_cmd_draw_indexed(TransactionLike& transact, const Command& cmd) {
   vkCmdDrawIndexed(cmdbuf, in.nidx, in.ninst, 0, 0, 0);
 
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::debug("scheduled graphics task '", in.task->label, "' for "
-      "execution");
+    log::debug("scheduled graphics task '", in.task->label, "' for execution");
   }
 }
 
@@ -1881,7 +1879,7 @@ void _record_cmd_write_timestamp(
   vkCmdWriteTimestamp(cmdbuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, query_pool, 0);
 
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::debug("scheduled timestamp write");
+    log::debug("scheduled timestamp write");
   }
 }
 
@@ -1894,7 +1892,7 @@ void _make_buf_barrier_params(
   if (dev_access == 0) { return; }
 
   if (usage == 0) {
-    liong::panic("buffer barrier must be specified with a usage");
+    panic("buffer barrier must be specified with a usage");
   } else if (usage == L_BUFFER_USAGE_STAGING_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
       // Transfer source.
@@ -1905,21 +1903,21 @@ void _make_buf_barrier_params(
       access = VK_ACCESS_TRANSFER_WRITE_BIT;
       stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
     } else {
-      liong::panic("buffer used for staging can't be both read and written");
+      panic("buffer used for staging can't be both read and written");
     }
   } else if (usage == L_BUFFER_USAGE_VERTEX_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
       access = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
       stage = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
     } else {
-      liong::panic("buffer used for vertex input cannot be written");
+      panic("buffer used for vertex input cannot be written");
     }
   } else if (usage == L_BUFFER_USAGE_INDEX_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
       access = VK_ACCESS_INDEX_READ_BIT;
       stage = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
     } else {
-      liong::panic("buffer used for index input cannot be written");
+      panic("buffer used for index input cannot be written");
     }
   } else if (usage == L_BUFFER_USAGE_UNIFORM_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
@@ -1929,7 +1927,7 @@ void _make_buf_barrier_params(
         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
     } else {
-      liong::panic("buffer used for uniform cannot be written");
+      panic("buffer used for uniform cannot be written");
     }
   } else if (usage == L_BUFFER_USAGE_STORAGE_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
@@ -1949,7 +1947,7 @@ void _make_buf_barrier_params(
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
     }
   } else {
-    liong::panic("cannot make buffer barrier with a set of usage");
+    panic("cannot make buffer barrier with a set of usage");
   }
 }
 
@@ -1978,7 +1976,7 @@ void _make_img_barrier_src_params(
       stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
       layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     } else {
-      liong::panic("image used for staging can't be both read and written");
+      panic("image used for staging can't be both read and written");
       return;
     }
   } else if (usage == L_IMAGE_USAGE_ATTACHMENT_BIT) {
@@ -2002,7 +2000,7 @@ void _make_img_barrier_src_params(
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
       layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     } else {
-      liong::panic("image used for sampling cannot be written");
+      panic("image used for sampling cannot be written");
       return;
     }
   } else if (usage == L_IMAGE_USAGE_STORAGE_BIT) {
@@ -2034,11 +2032,11 @@ void _make_img_barrier_src_params(
       stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
       layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     } else {
-      liong::panic("image used for present cannot be written");
+      panic("image used for present cannot be written");
       return;
     }
   } else {
-    liong::panic("cannot make image barrier with a set of usage");
+    panic("cannot make image barrier with a set of usage");
     return;
   }
 }
@@ -2067,7 +2065,7 @@ void _make_img_barrier_dst_params(
       stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
       layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     } else {
-      liong::panic("image used for staging can't be both read and written");
+      panic("image used for staging can't be both read and written");
     }
   } else if (usage == L_IMAGE_USAGE_ATTACHMENT_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
@@ -2090,7 +2088,7 @@ void _make_img_barrier_dst_params(
         VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
       layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     } else {
-      liong::panic("image used for sampling cannot be written");
+      panic("image used for sampling cannot be written");
     }
   } else if (usage == L_IMAGE_USAGE_STORAGE_BIT) {
     if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
@@ -2121,11 +2119,11 @@ void _make_img_barrier_dst_params(
       stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
       layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
     } else {
-      liong::panic("image used for present cannot be written");
+      panic("image used for present cannot be written");
       return;
     }
   } else {
-    liong::panic("cannot make image barrier with a set of usage");
+    panic("cannot make image barrier with a set of usage");
   }
 }
 void _record_cmd_buf_barrier(
@@ -2167,7 +2165,7 @@ void _record_cmd_buf_barrier(
     1, &bmb,
     0, nullptr);
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::debug("scheduled buffer barrier");
+    log::debug("scheduled buffer barrier");
   }
 }
 void _record_cmd_img_barrier(
@@ -2218,12 +2216,12 @@ void _record_cmd_img_barrier(
     0, nullptr,
     1, &imb);
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::debug("scheduled image barrier");
+    log::debug("scheduled image barrier");
   }
 }
 
 void _record_cmd_begin_pass(TransactionLike& transact, const Command& cmd) {
-  liong::assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+  assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
   const auto& in = cmd.cmd_begin_pass;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
   const auto& pass = *in.pass;
@@ -2240,16 +2238,16 @@ void _record_cmd_begin_pass(TransactionLike& transact, const Command& cmd) {
     VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS;
   vkCmdBeginRenderPass(cmdbuf, &rpbi, sc);
 
-  liong::log::debug("scheduled render pass begin");
+  log::debug("scheduled render pass begin");
 }
 void _record_cmd_end_pass(TransactionLike& transact, const Command& cmd) {
-  liong::assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+  assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
   const auto& in = cmd.cmd_end_pass;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
 
   vkCmdEndRenderPass(cmdbuf);
 
-  liong::log::debug("scheduled render pass end");
+  log::debug("scheduled render pass end");
 }
 
 // TODO: (penguinliong) Check these pipeline stages.
@@ -2268,8 +2266,8 @@ void _make_depth_img_barrier_src_params(
     layout = VK_IMAGE_LAYOUT_UNDEFINED;
   }
   if (usage == L_DEPTH_IMAGE_USAGE_SAMPLED_BIT) {
-    liong::assert(dev_access == L_MEMORY_ACCESS_READ_BIT,
-      "sampled depth image cannot be written");
+    assert(dev_access == L_MEMORY_ACCESS_READ_BIT, "sampled depth image cannot "
+      "be written");
     access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
     stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
     layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
@@ -2284,7 +2282,7 @@ void _make_depth_img_barrier_src_params(
       layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     }
   } else {
-    liong::panic("cannot make image barrier with a set of usage");
+    panic("cannot make image barrier with a set of usage");
   }
 }
 void _make_depth_img_barrier_dst_params(
@@ -2302,8 +2300,8 @@ void _make_depth_img_barrier_dst_params(
     layout = VK_IMAGE_LAYOUT_UNDEFINED;
   }
   if (usage == L_DEPTH_IMAGE_USAGE_SAMPLED_BIT) {
-    liong::assert(dev_access == L_MEMORY_ACCESS_READ_BIT,
-      "sampled depth image cannot be written");
+    assert(dev_access == L_MEMORY_ACCESS_READ_BIT, "sampled depth image cannot "
+      "be written");
     access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
     stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
     layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
@@ -2318,7 +2316,7 @@ void _make_depth_img_barrier_dst_params(
       layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
     }
   } else {
-    liong::panic("cannot make image barrier with a set of usage");
+    panic("cannot make image barrier with a set of usage");
   }
 }
 void _record_cmd_depth_img_barrier(
@@ -2365,7 +2363,7 @@ void _record_cmd_depth_img_barrier(
     1, &imb);
 
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    liong::log::debug("schedule depth image barrier");
+    log::debug("schedule depth image barrier");
   }
 }
 
@@ -2418,7 +2416,7 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
     _record_cmd_depth_img_barrier(transact, cmd);
     break;
   default:
-    liong::log::warn("ignored unknown command: ", cmd.cmd_ty);
+    log::warn("ignored unknown command: ", cmd.cmd_ty);
     break;
   }
 }
@@ -2427,7 +2425,7 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
 
 CommandDrain create_cmd_drain(const Context& ctxt) {
   auto fence = _create_fence(ctxt);
-  liong::log::debug("created command drain");
+  log::debug("created command drain");
   return CommandDrain { &ctxt, {}, fence };
 }
 void destroy_cmd_drain(CommandDrain& cmd_drain) {
@@ -2435,7 +2433,7 @@ void destroy_cmd_drain(CommandDrain& cmd_drain) {
     _clear_transact_submit_detail(*cmd_drain.ctxt, cmd_drain.submit_details);
     vkDestroyFence(cmd_drain.ctxt->dev, cmd_drain.fence, nullptr);
     cmd_drain = {};
-    liong::log::debug("destroyed command drain");
+    log::debug("destroyed command drain");
   }
 }
 void submit_cmds(
@@ -2443,16 +2441,16 @@ void submit_cmds(
   const Command* cmds,
   size_t ncmd
 ) {
-  liong::assert(ncmd > 0, "cannot submit empty command buffer");
+  assert(ncmd > 0, "cannot submit empty command buffer");
 
   TransactionLike transact {};
   transact.ctxt = cmd_drain.ctxt;
   transact.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 
-  liong::Timer timer {};
+  util::Timer timer {};
   timer.tic();
   for (auto i = 0; i < ncmd; ++i) {
-    liong::log::debug("recording ", i, "th command");
+    log::debug("recording ", i, "th command");
     _record_cmd(transact, cmds[i]);
   }
   cmd_drain.submit_details = std::move(transact.submit_details);
@@ -2462,8 +2460,8 @@ void submit_cmds(
   _submit_transact_submit_detail(*cmd_drain.ctxt,
     cmd_drain.submit_details.back(), cmd_drain.fence);
 
-  liong::log::debug("submitted transaction for execution, command recording "
-    "took ", timer.us(), "us");
+  log::debug("submitted transaction for execution, command recording took ",
+    timer.us(), "us");
 }
 void _reset_cmd_drain(CommandDrain& cmd_drain) {
   _clear_transact_submit_detail(*cmd_drain.ctxt, cmd_drain.submit_details);
@@ -2472,13 +2470,13 @@ void _reset_cmd_drain(CommandDrain& cmd_drain) {
 void wait_cmd_drain(CommandDrain& cmd_drain) {
   const uint32_t SPIN_INTERVAL = 3000;
 
-  Timer wait_timer {};
+  util::Timer wait_timer {};
   wait_timer.tic();
   for (VkResult err;;) {
     err = vkWaitForFences(cmd_drain.ctxt->dev, 1, &cmd_drain.fence, VK_TRUE,
         SPIN_INTERVAL);
     if (err == VK_TIMEOUT) {
-      // liong::log::warn("timeout after 3000ns");
+      // log::warn("timeout after 3000ns");
     } else {
       VK_ASSERT << err;
       break;
@@ -2486,16 +2484,16 @@ void wait_cmd_drain(CommandDrain& cmd_drain) {
   }
   wait_timer.toc();
 
-  Timer reset_timer {};
+  util::Timer reset_timer {};
   reset_timer.tic();
 
   _reset_cmd_drain(cmd_drain);
 
   reset_timer.toc();
 
-  liong::log::debug("command drain returned after ", wait_timer.us(),
-    "us since the wait started (spin interval = ", SPIN_INTERVAL / 1000.0,
-    "us; resource recycling took ", reset_timer.us(), "us)");
+  log::debug("command drain returned after ", wait_timer.us(), "us since the "
+    "wait started (spin interval = ", SPIN_INTERVAL / 1000.0, "us; resource "
+    "recycling took ", reset_timer.us(), "us)");
 }
 
 
@@ -2514,13 +2512,13 @@ Transaction create_transact(
   }
   _end_cmdbuf(transact.submit_details.back());
 
-  liong::log::debug("created transaction");
+  log::debug("created transaction");
   return Transaction { label, &ctxt, std::move(transact.submit_details) };
 }
 void destroy_transact(Transaction& transact) {
   _clear_transact_submit_detail(*transact.ctxt, transact.submit_details);
   transact = {};
-  liong::log::debug("destroyed transaction");
+  log::debug("destroyed transaction");
 }
 
 
@@ -2534,14 +2532,14 @@ Timestamp create_timestamp(const Context& ctxt) {
   VkQueryPool query_pool;
   VK_ASSERT << vkCreateQueryPool(ctxt.dev, &qpci, nullptr, &query_pool);
 
-  liong::log::debug("created timestamp");
+  log::debug("created timestamp");
   return Timestamp { &ctxt, query_pool };
 }
 void destroy_timestamp(Timestamp& timestamp) {
   if (timestamp.query_pool != VK_NULL_HANDLE) {
     vkDestroyQueryPool(timestamp.ctxt->dev, timestamp.query_pool, nullptr);
     timestamp = {};
-    liong::log::debug("destroyed timestamp");
+    log::debug("destroyed timestamp");
   }
 }
 double get_timestamp_result_us(const Timestamp& timestamp) {
@@ -2567,3 +2565,5 @@ std::vector<uint8_t> load_code(const std::string& prefix) {
 } // namespace HAL_IMPL_NAMESPACE
 
 } // namespace liong
+
+#endif // GFT_WITH_VULKAN

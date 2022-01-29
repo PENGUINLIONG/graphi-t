@@ -2,17 +2,13 @@
 // @PENGUINLIONG
 #pragma once
 
+#if GFT_WITH_GLSLANG
+
 namespace liong {
 
 namespace glslang {
 
 void initialize();
-
-enum ShaderStage {
-  L_SHADER_STAGE_COMPUTE,
-  L_SHADER_STAGE_VERTEX,
-  L_SHADER_STAGE_FRAGMENT,
-};
 
 struct ComputeSpirvArtifact {
   std::vector<uint32_t> comp_spv;
@@ -48,3 +44,5 @@ GraphicsSpirvArtifact compile_graph_hlsl(
 } // namespace glslang
 
 } // namespace liong
+
+#endif // GFT_WITH_GLSLANG
