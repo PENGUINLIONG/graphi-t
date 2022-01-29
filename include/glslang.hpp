@@ -10,12 +10,6 @@ namespace glslang {
 
 void initialize();
 
-enum ShaderStage {
-  L_SHADER_STAGE_COMPUTE,
-  L_SHADER_STAGE_VERTEX,
-  L_SHADER_STAGE_FRAGMENT,
-};
-
 struct ComputeSpirvArtifact {
   std::vector<uint32_t> comp_spv;
   size_t ubo_size;

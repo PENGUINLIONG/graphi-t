@@ -12,6 +12,12 @@ namespace liong {
 namespace glslang {
 
 void initialize() {
+  static bool is_initialized = false;
+  if (is_initialized) {
+    log::debug("ignored redundant glslang module initialization");
+    return;
+  }
+
   liong::assert(::glslang::InitializeProcess(), "cannot initialize glslang");
   ::glslang::Version glslang_ver = ::glslang::GetVersion();
   liong::log::info("glslang version: ", glslang_ver.major, ".",
@@ -19,6 +25,8 @@ void initialize() {
 
   const char* glsl_ver_str = ::glslang::GetGlslVersionString();
   liong::log::info("supported glsl version: ", glsl_ver_str);
+
+  is_initialized = true;
 }
 
 
