@@ -21,24 +21,12 @@ Context::~Context() {
   }
 }
 
-Task Context::create_comp_task(
-  const std::string& label,
-  const std::string& entry_point,
-  const void* code,
-  const size_t code_size,
-  const DispatchSize& workgrp_size,
-  const std::vector<ResourceType>& rsc_tys
-) const {
-  ComputeTaskConfig comp_task_cfg {};
-  comp_task_cfg.label = label;
-  comp_task_cfg.entry_name = entry_point.c_str();
-  comp_task_cfg.code = code;
-  comp_task_cfg.code_size = code_size;
-  comp_task_cfg.rsc_tys = rsc_tys;
-  comp_task_cfg.workgrp_size = workgrp_size;
-  return HAL_IMPL_NAMESPACE::create_comp_task(*inner, comp_task_cfg);
+ComputeTaskBuilder Context::build_comp_task(const std::string& label) const {
+  return ComputeTaskBuilder(*this, label);
 }
-
+RenderPassBuilder Context::build_pass(const std::string& label) const {
+  return RenderPassBuilder(*this, label);
+}
 
 
 Buffer Context::create_buf(
@@ -346,49 +334,14 @@ RenderPass::RenderPass(const Context& ctxt, const RenderPassConfig& cfg) :
 RenderPass::RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::RenderPass>(inner)) {}
 RenderPass::~RenderPass() { HAL_IMPL_NAMESPACE::destroy_pass(*inner); }
-RenderPass RenderPassBuilder::build(const Context& ctxt) {
-  return create_pass(ctxt, inner);
+RenderPass RenderPassBuilder::build() {
+  return create_pass(parent, inner);
 }
 
-RenderPass Context::create_pass(
-  const std::string& label,
-  const std::vector<AttachmentConfig>& attm_cfgs,
-  uint32_t width,
-  uint32_t height
+GraphicsTaskBuilder RenderPass::build_graph_task(
+  const std::string& label
 ) const {
-  RenderPassConfig pass_cfg {};
-  pass_cfg.label = label;
-  pass_cfg.attm_cfgs = attm_cfgs;
-  pass_cfg.width = width;
-  pass_cfg.height = height;
-  return HAL_IMPL_NAMESPACE::create_pass(*inner, pass_cfg);
-}
-
-Task RenderPass::create_graph_task(
-  const std::string& label,
-  const std::string& vert_entry_point,
-  const void* vert_code,
-  const size_t vert_code_size,
-  const std::string& frag_entry_point,
-  const void* frag_code,
-  const size_t frag_code_size,
-  const VertexInput* vert_inputs,
-  size_t nvert_input,
-  Topology topo,
-  const std::vector<ResourceType>& rsc_tys
-) const {
-  GraphicsTaskConfig graph_task_cfg {};
-  graph_task_cfg.label = label;
-  graph_task_cfg.vert_entry_name = vert_entry_point.c_str();
-  graph_task_cfg.vert_code = vert_code;
-  graph_task_cfg.vert_code_size = vert_code_size;
-  graph_task_cfg.frag_entry_name = frag_entry_point.c_str();
-  graph_task_cfg.frag_code = frag_code;
-  graph_task_cfg.frag_code_size = frag_code_size;
-  graph_task_cfg.vert_inputs = std::vector<VertexInput>(vert_inputs, vert_inputs + nvert_input);
-  graph_task_cfg.topo = topo;
-  graph_task_cfg.rsc_tys = rsc_tys;
-  return HAL_IMPL_NAMESPACE::create_graph_task(*inner, graph_task_cfg);
+  return GraphicsTaskBuilder(*this, label);
 }
 
 
@@ -403,11 +356,11 @@ Task::~Task() {
     destroy_task(*inner);
   }
 }
-Task ComputeTaskBuilder::build(const Context& ctxt) {
-  return create_comp_task(ctxt, inner);
+Task ComputeTaskBuilder::build() {
+  return create_comp_task(parent, inner);
 }
-Task GraphicsTaskBuilder::build(const RenderPass& pass) {
-  return create_graph_task(pass, inner);
+Task GraphicsTaskBuilder::build() {
+  return create_graph_task(parent, inner);
 }
 
 

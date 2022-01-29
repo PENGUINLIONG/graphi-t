@@ -123,10 +123,10 @@ void guarded_main() {
 
   scoped::Context ctxt("ctxt", 0);
 
-  scoped::Task task = scoped::ComputeTaskBuilder("comp_task")
+  scoped::Task task = ctxt.build_comp_task("comp_task")
     .comp(art.comp_spv)
     .rsc(L_RESOURCE_TYPE_STORAGE_BUFFER)
-    .build(ctxt);
+    .build();
 
   scoped::Buffer buf = ctxt.create_storage_buf("buf", 16 * sizeof(float));
 
@@ -260,19 +260,19 @@ void guarded_main2() {
 
 
 
-  scoped::RenderPass pass = scoped::RenderPassBuilder("pass")
+  scoped::RenderPass pass = ctxt.build_pass("pass")
     .width(FRAMEBUF_WIDTH)
     .height(FRAMEBUF_HEIGHT)
     .clear_store_attm(out_img)
     .clear_store_attm(zbuf)
-    .build(ctxt);
+    .build();
 
-  scoped::Task task = scoped::GraphicsTaskBuilder("graph_task")
+  scoped::Task task = pass.build_graph_task("graph_task")
     .vert(art.vert_spv)
     .frag(art.frag_spv)
     .per_vert_input(L_FORMAT_R32G32B32A32_SFLOAT)
     .rsc(L_RESOURCE_TYPE_UNIFORM_BUFFER)
-    .build(pass);
+    .build();
 
   scoped::ResourcePool rsc_pool = task.create_rsc_pool();
   rsc_pool.bind(0, ubo.view());
