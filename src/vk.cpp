@@ -1,13 +1,13 @@
+#if GFT_WITH_VULKAN
+
 #include <map>
 #include <set>
 #include <algorithm>
-#include "vk.hpp"
+#include "vk.hpp" // Defines `HAL_IMPL_NAMESPACE`.
 #include "assert.hpp"
 #include "util.hpp"
 #include "log.hpp"
-#define HAL_IMPL_NAMESPACE vk
-#include "hal/scoped-hal-impl.hpp"
-#undef HAL_IMPL_NAMESPACE
+#include "hal/scoped-hal-impl.hpp" // `HAL_IMPL_AMESPACE` used here.
 
 namespace liong {
 
@@ -32,6 +32,8 @@ VkException::VkException(VkResult code) {
 }
 
 const char* VkException::what() const noexcept { return msg.c_str(); }
+
+#define VK_ASSERT (::liong::vk::VkAssert{})
 
 
 
@@ -2566,3 +2568,5 @@ std::vector<uint8_t> load_code(const std::string& prefix) {
 } // namespace HAL_IMPL_NAMESPACE
 
 } // namespace liong
+
+#endif // GFT_WITH_VULKAN

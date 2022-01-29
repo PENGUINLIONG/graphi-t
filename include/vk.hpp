@@ -1,6 +1,9 @@
 // # Vulkan implementation of HAL
 // @PENGUINLIONG
 #pragma once
+
+#if GFT_WITH_VULKAN
+
 #include <array>
 #include <map>
 #include <chrono>
@@ -25,7 +28,6 @@ struct VkAssert {
     return *this;
   }
 };
-#define VK_ASSERT (::liong::vk::VkAssert{})
 
 
 
@@ -180,3 +182,5 @@ struct Timestamp {
 } // namespace vk
 
 } // namespace liong
+
+#endif // GFT_WITH_VULKAN

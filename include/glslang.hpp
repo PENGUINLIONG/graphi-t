@@ -2,6 +2,8 @@
 // @PENGUINLIONG
 #pragma once
 
+#if GFT_WITH_GLSLANG
+
 namespace liong {
 
 namespace glslang {
@@ -48,3 +50,5 @@ GraphicsSpirvArtifact compile_graph_hlsl(
 } // namespace glslang
 
 } // namespace liong
+
+#endif // GFT_WITH_GLSLANG
