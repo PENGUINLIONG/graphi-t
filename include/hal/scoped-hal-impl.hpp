@@ -132,10 +132,6 @@ Timestamp Context::create_timestamp() const {
 
 
 
-Buffer::Buffer(const Context& ctxt, const BufferConfig& cfg) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Buffer>(
-    create_buf(*ctxt.inner, cfg))),
-  dont_destroy(false) {}
 Buffer::Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::Buffer>(inner)),
   dont_destroy(false) {}
@@ -150,10 +146,6 @@ Buffer BufferBuilder::build() {
 
 
 
-Image::Image(const Context& ctxt, const ImageConfig& cfg) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Image>(
-    create_img(*ctxt.inner, cfg))),
-  dont_destroy(false) {}
 Image::Image(HAL_IMPL_NAMESPACE::Image&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::Image>(inner)),
   dont_destroy(false) {}
@@ -168,9 +160,6 @@ Image ImageBuilder::build() {
 
 
 
-DepthImage::DepthImage(const Context& ctxt, const DepthImageConfig& cfg) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::DepthImage>(
-    create_depth_img(*ctxt.inner, cfg))) {}
 DepthImage::DepthImage(HAL_IMPL_NAMESPACE::DepthImage&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::DepthImage>(inner)) {}
 DepthImage::~DepthImage() { HAL_IMPL_NAMESPACE::destroy_depth_img(*inner); }
@@ -180,8 +169,6 @@ DepthImage DepthImageBuilder::build() {
 
 
 
-RenderPass::RenderPass(const Context& ctxt, const RenderPassConfig& cfg) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::RenderPass>(create_pass(ctxt, cfg))) {}
 RenderPass::RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::RenderPass>(inner)) {}
 RenderPass::~RenderPass() { HAL_IMPL_NAMESPACE::destroy_pass(*inner); }
@@ -197,9 +184,6 @@ GraphicsTaskBuilder RenderPass::build_graph_task(
 
 
 
-Task::Task(const Context& ctxt, const ComputeTaskConfig& cfg) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Task>(
-    create_comp_task(*ctxt.inner, cfg))) {}
 Task::Task(HAL_IMPL_NAMESPACE::Task&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::Task>(std::move(inner))) {}
 Task::~Task() {

@@ -149,7 +149,6 @@ struct Task {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Task> inner;
 
   Task() = default;
-  Task(const Context& ctxt, const ComputeTaskConfig& cfg);
   Task(HAL_IMPL_NAMESPACE::Task&& inner);
   Task(Task&&) = default;
   ~Task();
@@ -307,7 +306,6 @@ struct Image {
   bool dont_destroy;
 
   Image() = default;
-  Image(const Context& ctxt, const ImageConfig& cfg);
   Image(HAL_IMPL_NAMESPACE::Image&& inner);
   Image(Image&&) = default;
   ~Image();
@@ -425,7 +423,6 @@ struct ImageBuilder {
 struct DepthImage {
   std::unique_ptr<HAL_IMPL_NAMESPACE::DepthImage> inner;
 
-  DepthImage(const Context& ctxt, const DepthImageConfig& cfg);
   DepthImage(HAL_IMPL_NAMESPACE::DepthImage&& inner);
   DepthImage(DepthImage&&) = default;
   ~DepthImage();
@@ -512,7 +509,6 @@ struct Buffer {
   bool dont_destroy;
 
   Buffer() = default;
-  Buffer(const Context& ctxt, const BufferConfig& cfg);
   Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner);
   Buffer(Buffer&&) = default;
   ~Buffer();
@@ -619,7 +615,6 @@ struct RenderPass {
 public:
   std::unique_ptr<HAL_IMPL_NAMESPACE::RenderPass> inner;
 
-  RenderPass(const Context& ctxt, const RenderPassConfig& cfg);
   RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner);
   RenderPass(RenderPass&&) = default;
   ~RenderPass();
