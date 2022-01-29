@@ -291,13 +291,31 @@ struct MappedImage {
     view(std::exchange(x.view, {})) {}
   ~MappedImage();
 
+  constexpr void* data() {
+    return buf == nullptr ? mapped : buf;
+  }
+  constexpr const void* data() const {
+    return buf == nullptr ? mapped : buf;
+  }
+
   template<typename T, typename _ = std::enable_if_t<std::is_pointer<T>::value>>
   inline operator T() const {
-    if (buf == nullptr) {
-      return (T)mapped;
-    } else {
-      return (T)buf;
-    }
+    return (T)data();
+  }
+
+  inline void read(void* dst, size_t size) {
+    std::memcpy(dst, data(), size);
+  }
+  template<typename T>
+  inline void read(std::vector<T>& src) {
+    read(src.data(), src.size() * sizeof(T));
+  }
+  inline void write(const void* src, size_t size) {
+    std::memcpy(data(), src, size);
+  }
+  template<typename T>
+  inline void write(const std::vector<T>& src) {
+    write(src.data(), src.size() * sizeof(T));
   }
 };
 
@@ -346,6 +364,12 @@ struct Image {
   }
   inline MappedImage map(MemoryAccess map_access) const {
     return MappedImage(view(), map_access);
+  }
+  inline MappedImage map_read() const {
+    return map(L_MEMORY_ACCESS_READ_BIT);
+  }
+  inline MappedImage map_write() const {
+    return map(L_MEMORY_ACCESS_WRITE_BIT);
   }
 };
 struct ImageBuilder {

@@ -164,6 +164,19 @@ void guarded_main() {
     liong::log::info("dbuf[", i, "] = ", dbuf[i]);
   }
 
+  std::vector<float> pattern;
+  {
+    pattern.resize(7 * 7 * 4);
+    for (int i = 0; i < 7; ++i) {
+      for (int j = i; j < 7; ++j) {
+        pattern[(i * 7 + j) * 4 + 0] = 1.0f;
+        pattern[(i * 7 + j) * 4 + 1] = 0.0f;
+        pattern[(i * 7 + j) * 4 + 2] = 1.0f;
+        pattern[(i * 7 + j) * 4 + 3] = 1.0f;
+      }
+    }
+  }
+
   scoped::Image map_test_img = ctxt.build_img("map_test_img")
     .width(7)
     .height(7)
@@ -171,20 +184,9 @@ void guarded_main() {
     .streaming()
     .read_back()
     .build();
+  map_test_img.map_write().write(pattern);
   {
-    scoped::MappedImage mapped = map_test_img.map(L_MEMORY_ACCESS_WRITE_BIT);
-    float* in_data = (float*)mapped;
-    for (int i = 0; i < 7; ++i) {
-      for (int j = i; j < 7; ++j) {
-        in_data[(i * 7 + j) * 4 + 0] = 1.0f;
-        in_data[(i * 7 + j) * 4 + 1] = 0.0f;
-        in_data[(i * 7 + j) * 4 + 2] = 1.0f;
-        in_data[(i * 7 + j) * 4 + 3] = 1.0f;
-      }
-    }
-  }
-  {
-    scoped::MappedImage mapped = map_test_img.map(L_MEMORY_ACCESS_READ_BIT);
+    scoped::MappedImage mapped = map_test_img.map_read();
     const float* out_data = (const float*)mapped;
     liong::util::save_bmp(out_data, 7, 7, "map_test.bmp");
   }
