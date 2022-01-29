@@ -22,19 +22,17 @@ inline void assert(bool pred, const TArgs& ... args) {
   }
 #endif
 }
-[[noreturn]]
+
 template<typename ... TArgs>
-inline void panic(const TArgs& ... args) {
+[[noreturn]] inline void panic(const TArgs& ... args) {
   assert<TArgs ...>(false, args ...);
 }
-[[noreturn]]
 template<typename ... TArgs>
-inline void unreachable(const TArgs& ... args) {
+[[noreturn]] inline void unreachable(const TArgs& ... args) {
   assert<const char*, TArgs ...>(false, "reached unreachable code: ", args ...);
 }
-[[noreturn]]
-inline void unimplemented() {
-  assert<const char*, TArgs ...>(false, "reached unimplemented path");
+[[noreturn]] inline void unimplemented() {
+  assert<const char*>(false, "reached unimplemented path");
 }
 
 } // namespace liong

@@ -5,7 +5,6 @@
 #include "assert.hpp"
 #include "util.hpp"
 #include "log.hpp"
-#include "timer.hpp"
 #define HAL_IMPL_NAMESPACE vk
 #include "hal/scoped-hal-impl.hpp"
 #undef HAL_IMPL_NAMESPACE
@@ -2449,7 +2448,7 @@ void submit_cmds(
   transact.ctxt = cmd_drain.ctxt;
   transact.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
 
-  liong::Timer timer {};
+  util::Timer timer {};
   timer.tic();
   for (auto i = 0; i < ncmd; ++i) {
     liong::log::debug("recording ", i, "th command");
@@ -2472,7 +2471,7 @@ void _reset_cmd_drain(CommandDrain& cmd_drain) {
 void wait_cmd_drain(CommandDrain& cmd_drain) {
   const uint32_t SPIN_INTERVAL = 3000;
 
-  Timer wait_timer {};
+  util::Timer wait_timer {};
   wait_timer.tic();
   for (VkResult err;;) {
     err = vkWaitForFences(cmd_drain.ctxt->dev, 1, &cmd_drain.fence, VK_TRUE,
@@ -2486,7 +2485,7 @@ void wait_cmd_drain(CommandDrain& cmd_drain) {
   }
   wait_timer.toc();
 
-  Timer reset_timer {};
+  util::Timer reset_timer {};
   reset_timer.tic();
 
   _reset_cmd_drain(cmd_drain);
