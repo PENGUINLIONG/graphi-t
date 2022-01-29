@@ -350,6 +350,78 @@ struct Image {
     return MappedImage(view(), map_access);
   }
 };
+struct ImageBuilder {
+  using Self = ImageBuilder;
+
+  const HAL_IMPL_NAMESPACE::Context& parent;
+  ImageConfig inner;
+
+  ImageBuilder(
+    const HAL_IMPL_NAMESPACE::Context& ctxt,
+    const std::string& label = ""
+  ) : parent(ctxt), inner() {
+    inner.label = label;
+    inner.width = 1;
+    inner.height = 1;
+  }
+
+  inline Self& host_access(MemoryAccess access) {
+    inner.host_access |= access;
+    return *this;
+  }
+  inline Self& dev_access(MemoryAccess access) {
+    inner.dev_access |= access;
+    return *this;
+  }
+  inline Self& width(uint32_t width) {
+    inner.width = width;
+    return *this;
+  }
+  inline Self& height(uint32_t height) {
+    inner.height = height;
+    return *this;
+  }
+  inline Self& fmt(PixelFormat fmt) {
+    inner.fmt = fmt;
+    return *this;
+  }
+  inline Self& usage(ImageUsage usage) {
+    inner.usage |= usage;
+    return *this;
+  }
+
+  inline Self& streaming() {
+    return usage(L_IMAGE_USAGE_STAGING_BIT)
+      .host_access(L_MEMORY_ACCESS_WRITE_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+  }
+  inline Self& read_back() {
+    return usage(L_IMAGE_USAGE_STAGING_BIT)
+      .host_access(L_MEMORY_ACCESS_READ_BIT)
+      .dev_access(L_MEMORY_ACCESS_WRITE_BIT);
+  }
+  inline Self& sampled() {
+    return usage(L_IMAGE_USAGE_SAMPLED_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+  }
+  inline Self& storage() {
+    return usage(L_IMAGE_USAGE_STORAGE_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT);
+  }
+  inline Self& attachment() {
+    return usage(L_IMAGE_USAGE_ATTACHMENT_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT);
+  }
+  inline Self& present() {
+    return usage(L_IMAGE_USAGE_PRESENT_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+  }
+
+  Image build();
+};
+
+
+
 struct DepthImage {
   std::unique_ptr<HAL_IMPL_NAMESPACE::DepthImage> inner;
 
@@ -368,6 +440,47 @@ struct DepthImage {
   inline const DepthImageConfig& cfg() const {
     return get_depth_img_cfg(*inner);
   }
+};
+struct DepthImageBuilder {
+  using Self = DepthImageBuilder;
+
+  const HAL_IMPL_NAMESPACE::Context& parent;
+  DepthImageConfig inner;
+
+  DepthImageBuilder(
+    const HAL_IMPL_NAMESPACE::Context& ctxt,
+    const std::string& label = ""
+  ) : parent(ctxt), inner() {
+    inner.label = label;
+    inner.width = 1;
+    inner.height = 1;
+  }
+
+  inline Self& width(uint32_t width) {
+    inner.width = width;
+    return *this;
+  }
+  inline Self& height(uint32_t height) {
+    inner.height = height;
+    return *this;
+  }
+  inline Self& fmt(DepthFormat fmt) {
+    inner.fmt = fmt;
+    return *this;
+  }
+  inline Self& usage(DepthImageUsage usage) {
+    inner.usage |= usage;
+    return *this;
+  }
+
+  inline Self& sampled() {
+    return usage(L_IMAGE_USAGE_SAMPLED_BIT);
+  }
+  inline Self& attachment() {
+    return usage(L_IMAGE_USAGE_ATTACHMENT_BIT);
+  }
+
+  DepthImage build();
 };
 
 
@@ -438,11 +551,11 @@ struct Buffer {
 struct BufferBuilder {
   using Self = BufferBuilder;
 
-  const Context& parent;
+  const HAL_IMPL_NAMESPACE::Context& parent;
   BufferConfig inner;
 
   BufferBuilder(
-    const Context& ctxt,
+    const HAL_IMPL_NAMESPACE::Context& ctxt,
     const std::string& label = ""
   ) : parent(ctxt), inner() {
     inner.label = label;
@@ -609,51 +722,8 @@ public:
   ComputeTaskBuilder build_comp_task(const std::string& label = "") const;
   RenderPassBuilder build_pass(const std::string& label = "") const;
   BufferBuilder build_buf(const std::string& label = "") const;
-
-  Image create_img(
-    const std::string& label,
-    ImageUsage usage,
-    size_t width,
-    size_t height,
-    PixelFormat fmt
-  ) const;
-  Image create_staging_img(
-    const std::string& label,
-    size_t width,
-    size_t height,
-    PixelFormat fmt
-  ) const;
-  Image create_sampled_img(
-    const std::string& label,
-    size_t width,
-    size_t height,
-    PixelFormat fmt
-  ) const;
-  Image create_storage_img(
-    const std::string& label,
-    size_t width,
-    size_t height,
-    PixelFormat fmt
-  ) const;
-  Image create_attm_img(
-    const std::string& label,
-    size_t width,
-    size_t height,
-    PixelFormat fmt
-  ) const;
-  DepthImage create_depth_img(
-    const std::string& label,
-    DepthImageUsage usage,
-    uint32_t width,
-    uint32_t height,
-    DepthFormat depth_fmt
-  ) const;
-  DepthImage create_depth_img(
-    const std::string& label,
-    uint32_t width,
-    uint32_t height,
-    DepthFormat depth_fmt
-  ) const;
+  ImageBuilder build_img(const std::string& label = "") const;
+  DepthImageBuilder build_depth_img(const std::string& label = "") const;
 
   Transaction create_transact(
     const std::string& label,

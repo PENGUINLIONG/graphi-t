@@ -164,7 +164,13 @@ void guarded_main() {
     liong::log::info("dbuf[", i, "] = ", dbuf[i]);
   }
 
-  scoped::Image map_test_img = ctxt.create_staging_img("map_test_img", 7, 7, L_FORMAT_R32G32B32A32_SFLOAT);
+  scoped::Image map_test_img = ctxt.build_img("map_test_img")
+    .width(7)
+    .height(7)
+    .fmt(L_FORMAT_R32G32B32A32_SFLOAT)
+    .streaming()
+    .read_back()
+    .build();
   {
     scoped::MappedImage mapped = map_test_img.map(L_MEMORY_ACCESS_WRITE_BIT);
     float* in_data = (float*)mapped;
@@ -270,10 +276,18 @@ void guarded_main2() {
   }
 
   ext::DeviceTimer dev_timer(ctxt);
-  scoped::DepthImage zbuf = ctxt.create_depth_img("zbuf", 4, 4,
-    L_DEPTH_FORMAT_D16_S0);
-  scoped::Image out_img = ctxt.create_attm_img("attm", 4, 4,
-    L_FORMAT_R32G32B32A32_SFLOAT);
+  scoped::DepthImage zbuf = ctxt.build_depth_img("zbuf")
+    .width(4)
+    .height(4)
+    .fmt(L_DEPTH_FORMAT_D16_S0)
+    .attachment()
+    .build();
+  scoped::Image out_img = ctxt.build_img("attm")
+    .width(4)
+    .height(4)
+    .fmt(L_FORMAT_R32G32B32A32_SFLOAT)
+    .attachment()
+    .build();
 
 
 

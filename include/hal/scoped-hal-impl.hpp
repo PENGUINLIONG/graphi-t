@@ -30,97 +30,11 @@ RenderPassBuilder Context::build_pass(const std::string& label) const {
 BufferBuilder Context::build_buf(const std::string& label) const {
   return BufferBuilder(*this, label);
 }
-
-Image Context::create_img(
-  const std::string& label,
-  ImageUsage usage,
-  size_t height,
-  size_t width,
-  PixelFormat fmt
-) const {
-  MemoryAccess host_access = 0;
-  MemoryAccess dev_access = 0;
-  if (usage & L_IMAGE_USAGE_STAGING_BIT) {
-    host_access |= L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT;
-    dev_access |= L_MEMORY_ACCESS_READ_BIT; 
-  }
-  if (usage & L_IMAGE_USAGE_SAMPLED_BIT) {
-    dev_access |= L_MEMORY_ACCESS_READ_BIT;
-  }
-  if (usage & L_IMAGE_USAGE_STORAGE_BIT) {
-    dev_access |= L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT;
-  }
-  if (usage & L_IMAGE_USAGE_ATTACHMENT_BIT) {
-    dev_access |= L_MEMORY_ACCESS_WRITE_BIT;
-  }
-
-  ImageConfig img_cfg {};
-  img_cfg.label = label;
-  img_cfg.host_access = host_access;
-  img_cfg.dev_access = dev_access;
-  img_cfg.height = height;
-  img_cfg.width = width;
-  img_cfg.fmt = fmt;
-  img_cfg.usage = usage;
-  return HAL_IMPL_NAMESPACE::create_img(*inner, img_cfg);
+ImageBuilder Context::build_img(const std::string& label) const {
+  return ImageBuilder(*this, label);
 }
-Image Context::create_staging_img(
-  const std::string& label,
-  size_t height,
-  size_t width,
-  PixelFormat fmt
-) const {
-  return create_img(label, L_IMAGE_USAGE_STAGING_BIT, height, width, fmt);
-}
-Image Context::create_sampled_img(
-  const std::string& label,
-  size_t height,
-  size_t width,
-  PixelFormat fmt
-) const {
-  return create_img(label, L_IMAGE_USAGE_SAMPLED_BIT, height, width, fmt);
-}
-Image Context::create_storage_img(
-  const std::string& label,
-  size_t height,
-  size_t width,
-  PixelFormat fmt
-) const {
-  return create_img(label, L_IMAGE_USAGE_STORAGE_BIT, height, width, fmt);
-}
-Image Context::create_attm_img(
-  const std::string& label,
-  size_t height,
-  size_t width,
-  PixelFormat fmt
-) const {
-  return create_img(label, L_IMAGE_USAGE_ATTACHMENT_BIT, height, width, fmt);
-}
-
-DepthImage Context::create_depth_img(
-    const std::string& label,
-    DepthImageUsage usage,
-    uint32_t width,
-    uint32_t height,
-    DepthFormat depth_fmt
-) const {
-  DepthImageConfig depth_img_cfg {};
-  depth_img_cfg.label = label;
-  depth_img_cfg.width = width;
-  depth_img_cfg.height = height;
-  depth_img_cfg.fmt = depth_fmt;
-  depth_img_cfg.usage = usage;
-  return HAL_IMPL_NAMESPACE::create_depth_img(*inner, depth_img_cfg);
-}
-DepthImage Context::create_depth_img(
-    const std::string& label,
-    uint32_t width,
-    uint32_t height,
-    DepthFormat depth_fmt
-) const {
-  DepthImageUsage usage =
-    L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT | L_DEPTH_IMAGE_USAGE_SAMPLED_BIT;
-  return create_depth_img(label, usage, width, height, depth_fmt);
+DepthImageBuilder Context::build_depth_img(const std::string& label) const {
+  return DepthImageBuilder(*this, label);
 }
 
 void _copy_img_tile(
@@ -248,6 +162,9 @@ Image::~Image() {
     HAL_IMPL_NAMESPACE::destroy_img(*inner);
   }
 }
+Image ImageBuilder::build() {
+  return create_img(parent, inner);
+}
 
 
 
@@ -257,6 +174,9 @@ DepthImage::DepthImage(const Context& ctxt, const DepthImageConfig& cfg) :
 DepthImage::DepthImage(HAL_IMPL_NAMESPACE::DepthImage&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::DepthImage>(inner)) {}
 DepthImage::~DepthImage() { HAL_IMPL_NAMESPACE::destroy_depth_img(*inner); }
+DepthImage DepthImageBuilder::build() {
+  return create_depth_img(parent, inner);
+}
 
 
 
