@@ -18,7 +18,6 @@ namespace util {
 
 bool starts_with(const std::string& start, const std::string& str);
 bool ends_with(const std::string& end, const std::string& str);
-std::string join(const std::string& sep, const std::vector<std::string>& segs);
 std::vector<std::string> split(char sep, const std::string& str);
 std::string trim(const std::string& str);
 
@@ -44,6 +43,16 @@ struct format_impl_t<T, TArgs ...> {
     const TArgs& ... others
   ) {
     format_impl_t<T>::format_impl(ss, x);
+    format_impl_t<TArgs...>::format_impl(ss, others...);
+  }
+  static inline void join_impl(
+    std::stringstream& ss,
+    const std::string& sep,
+    const T& x,
+    const TArgs& ... others
+  ) {
+    format_impl_t<T>::format_impl(ss, x);
+    ss << sep;
     format_impl_t<TArgs...>::format_impl(ss, others...);
   }
 };
@@ -76,6 +85,12 @@ std::string join(const std::string& sep, const std::vector<T>& strs) {
     }
     ss << str;
   }
+  return ss.str();
+}
+template<typename ... TArgs>
+inline std::string join(const std::string& sep, const TArgs& ... args) {
+  std::stringstream ss {};
+  format_impl_t<TArgs...>::join_impl(ss, sep, args...);
   return ss.str();
 }
 template<typename ... TArgs>

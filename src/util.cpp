@@ -116,19 +116,6 @@ bool ends_with(const std::string& end, const std::string& str) {
   }
   return true;
 }
-std::string join(const std::string& sep, const std::vector<std::string>& segs) {
-  std::stringstream ss;
-  bool is_first_iter = true;
-  for (const auto& seg : segs) {
-    if (!is_first_iter) {
-      ss << sep;
-    } else {
-      is_first_iter = false;
-    }
-    ss << seg;
-  }
-  return ss.str();
-}
 std::vector<std::string> split(char sep, const std::string& str) {
   std::vector<std::string> out;
 
