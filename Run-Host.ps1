@@ -11,4 +11,8 @@ cmake ..
 cmake --build . -t $AppName
 Pop-Location
 
+if ($lastexitcode -ne 0) {
+    exit
+}
+
 & ./build-windows-x64/bin/Debug/Demo.exe

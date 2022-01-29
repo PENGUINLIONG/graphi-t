@@ -34,8 +34,7 @@ Task Context::create_comp_task(
   comp_task_cfg.entry_name = entry_point.c_str();
   comp_task_cfg.code = code;
   comp_task_cfg.code_size = code_size;
-  comp_task_cfg.rsc_tys = rsc_tys.data();
-  comp_task_cfg.nrsc_ty = rsc_tys.size();
+  comp_task_cfg.rsc_tys = rsc_tys;
   comp_task_cfg.workgrp_size = workgrp_size;
   return HAL_IMPL_NAMESPACE::create_comp_task(*inner, comp_task_cfg);
 }
@@ -347,6 +346,9 @@ RenderPass::RenderPass(const Context& ctxt, const RenderPassConfig& cfg) :
 RenderPass::RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::RenderPass>(inner)) {}
 RenderPass::~RenderPass() { HAL_IMPL_NAMESPACE::destroy_pass(*inner); }
+RenderPass RenderPassBuilder::build(const Context& ctxt) {
+  return create_pass(ctxt, inner);
+}
 
 RenderPass Context::create_pass(
   const std::string& label,
@@ -383,11 +385,9 @@ Task RenderPass::create_graph_task(
   graph_task_cfg.frag_entry_name = frag_entry_point.c_str();
   graph_task_cfg.frag_code = frag_code;
   graph_task_cfg.frag_code_size = frag_code_size;
-  graph_task_cfg.vert_inputs = vert_inputs;
-  graph_task_cfg.nvert_input = nvert_input;
+  graph_task_cfg.vert_inputs = std::vector<VertexInput>(vert_inputs, vert_inputs + nvert_input);
   graph_task_cfg.topo = topo;
-  graph_task_cfg.rsc_tys = rsc_tys.data();
-  graph_task_cfg.nrsc_ty = rsc_tys.size();
+  graph_task_cfg.rsc_tys = rsc_tys;
   return HAL_IMPL_NAMESPACE::create_graph_task(*inner, graph_task_cfg);
 }
 
@@ -402,6 +402,12 @@ Task::~Task() {
   if (inner != nullptr) {
     destroy_task(*inner);
   }
+}
+Task ComputeTaskBuilder::build(const Context& ctxt) {
+  return create_comp_task(ctxt, inner);
+}
+Task GraphicsTaskBuilder::build(const RenderPass& pass) {
+  return create_graph_task(pass, inner);
 }
 
 
