@@ -1403,31 +1403,46 @@ void destroy_task(Task& task) {
 
 
 
+VkDescriptorPool _create_desc_pool(
+  const Context& ctxt,
+  const std::vector<VkDescriptorPoolSize>& desc_pool_sizes
+) {
+  VkDescriptorPoolCreateInfo dpci {};
+  dpci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+  dpci.poolSizeCount = static_cast<uint32_t>(desc_pool_sizes.size());
+  dpci.pPoolSizes = desc_pool_sizes.data();
+  dpci.maxSets = 1;
+
+  VkDescriptorPool desc_pool;
+  VK_ASSERT << vkCreateDescriptorPool(ctxt.dev, &dpci, nullptr, &desc_pool);
+  return desc_pool;
+}
+VkDescriptorSet _alloc_desc_set(
+  const Context& ctxt,
+  VkDescriptorPool desc_pool,
+  VkDescriptorSetLayout desc_set_layout
+) {
+  VkDescriptorSetAllocateInfo dsai {};
+  dsai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+  dsai.descriptorPool = desc_pool;
+  dsai.descriptorSetCount = 1;
+  dsai.pSetLayouts = &desc_set_layout;
+
+  VkDescriptorSet desc_set;
+  VK_ASSERT << vkAllocateDescriptorSets(ctxt.dev, &dsai, &desc_set);
+  return desc_set;
+}
 ResourcePool create_rsc_pool(const Task& task) {
   if (task.desc_pool_sizes.size() == 0) {
     log::debug("created resource pool with no entry");
     return ResourcePool { &task, VK_NULL_HANDLE, VK_NULL_HANDLE };
   }
 
-  VkDevice dev = task.ctxt->dev;
+  const Context& ctxt = *task.ctxt;
 
-  VkDescriptorPoolCreateInfo dpci {};
-  dpci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-  dpci.poolSizeCount = static_cast<uint32_t>(task.desc_pool_sizes.size());
-  dpci.pPoolSizes = task.desc_pool_sizes.data();
-  dpci.maxSets = 1;
-
-  VkDescriptorPool desc_pool;
-  VK_ASSERT << vkCreateDescriptorPool(dev, &dpci, nullptr, &desc_pool);
-
-  VkDescriptorSetAllocateInfo dsai {};
-  dsai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-  dsai.descriptorPool = desc_pool;
-  dsai.descriptorSetCount = 1;
-  dsai.pSetLayouts = &task.desc_set_layout;
-
-  VkDescriptorSet desc_set;
-  VK_ASSERT << vkAllocateDescriptorSets(dev, &dsai, &desc_set);
+  VkDescriptorPool desc_pool = _create_desc_pool(ctxt, task.desc_pool_sizes);
+  VkDescriptorSet desc_set =
+    _alloc_desc_set(ctxt, desc_pool, task.desc_set_layout);
 
   log::debug("created resource pool");
   return ResourcePool { &task, desc_pool, desc_set };
