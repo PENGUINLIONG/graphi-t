@@ -92,9 +92,9 @@ void initialize() {
   VkInstanceCreateInfo ici {};
   ici.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
   ici.pApplicationInfo = &app_info;
-  ici.enabledExtensionCount = inst_ext_names.size();
+  ici.enabledExtensionCount = (uint32_t)inst_ext_names.size();
   ici.ppEnabledExtensionNames = inst_ext_names.data();
-  ici.enabledLayerCount = layers.size();
+  ici.enabledLayerCount = (uint32_t)layers.size();
   ici.ppEnabledLayerNames = layers.data();
 
   VK_ASSERT << vkCreateInstance(&ici, nullptr, &inst);
@@ -160,7 +160,9 @@ uint32_t _get_mem_prior(
         VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
     };
     for (int i = 0; i < PRIORITY_LUT.size(); ++i) {
-      if (mem_prop == PRIORITY_LUT[i]) { return PRIORITY_LUT.size() - i; }
+      if (mem_prop == PRIORITY_LUT[i]) {
+        return (uint32_t)PRIORITY_LUT.size() - i;
+      }
     }
     return 0;
   } else if (host_access == L_MEMORY_ACCESS_WRITE_BIT) {
@@ -184,10 +186,12 @@ uint32_t _get_mem_prior(
         VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
     };
     for (int i = 0; i < PRIORITY_LUT.size(); ++i) {
-      if (mem_prop == PRIORITY_LUT[i]) { return PRIORITY_LUT.size() - i; }
+      if (mem_prop == PRIORITY_LUT[i]) {
+        return (uint32_t)PRIORITY_LUT.size() - i;
+      }
     }
     return 0;
-  } else if (host_access == L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT) {
+  } else {
     static const std::vector<VkMemoryPropertyFlags> PRIORITY_LUT {
       VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
         VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
@@ -208,11 +212,10 @@ uint32_t _get_mem_prior(
         VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
     };
     for (int i = 0; i < PRIORITY_LUT.size(); ++i) {
-      if (mem_prop == PRIORITY_LUT[i]) { return PRIORITY_LUT.size() - i; }
+      if (mem_prop == PRIORITY_LUT[i]) {
+        return (uint32_t)PRIORITY_LUT.size() - i;
+      }
     }
-    return 0;
-  } else {
-    panic("unexpected host access pattern");
     return 0;
   }
 }
@@ -385,7 +388,7 @@ Context create_ctxt(const ContextConfig& cfg) {
   dci.pEnabledFeatures = &feat;
   dci.queueCreateInfoCount = static_cast<uint32_t>(dqcis.size());
   dci.pQueueCreateInfos = dqcis.data();
-  dci.enabledExtensionCount = dev_ext_names.size();
+  dci.enabledExtensionCount = (uint32_t)dev_ext_names.size();
   dci.ppEnabledExtensionNames = dev_ext_names.data();
 
   VkDevice dev;
@@ -1162,7 +1165,7 @@ VkFramebuffer _create_framebuf(
   VkFramebufferCreateInfo fci {};
   fci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
   fci.renderPass = pass;
-  fci.attachmentCount = attm_img_views.size();
+  fci.attachmentCount = (uint32_t)attm_img_views.size();
   fci.pAttachments = attm_img_views.data();
   fci.width = width;
   fci.height = height;
@@ -1271,12 +1274,12 @@ Task create_graph_task(
     viad.location = i;
     viad.binding = 0;
     viad.format = _make_img_fmt(vert_input.fmt);
-    viad.offset = base_offset;
+    viad.offset = (uint32_t)base_offset;
     viads.emplace_back(std::move(viad));
 
     base_offset += fmt_size;
   }
-  vibd.stride = base_offset;
+  vibd.stride = (uint32_t)base_offset;
 
   VkPipelineVertexInputStateCreateInfo pvisci {};
   pvisci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
@@ -1305,8 +1308,8 @@ Task create_graph_task(
   VkViewport viewport {};
   viewport.x = 0;
   viewport.y = 0;
-  viewport.width = pass.viewport.extent.width;
-  viewport.height = pass.viewport.extent.height;
+  viewport.width = (float)pass.viewport.extent.width;
+  viewport.height = (float)pass.viewport.extent.height;
   viewport.minDepth = 0.0f;
   viewport.maxDepth = 1.0f;
   VkRect2D scissor {};
@@ -1500,7 +1503,8 @@ void _update_desc_set(
     wdss.emplace_back(std::move(wds));
   }
 
-  vkUpdateDescriptorSets(ctxt.dev, wdss.size(), wdss.data(), 0, nullptr);
+  vkUpdateDescriptorSets(ctxt.dev, (uint32_t)wdss.size(), wdss.data(), 0,
+    nullptr);
 }
 Invocation _create_invoke_common(
   const Task& task,
@@ -1902,7 +1906,7 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
     assert(invoke.graph_detail != nullptr);
     {
       const InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
-      vkCmdBindVertexBuffers(cmdbuf, 0, graph_detail.vert_bufs.size(),
+      vkCmdBindVertexBuffers(cmdbuf, 0, (uint32_t)graph_detail.vert_bufs.size(),
         graph_detail.vert_bufs.data(), graph_detail.vert_buf_offsets.data());
       if (invoke.graph_detail->nidx != 0) {
         vkCmdBindIndexBuffer(cmdbuf, graph_detail.idx_buf,
@@ -2287,7 +2291,7 @@ void _record_cmd_begin_pass(TransactionLike& transact, const Command& cmd) {
   rpbi.renderPass = pass.pass;
   rpbi.framebuffer = pass.framebuf;
   rpbi.renderArea.extent = pass.viewport.extent;
-  rpbi.clearValueCount = pass.clear_values.size();
+  rpbi.clearValueCount = (uint32_t)pass.clear_values.size();
   rpbi.pClearValues = pass.clear_values.data();
   VkSubpassContents sc = in.draw_inline ?
     VK_SUBPASS_CONTENTS_INLINE :
