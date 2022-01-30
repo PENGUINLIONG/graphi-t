@@ -303,11 +303,11 @@ struct MappedImage {
     return (T)data();
   }
 
-  inline void read(void* dst, size_t size) {
+  inline void read(void* dst, size_t size) const {
     std::memcpy(dst, data(), size);
   }
   template<typename T>
-  inline void read(std::vector<T>& src) {
+  inline void read(std::vector<T>& src) const {
     read(src.data(), src.size() * sizeof(T));
   }
   inline void write(const void* src, size_t size) {
@@ -523,9 +523,39 @@ struct MappedBuffer {
     unmap_buf_mem(view, mapped);
   }
 
+  constexpr void* data() {
+    return mapped;
+  }
+  constexpr const void* data() const {
+    return mapped;
+  }
+
   template<typename T, typename _ = std::enable_if_t<std::is_pointer<T>::value>>
   inline operator T() const {
-    return (T)mapped;
+    return (T)data();
+  }
+
+  inline void read(void* dst, size_t size) const {
+    std::memcpy(dst, data(), size);
+  }
+  template<typename T>
+  inline void read(std::vector<T>& dst) const {
+    read(dst.data(), dst.size() * sizeof(T));
+  }
+  template<typename T>
+  inline void read(T& dst) const {
+    read(&dst, sizeof(T));
+  }
+  inline void write(const void* src, size_t size) {
+    std::memcpy(data(), src, size);
+  }
+  template<typename T>
+  inline void write(std::vector<T>& src) {
+    write(src.data(), src.size() * sizeof(T));
+  }
+  template<typename T>
+  inline void write(T& src) {
+    write(&src, sizeof(T));
   }
 };
 struct Buffer {
@@ -566,6 +596,12 @@ struct Buffer {
   }
   inline MappedBuffer map(MemoryAccess map_access) const {
     return MappedBuffer(view(), map_access);
+  }
+  inline MappedBuffer map_read() const {
+    return map(L_MEMORY_ACCESS_READ_BIT);
+  }
+  inline MappedBuffer map_write() const {
+    return map(L_MEMORY_ACCESS_WRITE_BIT);
   }
 };
 struct BufferBuilder {

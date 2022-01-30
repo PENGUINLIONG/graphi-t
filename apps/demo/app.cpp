@@ -242,9 +242,7 @@ void guarded_main2() {
     float data[4] {
       0, 1, 0, 1
     };
-    scoped::MappedBuffer mapped = ubo.map(L_MEMORY_ACCESS_WRITE_BIT);
-    float* ubo_data = (float*)mapped;
-    std::memcpy(ubo_data, data, sizeof(data));
+    ubo.map_write().write(data);
   }
 
   scoped::Buffer verts = ctxt.build_buf("verts")
@@ -258,9 +256,7 @@ void guarded_main2() {
       -1, -1, 0, 1,
       -1,  1, 0, 1,
     };
-    scoped::MappedBuffer mapped = verts.map(L_MEMORY_ACCESS_WRITE_BIT);
-    float* verts_data = (float*)mapped;
-    std::memcpy(verts_data, data, sizeof(data));
+    verts.map_write().write(data);
   }
 
   scoped::Buffer idxs = ctxt.build_buf("idxs")
@@ -272,9 +268,7 @@ void guarded_main2() {
     uint16_t data[3] {
       0, 1, 2
     };
-    scoped::MappedBuffer mapped = idxs.map(L_MEMORY_ACCESS_WRITE_BIT);
-    uint16_t* idxs_data = (uint16_t*)mapped;
-    std::memcpy(idxs_data, data, sizeof(data));
+    idxs.map_write().write(data);
   }
 
   ext::DeviceTimer dev_timer(ctxt);
