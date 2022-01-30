@@ -255,9 +255,7 @@ struct ComputeTaskConfig {
   // Size of code of the task program in bytes.
   size_t code_size;
   // The resources to be allocated.
-  const ResourceType* rsc_tys;
-  // Number of resources to be allocated.
-  size_t nrsc_ty;
+  std::vector<ResourceType> rsc_tys;
   // Local group size; number of threads in a workgroup.
   DispatchSize workgrp_size;
 };
@@ -346,13 +344,9 @@ struct GraphicsTaskConfig {
   // Topology of vertex inputs to be assembled.
   Topology topo;
   // Vertex vertex input specifications.
-  const VertexInput* vert_inputs;
-  // Number of vertex inputs.
-  size_t nvert_input;
+  std::vector<VertexInput> vert_inputs;
   // Resources to be allocated.
-  const ResourceType* rsc_tys;
-  // Number of resources allocated.
-  size_t nrsc_ty;
+  std::vector<ResourceType> rsc_tys;
 };
 L_IMPL_STRUCT struct Task;
 L_IMPL_FN Task create_comp_task(

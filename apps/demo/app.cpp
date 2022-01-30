@@ -123,10 +123,17 @@ void guarded_main() {
 
   scoped::Context ctxt("ctxt", 0);
 
-  scoped::Task task = ctxt.create_comp_task("comp_task", "main", art.comp_spv,
-    { 1, 1, 1 }, { L_RESOURCE_TYPE_STORAGE_BUFFER });
+  scoped::Task task = ctxt.build_comp_task("comp_task")
+    .comp(art.comp_spv)
+    .rsc(L_RESOURCE_TYPE_STORAGE_BUFFER)
+    .build();
 
-  scoped::Buffer buf = ctxt.create_storage_buf("buf", 16 * sizeof(float));
+  scoped::Buffer buf = ctxt.build_buf("buf")
+    .size(16 * sizeof(float))
+    .storage()
+    .streaming()
+    .read_back()
+    .build();
 
   scoped::ResourcePool rsc_pool = task.create_rsc_pool();
   rsc_pool.bind(0, buf.view());
@@ -157,21 +164,29 @@ void guarded_main() {
     liong::log::info("dbuf[", i, "] = ", dbuf[i]);
   }
 
-  scoped::Image map_test_img = ctxt.create_staging_img("map_test_img", 7, 7, L_FORMAT_R32G32B32A32_SFLOAT);
+  std::vector<float> pattern;
   {
-    scoped::MappedImage mapped = map_test_img.map(L_MEMORY_ACCESS_WRITE_BIT);
-    float* in_data = (float*)mapped;
+    pattern.resize(7 * 7 * 4);
     for (int i = 0; i < 7; ++i) {
       for (int j = i; j < 7; ++j) {
-        in_data[(i * 7 + j) * 4 + 0] = 1.0f;
-        in_data[(i * 7 + j) * 4 + 1] = 0.0f;
-        in_data[(i * 7 + j) * 4 + 2] = 1.0f;
-        in_data[(i * 7 + j) * 4 + 3] = 1.0f;
+        pattern[(i * 7 + j) * 4 + 0] = 1.0f;
+        pattern[(i * 7 + j) * 4 + 1] = 0.0f;
+        pattern[(i * 7 + j) * 4 + 2] = 1.0f;
+        pattern[(i * 7 + j) * 4 + 3] = 1.0f;
       }
     }
   }
+
+  scoped::Image map_test_img = ctxt.build_img("map_test_img")
+    .width(7)
+    .height(7)
+    .fmt(L_FORMAT_R32G32B32A32_SFLOAT)
+    .streaming()
+    .read_back()
+    .build();
+  map_test_img.map_write().write(pattern);
   {
-    scoped::MappedImage mapped = map_test_img.map(L_MEMORY_ACCESS_READ_BIT);
+    scoped::MappedImage mapped = map_test_img.map_read();
     const float* out_data = (const float*)mapped;
     liong::util::save_bmp(out_data, 7, 7, "map_test.bmp");
   }
@@ -218,81 +233,81 @@ void guarded_main2() {
 
 
 
-  scoped::Buffer ubo = ctxt.create_uniform_buf("ubo", 4 * sizeof(float));
+  scoped::Buffer ubo = ctxt.build_buf("ubo")
+    .size(4 * sizeof(float))
+    .uniform()
+    .streaming()
+    .build();
   {
     float data[4] {
       0, 1, 0, 1
     };
-    scoped::MappedBuffer mapped = ubo.map(L_MEMORY_ACCESS_WRITE_BIT);
-    float* ubo_data = (float*)mapped;
-    std::memcpy(ubo_data, data, sizeof(data));
+    ubo.map_write().write(data);
   }
 
-  scoped::Buffer verts = ctxt.create_vert_buf("verts", 3 * 4 * sizeof(float));
+  scoped::Buffer verts = ctxt.build_buf("verts")
+    .size(3 * 4 * sizeof(float))
+    .vertex()
+    .streaming()
+    .build();
   {
     float data[12] {
        1, -1, 0, 1,
       -1, -1, 0, 1,
       -1,  1, 0, 1,
     };
-    scoped::MappedBuffer mapped = verts.map(L_MEMORY_ACCESS_WRITE_BIT);
-    float* verts_data = (float*)mapped;
-    std::memcpy(verts_data, data, sizeof(data));
+    verts.map_write().write(data);
   }
 
-  scoped::Buffer idxs = ctxt.create_idx_buf("idxs", 3 * 4 * sizeof(uint16_t));
+  scoped::Buffer idxs = ctxt.build_buf("idxs")
+    .size(3 * 4 * sizeof(uint16_t))
+    .index()
+    .streaming()
+    .build();
   {
     uint16_t data[3] {
       0, 1, 2
     };
-    scoped::MappedBuffer mapped = idxs.map(L_MEMORY_ACCESS_WRITE_BIT);
-    uint16_t* idxs_data = (uint16_t*)mapped;
-    std::memcpy(idxs_data, data, sizeof(data));
+    idxs.map_write().write(data);
   }
 
   ext::DeviceTimer dev_timer(ctxt);
-  scoped::DepthImage zbuf = ctxt.create_depth_img("zbuf", 4, 4,
-    L_DEPTH_FORMAT_D16_S0);
-  scoped::Image out_img = ctxt.create_attm_img("attm", 4, 4,
-    L_FORMAT_R32G32B32A32_SFLOAT);
+  scoped::DepthImage zbuf = ctxt.build_depth_img("zbuf")
+    .width(4)
+    .height(4)
+    .fmt(L_DEPTH_FORMAT_D16_S0)
+    .attachment()
+    .build();
+  scoped::Image out_img = ctxt.build_img("attm")
+    .width(4)
+    .height(4)
+    .fmt(L_FORMAT_R32G32B32A32_SFLOAT)
+    .attachment()
+    .build();
 
 
 
+  scoped::RenderPass pass = ctxt.build_pass("pass")
+    .width(FRAMEBUF_WIDTH)
+    .height(FRAMEBUF_HEIGHT)
+    .clear_store_attm(out_img)
+    .clear_store_attm(zbuf)
+    .build();
 
-  std::vector<AttachmentConfig> attm_cfgs;
-  {
-    AttachmentConfig attm_cfg {};
-    attm_cfg.attm_ty = L_ATTACHMENT_TYPE_COLOR;
-    attm_cfg.attm_access =
-      (AttachmentAccess)(L_ATTACHMENT_ACCESS_CLEAR | L_ATTACHMENT_ACCESS_STORE);
-    attm_cfg.color_img = &(const Image&)out_img;
-    attm_cfgs.emplace_back(attm_cfg);
-  }
-  {
-    AttachmentConfig attm_cfg {};
-    attm_cfg.attm_ty = L_ATTACHMENT_TYPE_DEPTH;
-    attm_cfg.attm_access =
-      (AttachmentAccess)(L_ATTACHMENT_ACCESS_LOAD | L_ATTACHMENT_ACCESS_STORE);
-    attm_cfg.depth_img = &(const DepthImage&)zbuf;
-    attm_cfgs.emplace_back(attm_cfg);
-  }
-  scoped::RenderPass pass =
-    ctxt.create_pass("pass", attm_cfgs, FRAMEBUF_WIDTH, FRAMEBUF_HEIGHT);
-
-  std::vector<VertexInput> vert_ins {
-    VertexInput { L_FORMAT_R32G32B32A32_SFLOAT, L_VERTEX_INPUT_RATE_VERTEX }
-  };
-  std::vector<ResourceType> rsc_tys {
-    L_RESOURCE_TYPE_UNIFORM_BUFFER,
-  };
-  scoped::Task task = pass.create_graph_task("graph_task", "main", art.vert_spv,
-    "main", art.frag_spv, vert_ins, L_TOPOLOGY_TRIANGLE, rsc_tys);
+  scoped::Task task = pass.build_graph_task("graph_task")
+    .vert(art.vert_spv)
+    .frag(art.frag_spv)
+    .per_vert_input(L_FORMAT_R32G32B32A32_SFLOAT)
+    .rsc(L_RESOURCE_TYPE_UNIFORM_BUFFER)
+    .build();
 
   scoped::ResourcePool rsc_pool = task.create_rsc_pool();
   rsc_pool.bind(0, ubo.view());
 
-  scoped::Buffer out_buf = ctxt.create_staging_buf("out_buf",
-    FRAMEBUF_WIDTH * FRAMEBUF_HEIGHT * 4 * sizeof(float));
+  scoped::Buffer out_buf = ctxt.build_buf("out_buf")
+    .size(FRAMEBUF_WIDTH * FRAMEBUF_HEIGHT * 4 * sizeof(float))
+    .read_back()
+    .build();
 
 
 

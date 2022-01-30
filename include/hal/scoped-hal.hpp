@@ -149,7 +149,6 @@ struct Task {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Task> inner;
 
   Task() = default;
-  Task(const Context& ctxt, const ComputeTaskConfig& cfg);
   Task(HAL_IMPL_NAMESPACE::Task&& inner);
   Task(Task&&) = default;
   ~Task();
@@ -164,6 +163,115 @@ struct Task {
   }
 
   ResourcePool create_rsc_pool() const;
+};
+struct ComputeTaskBuilder {
+  using Self = ComputeTaskBuilder;
+
+  const HAL_IMPL_NAMESPACE::Context& parent;
+  ComputeTaskConfig inner;
+
+  inline ComputeTaskBuilder(
+    const HAL_IMPL_NAMESPACE::Context& ctxt,
+    const std::string& label = ""
+  ) : parent(ctxt), inner() {
+    inner.label = label;
+    inner.entry_name = "main";
+    inner.workgrp_size.x = 1;
+    inner.workgrp_size.y = 1;
+    inner.workgrp_size.z = 1;
+  }
+
+  inline Self& comp(const void* code, size_t code_size) {
+    inner.code = code;
+    inner.code_size = code_size;
+    return *this;
+  }
+  inline Self& comp_entry_name(const std::string& entry_name) {
+    inner.entry_name = entry_name;
+    return *this;
+  }
+  inline Self& rsc(ResourceType rsc_ty) {
+    inner.rsc_tys.emplace_back(rsc_ty);
+    return *this;
+  }
+  inline Self& workgrp_size(uint32_t x, uint32_t y, uint32_t z) {
+    inner.workgrp_size.x = x;
+    inner.workgrp_size.y = y;
+    inner.workgrp_size.z = z;
+    return *this;
+  }
+
+  template<typename TContainer>
+  inline Self& comp(const TContainer& buf) {
+    return comp(buf.data(), buf.size() * sizeof(TContainer::value_type));
+  }
+
+  Task build();
+};
+struct GraphicsTaskBuilder {
+  using Self = GraphicsTaskBuilder;
+
+  const HAL_IMPL_NAMESPACE::RenderPass& parent;
+  GraphicsTaskConfig inner;
+
+  inline GraphicsTaskBuilder(
+    const HAL_IMPL_NAMESPACE::RenderPass& pass,
+    const std::string& label = ""
+  ) : parent(pass), inner() {
+    inner.label = label;
+    inner.topo = L_TOPOLOGY_TRIANGLE;
+    inner.vert_entry_name = "main";
+    inner.frag_entry_name = "main";
+  }
+
+  inline Self& vert(const void* code, size_t code_size) {
+    inner.vert_code = code;
+    inner.vert_code_size = code_size;
+    return *this;
+  }
+  inline Self& vert_entry_name(const std::string& entry_name) {
+    inner.vert_entry_name = entry_name;
+    return *this;
+  }
+  inline Self& frag(const void* code, size_t code_size) {
+    inner.frag_code = code;
+    inner.frag_code_size = code_size;
+    return *this;
+  }
+  inline Self& frag_entry_name(const std::string& entry_name) {
+    inner.frag_entry_name = entry_name;
+    return *this;
+  }
+  inline Self& topo(Topology topo) {
+    inner.topo = topo;
+    return *this;
+  }
+  inline Self& vert_input(PixelFormat fmt, VertexInputRate rate) {
+    inner.vert_inputs.emplace_back(VertexInput { fmt, rate });
+    return *this;
+  }
+  inline Self& rsc(const ResourceType& rsc_ty) {
+    inner.rsc_tys.emplace_back(rsc_ty);
+    return *this;
+  }
+
+  template<typename TContainer>
+  inline Self& vert(const TContainer& buf) {
+    return vert(buf.data(), buf.size() * sizeof(TContainer::value_type));
+  }
+  template<typename TContainer>
+  inline Self& frag(const TContainer& buf) {
+    return frag(buf.data(), buf.size() * sizeof(TContainer::value_type));
+  }
+
+  inline Self& per_vert_input(PixelFormat fmt) {
+    return vert_input(fmt, L_VERTEX_INPUT_RATE_VERTEX);
+  }
+  inline Self& per_inst_input(PixelFormat fmt) {
+    return vert_input(fmt, L_VERTEX_INPUT_RATE_INSTANCE);
+  }
+
+  Task build();
 };
 
 
@@ -183,13 +291,31 @@ struct MappedImage {
     view(std::exchange(x.view, {})) {}
   ~MappedImage();
 
+  constexpr void* data() {
+    return buf == nullptr ? mapped : buf;
+  }
+  constexpr const void* data() const {
+    return buf == nullptr ? mapped : buf;
+  }
+
   template<typename T, typename _ = std::enable_if_t<std::is_pointer<T>::value>>
   inline operator T() const {
-    if (buf == nullptr) {
-      return (T)mapped;
-    } else {
-      return (T)buf;
-    }
+    return (T)data();
+  }
+
+  inline void read(void* dst, size_t size) const {
+    std::memcpy(dst, data(), size);
+  }
+  template<typename T>
+  inline void read(std::vector<T>& src) const {
+    read(src.data(), src.size() * sizeof(T));
+  }
+  inline void write(const void* src, size_t size) {
+    std::memcpy(data(), src, size);
+  }
+  template<typename T>
+  inline void write(const std::vector<T>& src) {
+    write(src.data(), src.size() * sizeof(T));
   }
 };
 
@@ -198,7 +324,6 @@ struct Image {
   bool dont_destroy;
 
   Image() = default;
-  Image(const Context& ctxt, const ImageConfig& cfg);
   Image(HAL_IMPL_NAMESPACE::Image&& inner);
   Image(Image&&) = default;
   ~Image();
@@ -240,11 +365,88 @@ struct Image {
   inline MappedImage map(MemoryAccess map_access) const {
     return MappedImage(view(), map_access);
   }
+  inline MappedImage map_read() const {
+    return map(L_MEMORY_ACCESS_READ_BIT);
+  }
+  inline MappedImage map_write() const {
+    return map(L_MEMORY_ACCESS_WRITE_BIT);
+  }
 };
+struct ImageBuilder {
+  using Self = ImageBuilder;
+
+  const HAL_IMPL_NAMESPACE::Context& parent;
+  ImageConfig inner;
+
+  ImageBuilder(
+    const HAL_IMPL_NAMESPACE::Context& ctxt,
+    const std::string& label = ""
+  ) : parent(ctxt), inner() {
+    inner.label = label;
+    inner.width = 1;
+    inner.height = 1;
+  }
+
+  inline Self& host_access(MemoryAccess access) {
+    inner.host_access |= access;
+    return *this;
+  }
+  inline Self& dev_access(MemoryAccess access) {
+    inner.dev_access |= access;
+    return *this;
+  }
+  inline Self& width(uint32_t width) {
+    inner.width = width;
+    return *this;
+  }
+  inline Self& height(uint32_t height) {
+    inner.height = height;
+    return *this;
+  }
+  inline Self& fmt(PixelFormat fmt) {
+    inner.fmt = fmt;
+    return *this;
+  }
+  inline Self& usage(ImageUsage usage) {
+    inner.usage |= usage;
+    return *this;
+  }
+
+  inline Self& streaming() {
+    return usage(L_IMAGE_USAGE_STAGING_BIT)
+      .host_access(L_MEMORY_ACCESS_WRITE_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+  }
+  inline Self& read_back() {
+    return usage(L_IMAGE_USAGE_STAGING_BIT)
+      .host_access(L_MEMORY_ACCESS_READ_BIT)
+      .dev_access(L_MEMORY_ACCESS_WRITE_BIT);
+  }
+  inline Self& sampled() {
+    return usage(L_IMAGE_USAGE_SAMPLED_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+  }
+  inline Self& storage() {
+    return usage(L_IMAGE_USAGE_STORAGE_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT);
+  }
+  inline Self& attachment() {
+    return usage(L_IMAGE_USAGE_ATTACHMENT_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT);
+  }
+  inline Self& present() {
+    return usage(L_IMAGE_USAGE_PRESENT_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+  }
+
+  Image build();
+};
+
+
+
 struct DepthImage {
   std::unique_ptr<HAL_IMPL_NAMESPACE::DepthImage> inner;
 
-  DepthImage(const Context& ctxt, const DepthImageConfig& cfg);
   DepthImage(HAL_IMPL_NAMESPACE::DepthImage&& inner);
   DepthImage(DepthImage&&) = default;
   ~DepthImage();
@@ -259,6 +461,47 @@ struct DepthImage {
   inline const DepthImageConfig& cfg() const {
     return get_depth_img_cfg(*inner);
   }
+};
+struct DepthImageBuilder {
+  using Self = DepthImageBuilder;
+
+  const HAL_IMPL_NAMESPACE::Context& parent;
+  DepthImageConfig inner;
+
+  DepthImageBuilder(
+    const HAL_IMPL_NAMESPACE::Context& ctxt,
+    const std::string& label = ""
+  ) : parent(ctxt), inner() {
+    inner.label = label;
+    inner.width = 1;
+    inner.height = 1;
+  }
+
+  inline Self& width(uint32_t width) {
+    inner.width = width;
+    return *this;
+  }
+  inline Self& height(uint32_t height) {
+    inner.height = height;
+    return *this;
+  }
+  inline Self& fmt(DepthFormat fmt) {
+    inner.fmt = fmt;
+    return *this;
+  }
+  inline Self& usage(DepthImageUsage usage) {
+    inner.usage |= usage;
+    return *this;
+  }
+
+  inline Self& sampled() {
+    return usage(L_IMAGE_USAGE_SAMPLED_BIT);
+  }
+  inline Self& attachment() {
+    return usage(L_IMAGE_USAGE_ATTACHMENT_BIT);
+  }
+
+  DepthImage build();
 };
 
 
@@ -280,9 +523,39 @@ struct MappedBuffer {
     unmap_buf_mem(view, mapped);
   }
 
+  constexpr void* data() {
+    return mapped;
+  }
+  constexpr const void* data() const {
+    return mapped;
+  }
+
   template<typename T, typename _ = std::enable_if_t<std::is_pointer<T>::value>>
   inline operator T() const {
-    return (T)mapped;
+    return (T)data();
+  }
+
+  inline void read(void* dst, size_t size) const {
+    std::memcpy(dst, data(), size);
+  }
+  template<typename T>
+  inline void read(std::vector<T>& dst) const {
+    read(dst.data(), dst.size() * sizeof(T));
+  }
+  template<typename T>
+  inline void read(T& dst) const {
+    read(&dst, sizeof(T));
+  }
+  inline void write(const void* src, size_t size) {
+    std::memcpy(data(), src, size);
+  }
+  template<typename T>
+  inline void write(std::vector<T>& src) {
+    write(src.data(), src.size() * sizeof(T));
+  }
+  template<typename T>
+  inline void write(T& src) {
+    write(&src, sizeof(T));
   }
 };
 struct Buffer {
@@ -290,7 +563,6 @@ struct Buffer {
   bool dont_destroy;
 
   Buffer() = default;
-  Buffer(const Context& ctxt, const BufferConfig& cfg);
   Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner);
   Buffer(Buffer&&) = default;
   ~Buffer();
@@ -325,6 +597,76 @@ struct Buffer {
   inline MappedBuffer map(MemoryAccess map_access) const {
     return MappedBuffer(view(), map_access);
   }
+  inline MappedBuffer map_read() const {
+    return map(L_MEMORY_ACCESS_READ_BIT);
+  }
+  inline MappedBuffer map_write() const {
+    return map(L_MEMORY_ACCESS_WRITE_BIT);
+  }
+};
+struct BufferBuilder {
+  using Self = BufferBuilder;
+
+  const HAL_IMPL_NAMESPACE::Context& parent;
+  BufferConfig inner;
+
+  BufferBuilder(
+    const HAL_IMPL_NAMESPACE::Context& ctxt,
+    const std::string& label = ""
+  ) : parent(ctxt), inner() {
+    inner.label = label;
+    inner.align = 1;
+  }
+
+  inline Self& host_access(MemoryAccess access) {
+    inner.host_access |= access;
+    return *this;
+  }
+  inline Self& dev_access(MemoryAccess access) {
+    inner.dev_access |= access;
+    return *this;
+  }
+  inline Self& size(size_t size) {
+    inner.size = size;
+    return *this;
+  }
+  inline Self& align(size_t align) {
+    inner.align = align;
+    return *this;
+  }
+  inline Self& usage(BufferUsage usage) {
+    inner.usage |= usage;
+    return *this;
+  }
+
+  inline Self& streaming() {
+    return usage(L_BUFFER_USAGE_STAGING_BIT)
+      .host_access(L_MEMORY_ACCESS_WRITE_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+  }
+  inline Self& read_back() {
+    return usage(L_BUFFER_USAGE_STAGING_BIT)
+      .host_access(L_MEMORY_ACCESS_READ_BIT)
+      .dev_access(L_MEMORY_ACCESS_WRITE_BIT);
+  }
+  inline Self& uniform() {
+    return usage(L_BUFFER_USAGE_UNIFORM_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+  }
+  inline Self& storage() {
+    return usage(L_BUFFER_USAGE_STORAGE_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT);
+  }
+  inline Self& vertex() {
+    return usage(L_BUFFER_USAGE_VERTEX_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+  }
+  inline Self& index() {
+    return usage(L_BUFFER_USAGE_INDEX_BIT)
+      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+  }
+
+  Buffer build();
 };
 
 
@@ -333,7 +675,6 @@ struct RenderPass {
 public:
   std::unique_ptr<HAL_IMPL_NAMESPACE::RenderPass> inner;
 
-  RenderPass(const Context& ctxt, const RenderPassConfig& cfg);
   RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner);
   RenderPass(RenderPass&&) = default;
   ~RenderPass();
@@ -345,37 +686,68 @@ public:
     return *inner;
   }
 
-  Task create_graph_task(
-    const std::string& label,
-    const std::string& vert_entry_point,
-    const void* vert_code,
-    const size_t vert_code_size,
-    const std::string& frag_entry_point,
-    const void* frag_code,
-    const size_t frag_code_size,
-    const VertexInput* vert_inputs,
-    size_t nvert_input,
-    Topology topo,
-    const std::vector<ResourceType>& rsc_tys
-  ) const;
-  template<typename T>
-  inline Task create_graph_task(
-    const std::string& label,
-    const std::string& vert_entry_point,
-    const std::vector<T>& vert_code,
-    const std::string& frag_entry_point,
-    const std::vector<T>& frag_code,
-    const std::vector<VertexInput>& vert_inputs,
-    Topology topo,
-    const std::vector<ResourceType>& rsc_tys
-  ) const {
-    return create_graph_task(label, vert_entry_point, vert_code.data(),
-      vert_code.size() * sizeof(T), frag_entry_point, frag_code.data(),
-      frag_code.size() * sizeof(T), vert_inputs.data(), vert_inputs.size(),
-      topo, rsc_tys);
-  }
+  GraphicsTaskBuilder build_graph_task(const std::string& label) const;
 };
+struct RenderPassBuilder {
+  using Self = RenderPassBuilder;
 
+  const HAL_IMPL_NAMESPACE::Context& parent;
+  RenderPassConfig inner;
+
+  inline RenderPassBuilder(
+    const HAL_IMPL_NAMESPACE::Context& ctxt,
+    const std::string& label = ""
+  ) : parent(ctxt), inner() {
+    inner.label = label;
+    inner.width = 1;
+    inner.height = 1;
+    inner.attm_cfgs.reserve(1);
+  }
+
+  inline Self& width(uint32_t width) {
+    inner.width = width;
+    return *this;
+  }
+  inline Self& height(uint32_t height) {
+    inner.height = height;
+    return *this;
+  }
+  inline Self& attm(AttachmentAccess access, const Image& color_img) {
+    AttachmentConfig attm_cfg {};
+    attm_cfg.attm_ty = L_ATTACHMENT_TYPE_COLOR;
+    attm_cfg.attm_access = access;
+    attm_cfg.color_img = &(const HAL_IMPL_NAMESPACE::Image&)color_img;
+    inner.attm_cfgs.emplace_back(attm_cfg);
+    return *this;
+  }
+  inline Self& attm(AttachmentAccess access, const DepthImage& depth_img) {
+    AttachmentConfig attm_cfg {};
+    attm_cfg.attm_ty = L_ATTACHMENT_TYPE_DEPTH;
+    attm_cfg.attm_access = access;
+    attm_cfg.depth_img = &(const HAL_IMPL_NAMESPACE::DepthImage&)depth_img;
+    inner.attm_cfgs.emplace_back(attm_cfg);
+    return *this;
+  }
+
+  inline Self& load_store_attm(const Image& color_img) {
+    auto access = L_ATTACHMENT_ACCESS_LOAD | L_ATTACHMENT_ACCESS_STORE;
+    return attm((AttachmentAccess)access, color_img);
+  }
+  inline Self& clear_store_attm(const Image& color_img) {
+    auto access = L_ATTACHMENT_ACCESS_CLEAR | L_ATTACHMENT_ACCESS_STORE;
+    return attm((AttachmentAccess)access, color_img);
+  }
+  inline Self& load_store_attm(const DepthImage& depth_img) {
+    auto access = L_ATTACHMENT_ACCESS_LOAD | L_ATTACHMENT_ACCESS_STORE;
+    return attm((AttachmentAccess)access, depth_img);
+  }
+  inline Self& clear_store_attm(const DepthImage& depth_img) {
+    auto access = L_ATTACHMENT_ACCESS_CLEAR | L_ATTACHMENT_ACCESS_STORE;
+    return attm((AttachmentAccess)access, depth_img);
+  }
+
+  RenderPass build();
+};
 
 
 struct Context {
@@ -402,108 +774,11 @@ public:
     return get_ctxt_cfg(*inner);
   }
 
-  Task create_comp_task(
-    const std::string& label,
-    const std::string& entry_point,
-    const void* code,
-    const size_t code_size,
-    const DispatchSize& workgrp_size,
-    const std::vector<ResourceType>& rsc_tys
-  ) const;
-  template<typename T>
-  inline Task create_comp_task(
-    const std::string& label,
-    const std::string& entry_point,
-    const std::vector<T>& code,
-    const DispatchSize& workgrp_size,
-    const std::vector<ResourceType>& rsc_tys
-  ) const {
-    return create_comp_task(label, entry_point, code.data(),
-      code.size() * sizeof(T), workgrp_size, rsc_tys);
-  }
-  RenderPass create_pass(
-    const std::string& label,
-    const std::vector<AttachmentConfig>& attm_cfgs,
-    uint32_t width,
-    uint32_t height
-  ) const;
-
-  Buffer create_buf(
-    const std::string& label,
-    BufferUsage usage,
-    size_t size,
-    size_t align
-  ) const;
-  Buffer create_staging_buf(
-    const std::string& label,
-    size_t size,
-    size_t align = 1
-  ) const;
-  Buffer create_uniform_buf(
-    const std::string& label,
-    size_t size,
-    size_t align = 1
-  ) const;
-  Buffer create_storage_buf(
-    const std::string& label,
-    size_t size,
-    size_t align = 1
-  ) const;
-  Buffer create_vert_buf(
-    const std::string& label,
-    size_t size,
-    size_t align = 1
-  ) const;
-  Buffer create_idx_buf(
-    const std::string& label,
-    size_t size,
-    size_t align = 1
-  ) const;
-
-  Image create_img(
-    const std::string& label,
-    ImageUsage usage,
-    size_t width,
-    size_t height,
-    PixelFormat fmt
-  ) const;
-  Image create_staging_img(
-    const std::string& label,
-    size_t width,
-    size_t height,
-    PixelFormat fmt
-  ) const;
-  Image create_sampled_img(
-    const std::string& label,
-    size_t width,
-    size_t height,
-    PixelFormat fmt
-  ) const;
-  Image create_storage_img(
-    const std::string& label,
-    size_t width,
-    size_t height,
-    PixelFormat fmt
-  ) const;
-  Image create_attm_img(
-    const std::string& label,
-    size_t width,
-    size_t height,
-    PixelFormat fmt
-  ) const;
-  DepthImage create_depth_img(
-    const std::string& label,
-    DepthImageUsage usage,
-    uint32_t width,
-    uint32_t height,
-    DepthFormat depth_fmt
-  ) const;
-  DepthImage create_depth_img(
-    const std::string& label,
-    uint32_t width,
-    uint32_t height,
-    DepthFormat depth_fmt
-  ) const;
+  ComputeTaskBuilder build_comp_task(const std::string& label = "") const;
+  RenderPassBuilder build_pass(const std::string& label = "") const;
+  BufferBuilder build_buf(const std::string& label = "") const;
+  ImageBuilder build_img(const std::string& label = "") const;
+  DepthImageBuilder build_depth_img(const std::string& label = "") const;
 
   Transaction create_transact(
     const std::string& label,

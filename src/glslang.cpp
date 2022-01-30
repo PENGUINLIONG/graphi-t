@@ -14,7 +14,7 @@ namespace glslang {
 void initialize() {
   static bool is_initialized = false;
   if (is_initialized) {
-    log::debug("ignored redundant glslang module initialization");
+    log::warn("ignored redundant glslang module initialization");
     return;
   }
 
