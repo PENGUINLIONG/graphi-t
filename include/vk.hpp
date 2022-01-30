@@ -87,6 +87,9 @@ struct Context {
   }
 };
 
+struct BufferDynamicDetail {
+  BufferUsage last_usage;
+};
 struct Buffer {
   const Context* ctxt; // Lifetime bound.
   VkDeviceMemory devmem;

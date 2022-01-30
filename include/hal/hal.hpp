@@ -72,6 +72,7 @@ constexpr size_t align_addr(size_t size, size_t align) {
 }
 
 enum BufferUsageBits {
+  L_BUFFER_USAGE_NONE = 0,
   L_BUFFER_USAGE_STAGING_BIT = (1 << 0),
   L_BUFFER_USAGE_UNIFORM_BIT = (1 << 1),
   L_BUFFER_USAGE_STORAGE_BIT = (1 << 2),
@@ -84,7 +85,6 @@ struct BufferConfig {
   // Human-readable label of the buffer.
   std::string label;
   MemoryAccess host_access;
-  MemoryAccess dev_access;
   // Size of buffer allocation, or minimal size of buffer allocation if the
   // buffer has variable size. MUST NOT be zero.
   size_t size;
@@ -134,7 +134,8 @@ enum ImageUsageBits {
   L_IMAGE_USAGE_SAMPLED_BIT = (1 << 1),
   L_IMAGE_USAGE_STORAGE_BIT = (1 << 2),
   L_IMAGE_USAGE_ATTACHMENT_BIT = (1 << 3),
-  L_IMAGE_USAGE_PRESENT_BIT = (1 << 4),
+  L_IMAGE_USAGE_SUBPASS_DATA_BIT = (1 << 4),
+  L_IMAGE_USAGE_PRESENT_BIT = (1 << 5),
 };
 typedef uint32_t ImageUsage;
 // Describe a row-major 2D image.
@@ -142,7 +143,6 @@ struct ImageConfig {
   // Human-readable label of the image.
   std::string label;
   MemoryAccess host_access;
-  MemoryAccess dev_access;
   // Number of rows, or height of the image.
   uint32_t height;
   // Number of columns, or width of the image.
@@ -208,6 +208,7 @@ enum DepthImageUsageBits {
   L_DEPTH_IMAGE_USAGE_NONE = 0,
   L_DEPTH_IMAGE_USAGE_SAMPLED_BIT = (1 << 0),
   L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT = (1 << 1),
+  L_DEPTH_IMAGE_USAGE_SUBPASS_DATA_BIT = (1 << 2),
 };
 typedef uint32_t DepthImageUsage;
 struct DepthImageConfig {
@@ -425,75 +426,7 @@ L_IMPL_FN Timestamp create_timestamp(const Context& ctxt);
 L_IMPL_FN void destroy_timestamp(Timestamp& timestamp);
 L_IMPL_FN double get_timestamp_result_us(const Timestamp& timestamp);
 
-/*
 
-L_IMPL_STRUCT struct Invocation;
-L_IMPL_FN Invocation create_invocation(const Context& ctxt);
-L_IMPL_FN void destroy_invocation(const Context& ctxt);
-
-
-
-struct GraphicsCommandBuilder {
-  Command build();
-};
-
-enum CommandParameterType {
-  L_COMMAND_PARAMETER_TYPE_I32,
-  L_COMMAND_PARAMETER_TYPE_U32,
-  L_COMMAND_PARAMETER_TYPE_F32,
-  L_COMMAND_PARAMETER_TYPE_BUFFER,
-  L_COMMAND_PARAMETER_TYPE_IMAGE,
-  L_COMMAND_PARAMETER_TYPE_GRAPHICS_TASK,
-  L_COMMAND_PARAMETER_TYPE_COMPUTE_TASK,
-};
-
-struct CommandParameter {
-  CommandParameterType param_ty;
-  union {
-    struct {
-      BufferUsage buf_usage;
-      MemoryAccess buf_access;
-    } buf;
-    struct {
-      ImageUsage img_usage;
-      MemoryAccess img_access;
-    } img;
-  } contract;
-};
-struct CompositeCommand {
-  std::string label;
-  std::vector<Command> cmds;
-  std::vector<CommandParameter> params;
-};
-
-
-
-enum ComputeCommandParameterClass {
-  L_COMPUTE_COMMAND_PARAMETER_CLASS_WORKGROUP_COUNT, // u32
-  L_COMPUTE_COMMAND_PARAMETER_CLASS_RESOURCE, // Buffer | Image
-};
-struct ComputeCommand {
-  const Task* task;
-  uint32_t nworkgrp[3];
-  std::vector<Resource>;
-};
-
-
-
-enum GraphicsCommandParameterType {
-  L_GRAPHICS_COMMAND_PARAMETER_TYPE_VERTEX_COUNT,
-  L_GRAPHICS_COMMAND_PARAMETER_TYPE_VERTEX_BUFFER,
-  L_GRAPHICS_COMMAND_PARAMETER_TYPE_INDEX_COUNT,
-  L_GRAPHICS_COMMAND_PARAMETER_TYPE_INDEX_BUFFER,
-  L_GRAPHICS_COMMAND_PARAMETER_TYPE_COLOR_ATTACHMENT,
-  L_GRAPHICS_COMMAND_PARAMETER_TYPE_DEPTH_STENCIL_ATTACHMENT,
-
-};
-
-
-
-
-*/
 
 enum CommandType {
   L_COMMAND_TYPE_SET_SUBMIT_TYPE,
@@ -548,15 +481,11 @@ struct Command {
     } cmd_write_timestamp;
     struct {
       const Buffer* buf;
-      MemoryAccess src_dev_access;
-      MemoryAccess dst_dev_access;
       ImageUsage src_usage;
       ImageUsage dst_usage;
     } cmd_buf_barrier;
     struct {
       const Image* img;
-      MemoryAccess src_dev_access;
-      MemoryAccess dst_dev_access;
       ImageUsage src_usage;
       ImageUsage dst_usage;
     } cmd_img_barrier;
@@ -569,8 +498,6 @@ struct Command {
     } cmd_end_pass;
     struct {
       const DepthImage* depth_img;
-      MemoryAccess src_dev_access;
-      MemoryAccess dst_dev_access;
       DepthImageUsage src_usage;
       DepthImageUsage dst_usage;
     } cmd_depth_img_barrier;
@@ -642,15 +569,11 @@ inline Command cmd_set_submit_ty(SubmitType submit_ty) {
 inline Command cmd_buf_barrier(
   const Buffer& buf,
   BufferUsage src_usage,
-  BufferUsage dst_usage,
-  MemoryAccess src_dev_access,
-  MemoryAccess dst_dev_access
+  BufferUsage dst_usage
 ) {
   Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_BUFFER_BARRIER;
   cmd.cmd_buf_barrier.buf = &buf;
-  cmd.cmd_buf_barrier.src_dev_access = src_dev_access;
-  cmd.cmd_buf_barrier.dst_dev_access = dst_dev_access;
   cmd.cmd_buf_barrier.src_usage = src_usage;
   cmd.cmd_buf_barrier.dst_usage = dst_usage;
   return cmd;
@@ -658,15 +581,11 @@ inline Command cmd_buf_barrier(
 inline Command cmd_img_barrier(
   const Image& img,
   ImageUsage src_usage,
-  ImageUsage dst_usage,
-  MemoryAccess src_dev_access,
-  MemoryAccess dst_dev_access
+  ImageUsage dst_usage
 ) {
   Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_IMAGE_BARRIER;
   cmd.cmd_img_barrier.img = &img;
-  cmd.cmd_img_barrier.src_dev_access = src_dev_access;
-  cmd.cmd_img_barrier.dst_dev_access = dst_dev_access;
   cmd.cmd_img_barrier.src_usage = src_usage;
   cmd.cmd_img_barrier.dst_usage = dst_usage;
   return cmd;
@@ -692,15 +611,11 @@ inline Command cmd_end_pass(
 inline Command cmd_depth_img_barrier(
   const DepthImage& depth_img,
   DepthImageUsage src_usage,
-  DepthImageUsage dst_usage,
-  MemoryAccess src_dev_access,
-  MemoryAccess dst_dev_access
+  DepthImageUsage dst_usage
 ) {
   Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_DEPTH_IMAGE_BARRIER;
   cmd.cmd_depth_img_barrier.depth_img = &depth_img;
-  cmd.cmd_depth_img_barrier.src_dev_access = src_dev_access;
-  cmd.cmd_depth_img_barrier.dst_dev_access = dst_dev_access;
   cmd.cmd_depth_img_barrier.src_usage = src_usage;
   cmd.cmd_depth_img_barrier.dst_usage = dst_usage;
   return cmd;

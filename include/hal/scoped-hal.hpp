@@ -463,10 +463,6 @@ struct ImageBuilder {
     inner.host_access |= access;
     return *this;
   }
-  inline Self& dev_access(MemoryAccess access) {
-    inner.dev_access |= access;
-    return *this;
-  }
   inline Self& width(uint32_t width) {
     inner.width = width;
     return *this;
@@ -486,29 +482,23 @@ struct ImageBuilder {
 
   inline Self& streaming() {
     return usage(L_IMAGE_USAGE_STAGING_BIT)
-      .host_access(L_MEMORY_ACCESS_WRITE_BIT)
-      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+      .host_access(L_MEMORY_ACCESS_WRITE_BIT);
   }
   inline Self& read_back() {
     return usage(L_IMAGE_USAGE_STAGING_BIT)
-      .host_access(L_MEMORY_ACCESS_READ_BIT)
-      .dev_access(L_MEMORY_ACCESS_WRITE_BIT);
+      .host_access(L_MEMORY_ACCESS_READ_BIT);
   }
   inline Self& sampled() {
-    return usage(L_IMAGE_USAGE_SAMPLED_BIT)
-      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+    return usage(L_IMAGE_USAGE_SAMPLED_BIT);
   }
   inline Self& storage() {
-    return usage(L_IMAGE_USAGE_STORAGE_BIT)
-      .dev_access(L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT);
+    return usage(L_IMAGE_USAGE_STORAGE_BIT);
   }
   inline Self& attachment() {
-    return usage(L_IMAGE_USAGE_ATTACHMENT_BIT)
-      .dev_access(L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT);
+    return usage(L_IMAGE_USAGE_ATTACHMENT_BIT);
   }
   inline Self& present() {
-    return usage(L_IMAGE_USAGE_PRESENT_BIT)
-      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+    return usage(L_IMAGE_USAGE_PRESENT_BIT);
   }
 
   Image build();
@@ -694,10 +684,6 @@ struct BufferBuilder {
     inner.host_access |= access;
     return *this;
   }
-  inline Self& dev_access(MemoryAccess access) {
-    inner.dev_access |= access;
-    return *this;
-  }
   inline Self& size(size_t size) {
     inner.size = size;
     return *this;
@@ -713,29 +699,23 @@ struct BufferBuilder {
 
   inline Self& streaming() {
     return usage(L_BUFFER_USAGE_STAGING_BIT)
-      .host_access(L_MEMORY_ACCESS_WRITE_BIT)
-      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+      .host_access(L_MEMORY_ACCESS_WRITE_BIT);
   }
   inline Self& read_back() {
     return usage(L_BUFFER_USAGE_STAGING_BIT)
-      .host_access(L_MEMORY_ACCESS_READ_BIT)
-      .dev_access(L_MEMORY_ACCESS_WRITE_BIT);
+      .host_access(L_MEMORY_ACCESS_READ_BIT);
   }
   inline Self& uniform() {
-    return usage(L_BUFFER_USAGE_UNIFORM_BIT)
-      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+    return usage(L_BUFFER_USAGE_UNIFORM_BIT);
   }
   inline Self& storage() {
-    return usage(L_BUFFER_USAGE_STORAGE_BIT)
-      .dev_access(L_MEMORY_ACCESS_READ_BIT | L_MEMORY_ACCESS_WRITE_BIT);
+    return usage(L_BUFFER_USAGE_STORAGE_BIT);
   }
   inline Self& vertex() {
-    return usage(L_BUFFER_USAGE_VERTEX_BIT)
-      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+    return usage(L_BUFFER_USAGE_VERTEX_BIT);
   }
   inline Self& index() {
-    return usage(L_BUFFER_USAGE_INDEX_BIT)
-      .dev_access(L_MEMORY_ACCESS_READ_BIT);
+    return usage(L_BUFFER_USAGE_INDEX_BIT);
   }
 
   Buffer build();

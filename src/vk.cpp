@@ -1945,247 +1945,91 @@ void _record_cmd_write_timestamp(
 
 void _make_buf_barrier_params(
   BufferUsage usage,
-  MemoryAccess dev_access,
   VkAccessFlags& access,
-  VkPipelineStageFlags stage
+  VkPipelineStageFlags& stage
 ) {
-  if (dev_access == 0) { return; }
-
-  if (usage == 0) {
-    panic("buffer barrier must be specified with a usage");
-  } else if (usage == L_BUFFER_USAGE_STAGING_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
-      // Transfer source.
-      access = VK_ACCESS_TRANSFER_READ_BIT;
-      stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    } else if (dev_access == L_MEMORY_ACCESS_WRITE_BIT) {
-      // Transfer destination.
-      access = VK_ACCESS_TRANSFER_WRITE_BIT;
-      stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    } else {
-      panic("buffer used for staging can't be both read and written");
-    }
-  } else if (usage == L_BUFFER_USAGE_VERTEX_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
-      access = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
-      stage = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
-    } else {
-      panic("buffer used for vertex input cannot be written");
-    }
-  } else if (usage == L_BUFFER_USAGE_INDEX_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
-      access = VK_ACCESS_INDEX_READ_BIT;
-      stage = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
-    } else {
-      panic("buffer used for index input cannot be written");
-    }
-  } else if (usage == L_BUFFER_USAGE_UNIFORM_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
-      access = VK_ACCESS_UNIFORM_READ_BIT;
-      stage =
-        VK_PIPELINE_STAGE_VERTEX_SHADER_BIT |
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-    } else {
-      panic("buffer used for uniform cannot be written");
-    }
-  } else if (usage == L_BUFFER_USAGE_STORAGE_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
-      access = VK_ACCESS_SHADER_READ_BIT;
-      stage =
-        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-    } else if (dev_access == L_MEMORY_ACCESS_WRITE_BIT) {
-      access = VK_ACCESS_SHADER_WRITE_BIT;
-      stage =
-        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-    } else {
-      access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-      stage =
-        VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-    }
-  } else {
-    panic("cannot make buffer barrier with a set of usage");
+  switch (usage) {
+  case L_BUFFER_USAGE_NONE:
+    return; // Keep their original values.
+  case L_BUFFER_USAGE_STAGING_BIT:
+    access = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+    stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    break;
+  case L_BUFFER_USAGE_UNIFORM_BIT:
+    access = VK_ACCESS_UNIFORM_READ_BIT;
+    stage =
+      VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
+      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    break;
+  case L_BUFFER_USAGE_STORAGE_BIT:
+    access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+    stage =
+      VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
+      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    break;
+  case L_BUFFER_USAGE_VERTEX_BIT:
+    access = VK_ACCESS_VERTEX_ATTRIBUTE_READ_BIT;
+    stage = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+    break;
+  case L_BUFFER_USAGE_INDEX_BIT:
+    access = VK_ACCESS_INDEX_READ_BIT;
+    stage = VK_PIPELINE_STAGE_VERTEX_INPUT_BIT;
+    break;
+  default:
+    panic("destination usage cannot be a set of bits");
   }
 }
 
-void _make_img_barrier_src_params(
+void _make_img_barrier_params(
   ImageUsage usage,
-  MemoryAccess dev_access,
   VkAccessFlags& access,
   VkPipelineStageFlags& stage,
   VkImageLayout& layout
 ) {
-  if (dev_access == 0) { return; }
-
-  if (usage == L_IMAGE_USAGE_NONE) {
+  switch (usage) {
+  case L_IMAGE_USAGE_NONE:
+    return; // Keep their original values.
+  case L_IMAGE_USAGE_STAGING_BIT:
+    access = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+    stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    break;
+  case L_IMAGE_USAGE_SAMPLED_BIT:
+    access = VK_ACCESS_SHADER_READ_BIT;
+    stage =
+      VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
+      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    break;
+  case L_IMAGE_USAGE_STORAGE_BIT:
+    access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
+    stage =
+      VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
+      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
+    layout = VK_IMAGE_LAYOUT_GENERAL;
+    break;
+  case L_IMAGE_USAGE_ATTACHMENT_BIT:
+    access =
+      VK_ACCESS_COLOR_ATTACHMENT_READ_BIT | // Blending does this.
+      VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+    layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    break;
+  case L_IMAGE_USAGE_SUBPASS_DATA_BIT:
+    access = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
+    stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+    layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    break;
+  case L_IMAGE_USAGE_PRESENT_BIT:
     access = 0;
     stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    layout = VK_IMAGE_LAYOUT_UNDEFINED;
-  } else if (usage == L_IMAGE_USAGE_STAGING_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
-      // Transfer source.
-      access = VK_ACCESS_TRANSFER_READ_BIT;
-      stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-      layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    } else if (dev_access == L_MEMORY_ACCESS_WRITE_BIT) {
-      // Transfer destination.
-      access = VK_ACCESS_TRANSFER_WRITE_BIT;
-      stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-      layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    } else {
-      panic("image used for staging can't be both read and written");
-      return;
-    }
-  } else if (usage == L_IMAGE_USAGE_ATTACHMENT_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
-      // Input attachment.
-      access = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
-      stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-      layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    } else {
-      // Fragment output.
-      access = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT; // Note: This is different.
-      stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-      layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    }
-  } else if (usage == L_IMAGE_USAGE_SAMPLED_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
-      // Sampled image.
-      access = VK_ACCESS_SHADER_READ_BIT;
-      stage =
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-      layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    } else {
-      panic("image used for sampling cannot be written");
-      return;
-    }
-  } else if (usage == L_IMAGE_USAGE_STORAGE_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
-      // Read-only storage image.
-      access = VK_ACCESS_SHADER_READ_BIT;
-      stage =
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-      layout = VK_IMAGE_LAYOUT_GENERAL;
-    } else if (dev_access == L_MEMORY_ACCESS_WRITE_BIT) {
-      // Write-only storage image.
-      access = VK_ACCESS_SHADER_WRITE_BIT;
-      stage =
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-      layout = VK_IMAGE_LAYOUT_GENERAL;
-    } else {
-      // Read-write storage image.
-      access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-      stage =
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-      layout = VK_IMAGE_LAYOUT_GENERAL;
-    }
-  } else if (usage == L_IMAGE_USAGE_PRESENT_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
-      access = 0;
-      stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-      layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    } else {
-      panic("image used for present cannot be written");
-      return;
-    }
-  } else {
-    panic("cannot make image barrier with a set of usage");
-    return;
+    layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    break;
+  default:
+    panic("destination usage cannot be a set of bits");
   }
 }
-void _make_img_barrier_dst_params(
-  ImageUsage usage,
-  MemoryAccess dev_access,
-  VkAccessFlags& access,
-  VkPipelineStageFlags& stage,
-  VkImageLayout& layout
-) {
-  if (dev_access == 0) { return; }
 
-  if (usage == L_IMAGE_USAGE_NONE) {
-    access = 0;
-    stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-    layout = VK_IMAGE_LAYOUT_UNDEFINED;
-  } if (usage == L_IMAGE_USAGE_STAGING_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
-      // Transfer source.
-      access = VK_ACCESS_TRANSFER_READ_BIT;
-      stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-      layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
-    } else if (dev_access == L_MEMORY_ACCESS_WRITE_BIT) {
-      // Transfer destination.
-      access = VK_ACCESS_TRANSFER_WRITE_BIT;
-      stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-      layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
-    } else {
-      panic("image used for staging can't be both read and written");
-    }
-  } else if (usage == L_IMAGE_USAGE_ATTACHMENT_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
-      // Input attachment.
-      access = VK_ACCESS_INPUT_ATTACHMENT_READ_BIT;
-      stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-      layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    } else {
-      // Fragment output.
-      access = VK_ACCESS_COLOR_ATTACHMENT_READ_BIT;
-      stage = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-      layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-    }
-  } else if (usage == L_IMAGE_USAGE_SAMPLED_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
-      // Sampled image.
-      access = VK_ACCESS_SHADER_READ_BIT;
-      stage =
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-      layout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    } else {
-      panic("image used for sampling cannot be written");
-    }
-  } else if (usage == L_IMAGE_USAGE_STORAGE_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
-      // Read-only storage image.
-      access = VK_ACCESS_SHADER_READ_BIT;
-      stage =
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-      layout = VK_IMAGE_LAYOUT_GENERAL;
-    } else if (dev_access == L_MEMORY_ACCESS_WRITE_BIT) {
-      // Write-only storage image.
-      access = VK_ACCESS_SHADER_WRITE_BIT;
-      stage =
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-      layout = VK_IMAGE_LAYOUT_GENERAL;
-    } else {
-      // Read-write storage image.
-      access = VK_ACCESS_SHADER_READ_BIT | VK_ACCESS_SHADER_WRITE_BIT;
-      stage =
-        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT |
-        VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
-      layout = VK_IMAGE_LAYOUT_GENERAL;
-    }
-  } else if (usage == L_IMAGE_USAGE_PRESENT_BIT) {
-    if (dev_access == L_MEMORY_ACCESS_READ_BIT) {
-      access = 0;
-      stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-      layout = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
-    } else {
-      panic("image used for present cannot be written");
-      return;
-    }
-  } else {
-    panic("cannot make image barrier with a set of usage");
-  }
-}
 void _record_cmd_buf_barrier(
   TransactionLike& transact,
   const Command& cmd
@@ -2195,16 +2039,14 @@ void _record_cmd_buf_barrier(
 
   BufferUsage src_usage = in.src_usage;
   BufferUsage dst_usage = in.dst_usage;
-  MemoryAccess src_dev_access = in.src_dev_access;
-  MemoryAccess dst_dev_access = in.dst_dev_access;
 
   VkAccessFlags src_access = 0;
   VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-  _make_buf_barrier_params(src_usage, src_dev_access, src_access, src_stage);
+  _make_buf_barrier_params(src_usage, src_access, src_stage);
 
   VkAccessFlags dst_access = 0;
   VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-  _make_buf_barrier_params(dst_usage, dst_dev_access, dst_access, dst_stage);
+  _make_buf_barrier_params(dst_usage, dst_access, dst_stage);
 
   VkBufferMemoryBarrier bmb {};
   bmb.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
@@ -2237,20 +2079,16 @@ void _record_cmd_img_barrier(
 
   ImageUsage src_usage = in.src_usage;
   ImageUsage dst_usage = in.dst_usage;
-  MemoryAccess src_dev_access = in.src_dev_access;
-  MemoryAccess dst_dev_access = in.dst_dev_access;
 
   VkAccessFlags src_access = 0;
   VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
   VkImageLayout src_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-  _make_img_barrier_src_params(src_usage, src_dev_access,
-    src_access, src_stage, src_layout);
+  _make_img_barrier_params(src_usage, src_access, src_stage, src_layout);
 
   VkAccessFlags dst_access = 0;
   VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
   VkImageLayout dst_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-  _make_img_barrier_dst_params(dst_usage, dst_dev_access,
-    dst_access, dst_stage, dst_layout);
+  _make_img_barrier_params(dst_usage, dst_access, dst_stage, dst_layout);
 
   VkImageMemoryBarrier imb {};
   imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -2311,72 +2149,38 @@ void _record_cmd_end_pass(TransactionLike& transact, const Command& cmd) {
 }
 
 // TODO: (penguinliong) Check these pipeline stages.
-void _make_depth_img_barrier_src_params(
+void _make_depth_img_barrier_params(
   DepthImageUsage usage,
-  MemoryAccess dev_access,
   VkAccessFlags& access,
   VkPipelineStageFlags& stage,
   VkImageLayout& layout
 ) {
-  if (dev_access == 0) { return; }
-
-  if (usage == L_IMAGE_USAGE_NONE) {
-    access = 0;
-    stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    layout = VK_IMAGE_LAYOUT_UNDEFINED;
-  }
-  if (usage == L_DEPTH_IMAGE_USAGE_SAMPLED_BIT) {
-    assert(dev_access == L_MEMORY_ACCESS_READ_BIT, "sampled depth image cannot "
-      "be written");
-    access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-    stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
+  switch (usage) {
+  case L_DEPTH_IMAGE_USAGE_NONE:
+    return; // Keep their original values.
+  case L_DEPTH_IMAGE_USAGE_SAMPLED_BIT:
+    access = VK_ACCESS_SHADER_READ_BIT;
+    stage =
+      VK_PIPELINE_STAGE_ALL_GRAPHICS_BIT |
+      VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT;
     layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-  } else if (usage == L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT) {
-    if (L_MEMORY_ACCESS_READ_BIT) {
-      access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-      stage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-      layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    } else {
-      access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-      stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-      layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    }
-  } else {
-    panic("cannot make image barrier with a set of usage");
-  }
-}
-void _make_depth_img_barrier_dst_params(
-  DepthImageUsage usage,
-  MemoryAccess dev_access,
-  VkAccessFlags& access,
-  VkPipelineStageFlags& stage,
-  VkImageLayout& layout
-) {
-  if (dev_access == 0) { return; }
-
-  if (usage == L_IMAGE_USAGE_NONE) {
-    access = 0;
-    stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-    layout = VK_IMAGE_LAYOUT_UNDEFINED;
-  }
-  if (usage == L_DEPTH_IMAGE_USAGE_SAMPLED_BIT) {
-    assert(dev_access == L_MEMORY_ACCESS_READ_BIT, "sampled depth image cannot "
-      "be written");
+    break;
+  case L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT:
+    access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
+    stage = 
+      VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+      VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    break;
+  case L_DEPTH_IMAGE_USAGE_SUBPASS_DATA_BIT:
     access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-    stage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_READ_ONLY_OPTIMAL;
-  } else if (usage == L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT) {
-    if (L_MEMORY_ACCESS_READ_BIT) {
-      access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_READ_BIT;
-      stage = VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT;
-      layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    } else {
-      access = VK_ACCESS_DEPTH_STENCIL_ATTACHMENT_WRITE_BIT;
-      stage = VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
-      layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-    }
-  } else {
-    panic("cannot make image barrier with a set of usage");
+    stage =
+      VK_PIPELINE_STAGE_EARLY_FRAGMENT_TESTS_BIT |
+      VK_PIPELINE_STAGE_LATE_FRAGMENT_TESTS_BIT;
+    layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
+    break;
+  default:
+    panic("destination usage cannot be a set of bits");
   }
 }
 void _record_cmd_depth_img_barrier(
@@ -2389,14 +2193,14 @@ void _record_cmd_depth_img_barrier(
   VkAccessFlags src_access = 0;
   VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
   VkImageLayout src_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-  _make_depth_img_barrier_src_params(in.src_usage, in.src_dev_access,
-    src_access, src_stage, src_layout);
+  _make_depth_img_barrier_params(in.src_usage, src_access, src_stage,
+    src_layout);
 
   VkAccessFlags dst_access = 0;
   VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
   VkImageLayout dst_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-  _make_depth_img_barrier_dst_params(in.dst_usage, in.dst_dev_access,
-    dst_access, dst_stage, dst_layout);
+  _make_depth_img_barrier_params(in.dst_usage, dst_access, dst_stage,
+    dst_layout);
 
   VkImageMemoryBarrier imb {};
   imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
