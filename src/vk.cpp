@@ -1432,95 +1432,154 @@ VkDescriptorSet _alloc_desc_set(
   VK_ASSERT << vkAllocateDescriptorSets(ctxt.dev, &dsai, &desc_set);
   return desc_set;
 }
-ResourcePool create_rsc_pool(const Task& task) {
-  if (task.desc_pool_sizes.size() == 0) {
-    log::debug("created resource pool with no entry");
-    return ResourcePool { &task, VK_NULL_HANDLE, VK_NULL_HANDLE };
+void _update_desc_set(
+  const Context& ctxt,
+  VkDescriptorSet desc_set,
+  const std::vector<ResourceType>& rsc_tys,
+  const std::vector<ResourceView>& rsc_views
+) {
+  std::vector<VkDescriptorBufferInfo> dbis;
+  std::vector<VkDescriptorImageInfo> diis;
+  std::vector<VkWriteDescriptorSet> wdss;
+
+  auto push_dbi = [&](const BufferView& buf_view) {
+    VkDescriptorBufferInfo dbi {};
+    dbi.buffer = buf_view.buf->buf;
+    dbi.offset = buf_view.offset;
+    dbi.range = buf_view.size;
+    dbis.emplace_back(std::move(dbi));
+
+    log::debug("bound pool resource #", wdss.size(), " to buffer '",
+      buf_view.buf->buf_cfg.label, "'");
+
+    return dbis.back();
+  };
+  auto push_dii = [&](const ImageView& img_view, VkImageLayout layout) {
+    VkDescriptorImageInfo dii {};
+    dii.imageView = img_view.img->img_view;
+    dii.imageLayout = layout;
+    diis.emplace_back(std::move(dii));
+
+    log::debug("bound pool resource #", wdss.size(), " to image '",
+      img_view.img->img_cfg.label, "'");
+
+    return diis.back();
+  };
+
+  wdss.reserve(rsc_views.size());
+  for (uint32_t i = 0; i < rsc_views.size(); ++i) {
+    const ResourceView& rsc_view = rsc_views[i];
+
+    VkWriteDescriptorSet wds {};
+    wds.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    wds.dstSet = desc_set;
+    wds.dstBinding = i;
+    wds.dstArrayElement = 0;
+    wds.descriptorCount = 1;
+    switch (rsc_tys[i]) {
+    case L_RESOURCE_TYPE_UNIFORM_BUFFER:
+      wds.pBufferInfo = &push_dbi(rsc_view.buf_view);
+      wds.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      break;
+    case L_RESOURCE_TYPE_STORAGE_BUFFER:
+      wds.pBufferInfo = &push_dbi(rsc_view.buf_view);
+      wds.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      break;
+    case L_RESOURCE_TYPE_SAMPLED_IMAGE:
+      wds.pImageInfo = &push_dii(rsc_view.img_view,
+        VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+      wds.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      break;
+    case L_RESOURCE_TYPE_STORAGE_IMAGE:
+      wds.pImageInfo = &push_dii(rsc_view.img_view,
+        VK_IMAGE_LAYOUT_GENERAL);
+      wds.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+      break;
+    default: panic("unexpected resource type");
+    }
+    wdss.emplace_back(std::move(wds));
   }
+
+  vkUpdateDescriptorSets(ctxt.dev, wdss.size(), wdss.data(), 0, nullptr);
+}
+Invocation _create_invoke_common(
+  const Task& task,
+  const std::vector<ResourceView>& rsc_views
+) {
+  assert(task.rsc_tys.size() == rsc_views.size());
 
   const Context& ctxt = *task.ctxt;
 
-  VkDescriptorPool desc_pool = _create_desc_pool(ctxt, task.desc_pool_sizes);
-  VkDescriptorSet desc_set =
-    _alloc_desc_set(ctxt, desc_pool, task.desc_set_layout);
-
-  log::debug("created resource pool");
-  return ResourcePool { &task, desc_pool, desc_set };
-}
-void destroy_rsc_pool(ResourcePool& rsc_pool) {
-  if (rsc_pool.desc_pool != VK_NULL_HANDLE) {
-    vkDestroyDescriptorPool(rsc_pool.task->ctxt->dev, rsc_pool.desc_pool, nullptr);
-    log::debug("destroyed resource pool");
-    rsc_pool = {};
+  Invocation out {};
+  if (task.desc_pool_sizes.size() > 0) {
+    out.desc_pool = _create_desc_pool(ctxt, task.desc_pool_sizes);
+    out.desc_set = _alloc_desc_set(ctxt, out.desc_pool, task.desc_set_layout);
+    _update_desc_set(ctxt, out.desc_set, task.rsc_tys, rsc_views);
   }
+  out.task = &task;
+
+  return out;
 }
-void bind_pool_rsc(
-  ResourcePool& rsc_pool,
-  uint32_t idx,
-  const BufferView& buf_view
+Invocation create_comp_invoke(
+  const Task& task,
+  const ComputeInvocationConfig& cfg
 ) {
-  assert(rsc_pool.desc_pool != VK_NULL_HANDLE, "cannot bind to empty resource "
-    "pool");
+  const Context& ctxt = *task.ctxt;
 
-  VkDescriptorBufferInfo dbi {};
-  dbi.buffer = buf_view.buf->buf;
-  dbi.offset = buf_view.offset;
-  dbi.range = buf_view.size;
+  Invocation out = _create_invoke_common(task, cfg.rsc_views);
+  out.submit_ty = L_SUBMIT_TYPE_COMPUTE;
+  out.bind_pt = VK_PIPELINE_BIND_POINT_COMPUTE;
 
-  VkWriteDescriptorSet write_desc_set {};
-  write_desc_set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-  write_desc_set.dstSet = rsc_pool.desc_set;
-  write_desc_set.dstBinding = idx;
-  write_desc_set.dstArrayElement = 0;
-  write_desc_set.descriptorCount = 1;
-  switch (rsc_pool.task->rsc_tys[idx]) {
-  case L_RESOURCE_TYPE_UNIFORM_BUFFER:
-    write_desc_set.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    break;
-  case L_RESOURCE_TYPE_STORAGE_BUFFER:
-    write_desc_set.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-    break;
-  default: panic("unexpected buffer resource type");
-  }
-  write_desc_set.pBufferInfo = &dbi;
+  InvocationComputeDetail comp_detail {};
+  comp_detail.workgrp_count = cfg.workgrp_count;
 
-  vkUpdateDescriptorSets(rsc_pool.task->ctxt->dev, 1, &write_desc_set, 0, nullptr);
-  log::debug("bound pool resource #", idx, " to buffer '",
-    buf_view.buf->buf_cfg.label, "'");
+  out.comp_detail =
+    std::make_unique<InvocationComputeDetail>(std::move(comp_detail));
+
+  log::debug("created compute invocation");
+  return out;
 }
-void bind_pool_rsc(
-  ResourcePool& rsc_pool,
-  uint32_t idx,
-  const ImageView& img_view
+Invocation create_graph_invoke(
+  const Task& task,
+  const GraphicsInvocationConfig& cfg
 ) {
-  assert(rsc_pool.desc_pool != VK_NULL_HANDLE, "cannot bind to empty resource "
-    "pool");
+  const Context& ctxt = *task.ctxt;
 
-  VkDescriptorImageInfo dii {};
-  dii.imageView = img_view.img->img_view;
+  Invocation out = _create_invoke_common(task, cfg.rsc_views);
+  out.submit_ty = L_SUBMIT_TYPE_GRAPHICS;
+  out.bind_pt = VK_PIPELINE_BIND_POINT_GRAPHICS;
 
-  VkWriteDescriptorSet write_desc_set {};
-  write_desc_set.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-  write_desc_set.dstSet = rsc_pool.desc_set;
-  write_desc_set.dstBinding = idx;
-  write_desc_set.dstArrayElement = 0;
-  write_desc_set.descriptorCount = 1;
-  switch (rsc_pool.task->rsc_tys[idx]) {
-  case L_RESOURCE_TYPE_SAMPLED_IMAGE:
-    write_desc_set.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    dii.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    break;
-  case L_RESOURCE_TYPE_STORAGE_IMAGE:
-    write_desc_set.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-    dii.imageLayout = VK_IMAGE_LAYOUT_GENERAL;
-    break;
-  default: panic("unexpected image resource type");
+  std::vector<VkBuffer> vert_bufs;
+  std::vector<VkDeviceSize> vert_buf_offsets;
+  vert_bufs.reserve(cfg.vert_bufs.size());
+  vert_buf_offsets.reserve(cfg.vert_bufs.size());
+  for (size_t i = 0; i < cfg.vert_bufs.size(); ++i) {
+    const BufferView& vert_buf = cfg.vert_bufs[i];
+    vert_bufs.emplace_back(vert_buf.buf->buf);
+    vert_buf_offsets.emplace_back(vert_buf.offset);
   }
-  write_desc_set.pImageInfo = &dii;
 
-  vkUpdateDescriptorSets(rsc_pool.task->ctxt->dev, 1, &write_desc_set, 0, nullptr);
-  log::debug("bound pool resource #", idx, " to image '",
-    img_view.img->img_cfg.label, "'");
+  InvocationGraphicsDetail graph_detail {};
+  graph_detail.vert_bufs = std::move(vert_bufs);
+  graph_detail.vert_buf_offsets = std::move(vert_buf_offsets);
+  graph_detail.idx_buf = cfg.idx_buf.buf->buf;
+  graph_detail.idx_buf_offset = cfg.idx_buf.offset;
+  graph_detail.ninst = cfg.ninst;
+  graph_detail.nvert = cfg.nvert;
+  graph_detail.nidx = cfg.nidx;
+
+  out.graph_detail =
+    std::make_unique<InvocationGraphicsDetail>(std::move(graph_detail));
+
+  log::debug("created graphics invocation");
+  return out;
+}
+void destroy_invoke(Invocation& invoke) {
+  if (invoke.desc_pool != VK_NULL_HANDLE) {
+    vkDestroyDescriptorPool(invoke.task->ctxt->dev, invoke.desc_pool, nullptr);
+    log::debug("destroyed invocation");
+  }
+  invoke = {};
 }
 
 
@@ -1817,65 +1876,50 @@ void _record_cmd_copy_img(TransactionLike& transact, const Command& cmd) {
   }
 }
 
-void _record_cmd_dispatch(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_dispatch;
-  const auto& task = *in.task;
-  const auto& rsc_pool = *in.rsc_pool;
-  const auto& nworkgrp = in.nworkgrp;
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_COMPUTE);
+void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
+  const auto& in = cmd.cmd_invoke;
+  const auto& invoke = *in.invoke;
+  const auto& task = *invoke.task;
 
-  //log::warn("workgroup size is ignored; actual workgroup size is "
-  //  "specified in shader");
-  vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_COMPUTE, task.pipe);
-  if (rsc_pool.desc_set != VK_NULL_HANDLE) {
-    vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_COMPUTE,
-      task.pipe_layout, 0, 1, &rsc_pool.desc_set, 0, nullptr);
-  }
-  vkCmdDispatch(cmdbuf, nworkgrp.x, nworkgrp.y, nworkgrp.z);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled compute task '", task.label, "' for execution");
-  }
-}
-
-void _record_cmd_draw(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_draw;
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
-
-  vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-    in.task->pipe);
-  if (in.rsc_pool->desc_set != VK_NULL_HANDLE) {
-    vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-      in.task->pipe_layout, 0, 1, &in.rsc_pool->desc_set, 0, nullptr);
+  VkCommandBuffer cmdbuf = _get_cmdbuf(transact, invoke.submit_ty);
+  
+  vkCmdBindPipeline(cmdbuf, invoke.bind_pt, task.pipe);
+  if (invoke.desc_set != VK_NULL_HANDLE) {
+    vkCmdBindDescriptorSets(cmdbuf, invoke.bind_pt, task.pipe_layout, 0, 1,
+      &invoke.desc_set, 0, nullptr);
   }
 
-  VkDeviceSize offset = in.verts.offset;
-  vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts.buf->buf, &offset);
-  vkCmdDraw(cmdbuf, in.nvert, in.ninst, 0, 0);
-
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled graphics task '", in.task->label, "' for execution");
+  switch (invoke.bind_pt) {
+  case VK_PIPELINE_BIND_POINT_COMPUTE:
+    assert(invoke.comp_detail != nullptr);
+    {
+      const InvocationComputeDetail& comp_detail = *invoke.comp_detail;
+      const DispatchSize& workgrp_count = comp_detail.workgrp_count;
+      vkCmdDispatch(cmdbuf, workgrp_count.x, workgrp_count.y, workgrp_count.z);
+    }
+    break;
+  case VK_PIPELINE_BIND_POINT_GRAPHICS:
+    assert(invoke.graph_detail != nullptr);
+    {
+      const InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
+      vkCmdBindVertexBuffers(cmdbuf, 0, graph_detail.vert_bufs.size(),
+        graph_detail.vert_bufs.data(), graph_detail.vert_buf_offsets.data());
+      if (invoke.graph_detail->nidx != 0) {
+        vkCmdBindIndexBuffer(cmdbuf, graph_detail.idx_buf,
+          graph_detail.idx_buf_offset, VK_INDEX_TYPE_UINT16);
+        vkCmdDrawIndexed(cmdbuf, graph_detail.nidx, graph_detail.ninst,
+          0, 0, 0);
+      } else {
+        vkCmdDraw(cmdbuf, graph_detail.nvert, graph_detail.ninst, 0, 0);
+      }
+    }
+    break;
+  default:
+    unreachable("unexpected submit type");
   }
-}
-void _record_cmd_draw_indexed(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_draw_indexed;
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
-
-  vkCmdBindPipeline(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-    in.task->pipe);
-  if (in.rsc_pool->desc_set != VK_NULL_HANDLE) {
-    vkCmdBindDescriptorSets(cmdbuf, VK_PIPELINE_BIND_POINT_GRAPHICS,
-      in.task->pipe_layout, 0, 1, &in.rsc_pool->desc_set, 0, nullptr);
-  }
-
-  VkDeviceSize offset = in.verts.offset;
-  vkCmdBindVertexBuffers(cmdbuf, 0, 1, &in.verts.buf->buf, &offset);
-
-  vkCmdBindIndexBuffer(cmdbuf, in.idxs.buf->buf, in.idxs.offset,
-    VK_INDEX_TYPE_UINT16);
-  vkCmdDrawIndexed(cmdbuf, in.nidx, in.ninst, 0, 0, 0);
 
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled graphics task '", in.task->label, "' for execution");
+    log::debug("scheduled invocation '", task.label, "' for execution");
   }
 }
 
@@ -2400,14 +2444,8 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
   case L_COMMAND_TYPE_COPY_IMAGE:
     _record_cmd_copy_img(transact, cmd);
     break;
-  case L_COMMAND_TYPE_DISPATCH:
-    _record_cmd_dispatch(transact, cmd);
-    break;
-  case L_COMMAND_TYPE_DRAW:
-    _record_cmd_draw(transact, cmd);
-    break;
-  case L_COMMAND_TYPE_DRAW_INDEXED:
-    _record_cmd_draw_indexed(transact, cmd);
+  case L_COMMAND_TYPE_INVOKE:
+    _record_cmd_invoke(transact, cmd);
     break;
   case L_COMMAND_TYPE_WRITE_TIMESTAMP:
     _record_cmd_write_timestamp(transact, cmd);

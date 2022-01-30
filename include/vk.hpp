@@ -6,6 +6,7 @@
 
 #include <array>
 #include <map>
+#include <memory>
 #include <chrono>
 #include <vulkan/vulkan.h>
 #define HAL_IMPL_NAMESPACE vk
@@ -138,10 +139,27 @@ struct Task {
   WorkgroupSizeSpecializationDetail workgrp_spec_detail;
 };
 
-struct ResourcePool {
+struct InvocationComputeDetail {
+  DispatchSize workgrp_count;
+};
+struct InvocationGraphicsDetail {
+  std::vector<VkBuffer> vert_bufs;
+  std::vector<VkDeviceSize> vert_buf_offsets;
+  VkBuffer idx_buf;
+  VkDeviceSize idx_buf_offset;
+  uint32_t ninst;
+  uint32_t nvert;
+  uint32_t nidx;
+};
+struct Invocation {
+  std::string label;
   const Task* task;
+  SubmitType submit_ty;
+  VkPipelineBindPoint bind_pt;
   VkDescriptorPool desc_pool;
   VkDescriptorSet desc_set;
+  std::unique_ptr<InvocationComputeDetail> comp_detail;
+  std::unique_ptr<InvocationGraphicsDetail> graph_detail;
 };
 
 struct TransactionRenderPassDetail {

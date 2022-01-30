@@ -198,21 +198,31 @@ Task GraphicsTaskBuilder::build() {
   return create_graph_task(parent, inner);
 }
 
-
-
-ResourcePool Task::create_rsc_pool() const {
-  return HAL_IMPL_NAMESPACE::create_rsc_pool(*inner);
+ComputeInvocationBuilder Task::build_comp_invoke(
+  const std::string& label
+) const {
+  return ComputeInvocationBuilder(*this, label);
+}
+GraphicsInvocationBuilder Task::build_graph_invoke(
+  const std::string& label
+) const {
+  return GraphicsInvocationBuilder(*this, label);
 }
 
-ResourcePool::ResourcePool(const Context& ctxt, const Task& task) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::ResourcePool>(
-    create_rsc_pool(*task.inner))) {}
-ResourcePool::ResourcePool(HAL_IMPL_NAMESPACE::ResourcePool&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::ResourcePool>(inner)) {}
-ResourcePool::~ResourcePool() {
+
+Invocation::Invocation(HAL_IMPL_NAMESPACE::Invocation&& inner) :
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::Invocation>(
+    std::forward<HAL_IMPL_NAMESPACE::Invocation>(inner))) {}
+Invocation::~Invocation() {
   if (inner != nullptr) {
-    destroy_rsc_pool(*inner);
+    destroy_invoke(*inner);
   }
+}
+Invocation ComputeInvocationBuilder::build() {
+  return create_comp_invoke(parent, inner);
+}
+Invocation GraphicsInvocationBuilder::build() {
+  return create_graph_invoke(parent, inner);
 }
 
 

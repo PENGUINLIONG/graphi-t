@@ -135,12 +135,14 @@ void guarded_main() {
     .read_back()
     .build();
 
-  scoped::ResourcePool rsc_pool = task.create_rsc_pool();
-  rsc_pool.bind(0, buf.view());
+  scoped::Invocation invoke = task.build_comp_invoke()
+    .rsc(buf.view())
+    .workgrp_count(4, 4, 4)
+    .build();
 
   scoped::Transaction transact = ctxt.create_transact("transact", {
     cmd_set_submit_ty(L_SUBMIT_TYPE_COMPUTE),
-    cmd_dispatch(task, rsc_pool, { 4, 4, 4 }),
+    cmd_invoke(invoke),
   });
 
   scoped::CommandDrain cmd_drain(ctxt);
@@ -301,8 +303,12 @@ void guarded_main2() {
     .rsc(L_RESOURCE_TYPE_UNIFORM_BUFFER)
     .build();
 
-  scoped::ResourcePool rsc_pool = task.create_rsc_pool();
-  rsc_pool.bind(0, ubo.view());
+  scoped::Invocation invoke = task.build_graph_invoke()
+    .vert_buf(verts.view())
+    .idx_buf(idxs.view())
+    .rsc(ubo.view())
+    .nidx(3)
+    .build();
 
   scoped::Buffer out_buf = ctxt.build_buf("out_buf")
     .size(FRAMEBUF_WIDTH * FRAMEBUF_HEIGHT * 4 * sizeof(float))
@@ -326,7 +332,7 @@ void guarded_main2() {
       0,
       L_MEMORY_ACCESS_WRITE_BIT),
     cmd_begin_pass(pass, true),
-    cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 3, 1),
+    cmd_invoke(invoke),
     cmd_end_pass(pass),
     dev_timer.cmd_toc(),
     cmd_img_barrier(out_img,

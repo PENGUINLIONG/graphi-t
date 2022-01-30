@@ -260,8 +260,6 @@ struct ComputeTaskConfig {
   DispatchSize workgrp_size;
 };
 
-
-
 enum AttachmentType {
   L_ATTACHMENT_TYPE_COLOR,
   L_ATTACHMENT_TYPE_DEPTH,
@@ -307,8 +305,6 @@ L_IMPL_STRUCT struct RenderPass;
 RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg);
 void destroy_pass(RenderPass& pass);
 
-
-
 enum Topology {
   L_TOPOLOGY_POINT = 1,
   L_TOPOLOGY_LINE = 2,
@@ -348,6 +344,7 @@ struct GraphicsTaskConfig {
   // Resources to be allocated.
   std::vector<ResourceType> rsc_tys;
 };
+
 L_IMPL_STRUCT struct Task;
 L_IMPL_FN Task create_comp_task(
   const Context& ctxt,
@@ -361,19 +358,49 @@ L_IMPL_FN void destroy_task(Task& task);
 
 
 
-L_IMPL_STRUCT struct ResourcePool;
-L_IMPL_FN ResourcePool create_rsc_pool(const Task& task);
-L_IMPL_FN void destroy_rsc_pool(ResourcePool& rsc_pool);
-L_IMPL_FN void bind_pool_rsc(
-  ResourcePool& rsc_pool,
-  uint32_t idx,
-  const BufferView& buf_view
+struct ResourceView {
+  BufferView buf_view;
+  ImageView img_view;
+
+  inline ResourceView(BufferView buf_view) : buf_view(buf_view), img_view() {}
+  inline ResourceView(ImageView img_view) : buf_view(), img_view(img_view) {}
+};
+// Instanced invocation of a compute task, a.k.a. a dispatch.
+struct ComputeInvocationConfig {
+  std::string label;
+  // Resources bound to this invocation.
+  std::vector<ResourceView> rsc_views;
+  // Number of workgroups dispatched in this invocation.
+  DispatchSize workgrp_count;
+};
+// Instanced invocation of a graphics task, a.k.a. a draw call.
+struct GraphicsInvocationConfig {
+  std::string label;
+  // Resources bound to this invocation.
+  std::vector<ResourceView> rsc_views;
+  // Number of instances to be drawn.
+  uint32_t ninst;
+  // Vertex buffer for drawing.
+  std::vector<BufferView> vert_bufs;
+  // Number of vertices to be drawn in this draw. If `nidx` is non-zero, `nvert`
+  // MUST be zero.
+  uint32_t nvert;
+  // Index buffer for vertex indexing.
+  BufferView idx_buf;
+  // Number of indices to be drawn in this draw. If `nvert` is non-zero, `nidx`
+  // MUST be zero.
+  uint32_t nidx;
+};
+L_IMPL_STRUCT struct Invocation;
+L_IMPL_FN Invocation create_comp_invoke(
+  const Task& task,
+  const ComputeInvocationConfig& cfg
 );
-L_IMPL_FN void bind_pool_rsc(
-  ResourcePool& rsc_pool,
-  uint32_t idx,
-  const ImageView& img_view
+L_IMPL_FN Invocation create_graph_invoke(
+  const Task& task,
+  const GraphicsInvocationConfig& cfg
 );
+L_IMPL_FN void destroy_invoke(Invocation& invoke);
 
 
 
@@ -398,6 +425,75 @@ L_IMPL_FN Timestamp create_timestamp(const Context& ctxt);
 L_IMPL_FN void destroy_timestamp(Timestamp& timestamp);
 L_IMPL_FN double get_timestamp_result_us(const Timestamp& timestamp);
 
+/*
+
+L_IMPL_STRUCT struct Invocation;
+L_IMPL_FN Invocation create_invocation(const Context& ctxt);
+L_IMPL_FN void destroy_invocation(const Context& ctxt);
+
+
+
+struct GraphicsCommandBuilder {
+  Command build();
+};
+
+enum CommandParameterType {
+  L_COMMAND_PARAMETER_TYPE_I32,
+  L_COMMAND_PARAMETER_TYPE_U32,
+  L_COMMAND_PARAMETER_TYPE_F32,
+  L_COMMAND_PARAMETER_TYPE_BUFFER,
+  L_COMMAND_PARAMETER_TYPE_IMAGE,
+  L_COMMAND_PARAMETER_TYPE_GRAPHICS_TASK,
+  L_COMMAND_PARAMETER_TYPE_COMPUTE_TASK,
+};
+
+struct CommandParameter {
+  CommandParameterType param_ty;
+  union {
+    struct {
+      BufferUsage buf_usage;
+      MemoryAccess buf_access;
+    } buf;
+    struct {
+      ImageUsage img_usage;
+      MemoryAccess img_access;
+    } img;
+  } contract;
+};
+struct CompositeCommand {
+  std::string label;
+  std::vector<Command> cmds;
+  std::vector<CommandParameter> params;
+};
+
+
+
+enum ComputeCommandParameterClass {
+  L_COMPUTE_COMMAND_PARAMETER_CLASS_WORKGROUP_COUNT, // u32
+  L_COMPUTE_COMMAND_PARAMETER_CLASS_RESOURCE, // Buffer | Image
+};
+struct ComputeCommand {
+  const Task* task;
+  uint32_t nworkgrp[3];
+  std::vector<Resource>;
+};
+
+
+
+enum GraphicsCommandParameterType {
+  L_GRAPHICS_COMMAND_PARAMETER_TYPE_VERTEX_COUNT,
+  L_GRAPHICS_COMMAND_PARAMETER_TYPE_VERTEX_BUFFER,
+  L_GRAPHICS_COMMAND_PARAMETER_TYPE_INDEX_COUNT,
+  L_GRAPHICS_COMMAND_PARAMETER_TYPE_INDEX_BUFFER,
+  L_GRAPHICS_COMMAND_PARAMETER_TYPE_COLOR_ATTACHMENT,
+  L_GRAPHICS_COMMAND_PARAMETER_TYPE_DEPTH_STENCIL_ATTACHMENT,
+
+};
+
+
+
+
+*/
 
 enum CommandType {
   L_COMMAND_TYPE_SET_SUBMIT_TYPE,
@@ -406,9 +502,7 @@ enum CommandType {
   L_COMMAND_TYPE_COPY_IMAGE_TO_BUFFER,
   L_COMMAND_TYPE_COPY_BUFFER,
   L_COMMAND_TYPE_COPY_IMAGE,
-  L_COMMAND_TYPE_DISPATCH,
-  L_COMMAND_TYPE_DRAW,
-  L_COMMAND_TYPE_DRAW_INDEXED,
+  L_COMMAND_TYPE_INVOKE,
   L_COMMAND_TYPE_WRITE_TIMESTAMP,
   L_COMMAND_TYPE_BUFFER_BARRIER,
   L_COMMAND_TYPE_IMAGE_BARRIER,
@@ -447,25 +541,8 @@ struct Command {
       ImageView dst;
     } cmd_copy_img;
     struct {
-      const Task* task;
-      const ResourcePool* rsc_pool;
-      DispatchSize nworkgrp;
-    } cmd_dispatch;
-    struct {
-      const Task* task;
-      const ResourcePool* rsc_pool;
-      BufferView verts;
-      uint32_t nvert;
-      uint32_t ninst;
-    } cmd_draw;
-    struct {
-      const Task* task;
-      const ResourcePool* rsc_pool;
-      BufferView verts;
-      BufferView idxs;
-      uint32_t nidx;
-      uint32_t ninst;
-    } cmd_draw_indexed;
+      const Invocation* invoke;
+    } cmd_invoke;
     struct {
       const Timestamp* timestamp;
     } cmd_write_timestamp;
@@ -490,13 +567,6 @@ struct Command {
     struct {
       const RenderPass* pass;
     } cmd_end_pass;
-    struct {
-        uint32_t ivert_input;
-        const Buffer* vert_buf;
-    } cmd_bind_vert_buf;
-    struct {
-        const Buffer* vert_buf;
-    } cmd_bind_idx_buf;
     struct {
       const DepthImage* depth_img;
       MemoryAccess src_dev_access;
@@ -547,54 +617,11 @@ inline Command cmd_copy_img(const ImageView& src, const ImageView& dst) {
   return cmd;
 }
 
-// Dispatch a task to the transaction.
-inline Command cmd_dispatch(
-  const Task& task,
-  const ResourcePool& rsc_pool,
-  DispatchSize nworkgrp
-) {
+// Realize an invocation.
+inline Command cmd_invoke(const Invocation& invoke) {
   Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_DISPATCH;
-  cmd.cmd_dispatch.task = &task;
-  cmd.cmd_dispatch.rsc_pool = &rsc_pool;
-  cmd.cmd_dispatch.nworkgrp = nworkgrp;
-  return cmd;
-}
-
-// Draw triangle lists, vertex by vertex.
-inline Command cmd_draw(
-  const Task& task,
-  const ResourcePool& rsc_pool,
-  const BufferView& verts,
-  uint32_t nvert,
-  uint32_t ninst
-) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_DRAW;
-  cmd.cmd_draw.task = &task;
-  cmd.cmd_draw.rsc_pool = &rsc_pool;
-  cmd.cmd_draw.verts = verts;
-  cmd.cmd_draw.nvert = nvert;
-  cmd.cmd_draw.ninst = ninst;
-  return cmd;
-}
-// Draw triangle lists, index by index, where each index points to a vertex.
-inline Command cmd_draw_indexed(
-  const Task& task,
-  const ResourcePool& rsc_pool,
-  const BufferView& idxs,
-  const BufferView& verts,
-  uint32_t nidx,
-  uint32_t ninst
-) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_DRAW_INDEXED;
-  cmd.cmd_draw_indexed.task = &task;
-  cmd.cmd_draw_indexed.rsc_pool = &rsc_pool;
-  cmd.cmd_draw_indexed.verts = verts;
-  cmd.cmd_draw_indexed.idxs = idxs;
-  cmd.cmd_draw_indexed.nidx = nidx;
-  cmd.cmd_draw_indexed.ninst = ninst;
+  cmd.cmd_ty = L_COMMAND_TYPE_INVOKE;
+  cmd.cmd_invoke.invoke = &invoke;
   return cmd;
 }
 
