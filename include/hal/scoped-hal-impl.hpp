@@ -12,7 +12,8 @@ namespace scoped {
 Context::Context(const ContextConfig& cfg) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::Context>(create_ctxt(cfg))) {}
 Context::Context(HAL_IMPL_NAMESPACE::Context&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Context>(inner)) {}
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::Context>(
+    std::forward<HAL_IMPL_NAMESPACE::Context>(inner))) {}
 Context::Context(const std::string& label, uint32_t dev_idx) :
   Context(ContextConfig { label, dev_idx }) {}
 Context::~Context() {
@@ -66,7 +67,9 @@ void _copy_img_tile(
 MappedImage::MappedImage(const ImageView& view, MemoryAccess map_access) :
   mapped(nullptr),
   row_pitch(0),
-  view(view)
+  view(view),
+  buf(nullptr),
+  buf_size(0)
 {
   map_img_mem(view, map_access, mapped, row_pitch);
 
@@ -133,7 +136,8 @@ Timestamp Context::create_timestamp() const {
 
 
 Buffer::Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Buffer>(inner)),
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::Buffer>(
+    std::forward<HAL_IMPL_NAMESPACE::Buffer>(inner))),
   dont_destroy(false) {}
 Buffer::~Buffer() {
   if (!dont_destroy && inner != nullptr) {
@@ -147,7 +151,8 @@ Buffer BufferBuilder::build() {
 
 
 Image::Image(HAL_IMPL_NAMESPACE::Image&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Image>(inner)),
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::Image>(
+    std::forward<HAL_IMPL_NAMESPACE::Image>(inner))),
   dont_destroy(false) {}
 Image::~Image() {
   if (!dont_destroy && inner != nullptr) {
@@ -161,7 +166,8 @@ Image ImageBuilder::build() {
 
 
 DepthImage::DepthImage(HAL_IMPL_NAMESPACE::DepthImage&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::DepthImage>(inner)) {}
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::DepthImage>(
+    std::forward<HAL_IMPL_NAMESPACE::DepthImage>(inner))) {}
 DepthImage::~DepthImage() { HAL_IMPL_NAMESPACE::destroy_depth_img(*inner); }
 DepthImage DepthImageBuilder::build() {
   return create_depth_img(parent, inner);
@@ -170,7 +176,8 @@ DepthImage DepthImageBuilder::build() {
 
 
 RenderPass::RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::RenderPass>(inner)) {}
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::RenderPass>(
+    std::forward<HAL_IMPL_NAMESPACE::RenderPass>(inner))) {}
 RenderPass::~RenderPass() { HAL_IMPL_NAMESPACE::destroy_pass(*inner); }
 RenderPass RenderPassBuilder::build() {
   return create_pass(parent, inner);
@@ -181,11 +188,17 @@ GraphicsTaskBuilder RenderPass::build_graph_task(
 ) const {
   return GraphicsTaskBuilder(*this, label);
 }
+RenderPassInvocationBuilder RenderPass::build_pass_invoke(
+  const std::string& label
+) const {
+  return RenderPassInvocationBuilder(*this, label);
+}
 
 
 
 Task::Task(HAL_IMPL_NAMESPACE::Task&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Task>(std::move(inner))) {}
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::Task>(
+    std::forward<HAL_IMPL_NAMESPACE::Task>(inner))) {}
 Task::~Task() {
   if (inner != nullptr) {
     destroy_task(*inner);
@@ -198,21 +211,34 @@ Task GraphicsTaskBuilder::build() {
   return create_graph_task(parent, inner);
 }
 
-
-
-ResourcePool Task::create_rsc_pool() const {
-  return HAL_IMPL_NAMESPACE::create_rsc_pool(*inner);
+ComputeInvocationBuilder Task::build_comp_invoke(
+  const std::string& label
+) const {
+  return ComputeInvocationBuilder(*this, label);
+}
+GraphicsInvocationBuilder Task::build_graph_invoke(
+  const std::string& label
+) const {
+  return GraphicsInvocationBuilder(*this, label);
 }
 
-ResourcePool::ResourcePool(const Context& ctxt, const Task& task) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::ResourcePool>(
-    create_rsc_pool(*task.inner))) {}
-ResourcePool::ResourcePool(HAL_IMPL_NAMESPACE::ResourcePool&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::ResourcePool>(inner)) {}
-ResourcePool::~ResourcePool() {
+
+Invocation::Invocation(HAL_IMPL_NAMESPACE::Invocation&& inner) :
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::Invocation>(
+    std::forward<HAL_IMPL_NAMESPACE::Invocation>(inner))) {}
+Invocation::~Invocation() {
   if (inner != nullptr) {
-    destroy_rsc_pool(*inner);
+    destroy_invoke(*inner);
   }
+}
+Invocation ComputeInvocationBuilder::build() {
+  return create_comp_invoke(parent, inner);
+}
+Invocation GraphicsInvocationBuilder::build() {
+  return create_graph_invoke(parent, inner);
+}
+Invocation RenderPassInvocationBuilder::build() {
+  return create_pass_invoke(parent, inner);
 }
 
 
@@ -225,7 +251,8 @@ Transaction::Transaction(
 ) : inner(std::make_unique<HAL_IMPL_NAMESPACE::Transaction>(
     create_transact(label, *ctxt.inner, cmds, ncmd))) {}
 Transaction::Transaction(HAL_IMPL_NAMESPACE::Transaction&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Transaction>(inner)) {}
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::Transaction>(
+    std::forward<HAL_IMPL_NAMESPACE::Transaction>(inner))) {}
 Transaction::Transaction(
   const Context& ctxt,
   const std::string& label,
@@ -244,7 +271,8 @@ Timestamp::Timestamp(
 ) : inner(std::make_unique<HAL_IMPL_NAMESPACE::Timestamp>(
   create_timestamp(*ctxt.inner))) {}
 Timestamp::Timestamp(HAL_IMPL_NAMESPACE::Timestamp&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Timestamp>(inner)) {}
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::Timestamp>(
+    std::forward<HAL_IMPL_NAMESPACE::Timestamp>(inner))) {}
 Timestamp::~Timestamp() {
   if (inner != nullptr) {
     destroy_timestamp(*inner);
@@ -257,7 +285,8 @@ CommandDrain::CommandDrain(const Context& ctxt) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::CommandDrain>(
     create_cmd_drain(*ctxt.inner))) {}
 CommandDrain::CommandDrain(HAL_IMPL_NAMESPACE::CommandDrain&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::CommandDrain>(inner)) {}
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::CommandDrain>(
+    std::forward<HAL_IMPL_NAMESPACE::CommandDrain>(inner))) {}
 CommandDrain::~CommandDrain() {
   if (inner != nullptr) {
     destroy_cmd_drain(*inner);

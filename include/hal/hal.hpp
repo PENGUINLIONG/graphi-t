@@ -72,6 +72,7 @@ constexpr size_t align_addr(size_t size, size_t align) {
 }
 
 enum BufferUsageBits {
+  L_BUFFER_USAGE_NONE = 0,
   L_BUFFER_USAGE_STAGING_BIT = (1 << 0),
   L_BUFFER_USAGE_UNIFORM_BIT = (1 << 1),
   L_BUFFER_USAGE_STORAGE_BIT = (1 << 2),
@@ -84,7 +85,6 @@ struct BufferConfig {
   // Human-readable label of the buffer.
   std::string label;
   MemoryAccess host_access;
-  MemoryAccess dev_access;
   // Size of buffer allocation, or minimal size of buffer allocation if the
   // buffer has variable size. MUST NOT be zero.
   size_t size;
@@ -134,7 +134,8 @@ enum ImageUsageBits {
   L_IMAGE_USAGE_SAMPLED_BIT = (1 << 1),
   L_IMAGE_USAGE_STORAGE_BIT = (1 << 2),
   L_IMAGE_USAGE_ATTACHMENT_BIT = (1 << 3),
-  L_IMAGE_USAGE_PRESENT_BIT = (1 << 4),
+  L_IMAGE_USAGE_SUBPASS_DATA_BIT = (1 << 4),
+  L_IMAGE_USAGE_PRESENT_BIT = (1 << 5),
 };
 typedef uint32_t ImageUsage;
 // Describe a row-major 2D image.
@@ -142,7 +143,6 @@ struct ImageConfig {
   // Human-readable label of the image.
   std::string label;
   MemoryAccess host_access;
-  MemoryAccess dev_access;
   // Number of rows, or height of the image.
   uint32_t height;
   // Number of columns, or width of the image.
@@ -208,6 +208,7 @@ enum DepthImageUsageBits {
   L_DEPTH_IMAGE_USAGE_NONE = 0,
   L_DEPTH_IMAGE_USAGE_SAMPLED_BIT = (1 << 0),
   L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT = (1 << 1),
+  L_DEPTH_IMAGE_USAGE_SUBPASS_DATA_BIT = (1 << 2),
 };
 typedef uint32_t DepthImageUsage;
 struct DepthImageConfig {
@@ -230,6 +231,34 @@ L_IMPL_FN DepthImage create_depth_img(
 );
 L_IMPL_FN void destroy_depth_img(DepthImage& depth_img);
 L_IMPL_FN const DepthImageConfig& get_depth_img_cfg(const DepthImage& depth_img);
+
+struct DepthImageView {
+  const DepthImage* depth_img; // Lifetime bound.
+  uint32_t x_offset;
+  uint32_t y_offset;
+  uint32_t width;
+  uint32_t height;
+};
+inline DepthImageView make_depth_img_view(
+  const DepthImage& depth_img,
+  uint32_t x_offset,
+  uint32_t y_offset,
+  uint32_t width,
+  uint32_t height
+) {
+  DepthImageView out {};
+  out.depth_img = &depth_img;
+  out.x_offset = x_offset;
+  out.y_offset = y_offset;
+  out.width = width;
+  out.height = height;
+  return out;
+}
+inline DepthImageView make_depth_img_view(const DepthImage& depth_img) {
+  const DepthImageConfig& depth_img_cfg = get_depth_img_cfg(depth_img);
+  return make_depth_img_view(depth_img, 0, 0, depth_img_cfg.width,
+    depth_img_cfg.height);
+}
 
 
 
@@ -260,8 +289,6 @@ struct ComputeTaskConfig {
   DispatchSize workgrp_size;
 };
 
-
-
 enum AttachmentType {
   L_ATTACHMENT_TYPE_COLOR,
   L_ATTACHMENT_TYPE_DEPTH,
@@ -288,12 +315,14 @@ struct AttachmentConfig {
   AttachmentAccess attm_access;
   // Attachment type.
   AttachmentType attm_ty;
-  // The image to be used as an attachment.
   union {
-    const Image* color_img;
-    const DepthImage* depth_img;
+    // Color attachment format.
+    PixelFormat color_fmt;
+    // Depth attachment format.
+    DepthFormat depth_fmt;
   };
 };
+// TODO: (penguinliong) Multi-subpass rendering.
 struct RenderPassConfig {
   std::string label;
   // Width of attachments.
@@ -306,8 +335,6 @@ struct RenderPassConfig {
 L_IMPL_STRUCT struct RenderPass;
 RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg);
 void destroy_pass(RenderPass& pass);
-
-
 
 enum Topology {
   L_TOPOLOGY_POINT = 1,
@@ -348,6 +375,7 @@ struct GraphicsTaskConfig {
   // Resources to be allocated.
   std::vector<ResourceType> rsc_tys;
 };
+
 L_IMPL_STRUCT struct Task;
 L_IMPL_FN Task create_comp_task(
   const Context& ctxt,
@@ -361,19 +389,80 @@ L_IMPL_FN void destroy_task(Task& task);
 
 
 
-L_IMPL_STRUCT struct ResourcePool;
-L_IMPL_FN ResourcePool create_rsc_pool(const Task& task);
-L_IMPL_FN void destroy_rsc_pool(ResourcePool& rsc_pool);
-L_IMPL_FN void bind_pool_rsc(
-  ResourcePool& rsc_pool,
-  uint32_t idx,
-  const BufferView& buf_view
+enum ResourceViewType {
+  L_RESOURCE_VIEW_TYPE_BUFFER,
+  L_RESOURCE_VIEW_TYPE_IMAGE,
+  L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE,
+};
+struct ResourceView {
+  ResourceViewType rsc_view_ty;
+  BufferView buf_view;
+  ImageView img_view;
+  DepthImageView depth_img_view;
+
+  inline ResourceView(BufferView buf_view) :
+    rsc_view_ty(L_RESOURCE_VIEW_TYPE_BUFFER),
+    buf_view(buf_view),
+    img_view(),
+    depth_img_view() {}
+  inline ResourceView(ImageView img_view) :
+    rsc_view_ty(L_RESOURCE_VIEW_TYPE_IMAGE),
+    buf_view(),
+    img_view(img_view),
+    depth_img_view() {}
+  inline ResourceView(DepthImageView depth_img_view) :
+    rsc_view_ty(L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE),
+    buf_view(),
+    img_view(),
+    depth_img_view(depth_img_view) {}
+};
+// Instanced invocation of a compute task, a.k.a. a dispatch.
+struct ComputeInvocationConfig {
+  std::string label;
+  // Resources bound to this invocation.
+  std::vector<ResourceView> rsc_views;
+  // Number of workgroups dispatched in this invocation.
+  DispatchSize workgrp_count;
+};
+// Instanced invocation of a graphics task, a.k.a. a draw call.
+struct GraphicsInvocationConfig {
+  std::string label;
+  // Resources bound to this invocation.
+  std::vector<ResourceView> rsc_views;
+  // Number of instances to be drawn.
+  uint32_t ninst;
+  // Vertex buffer for drawing.
+  std::vector<BufferView> vert_bufs;
+  // Number of vertices to be drawn in this draw. If `nidx` is non-zero, `nvert`
+  // MUST be zero.
+  uint32_t nvert;
+  // Index buffer for vertex indexing.
+  BufferView idx_buf;
+  // Number of indices to be drawn in this draw. If `nvert` is non-zero, `nidx`
+  // MUST be zero.
+  uint32_t nidx;
+};
+struct RenderPassInvocationConfig {
+  std::string label;
+  // Attachment feed in order, can be `Image` or `DepthImage` only.
+  std::vector<ResourceView> attms;
+  // Graphics invocations applied within this render pass.
+  std::vector<const struct Invocation*> invokes; // Lifetime bound.
+};
+L_IMPL_STRUCT struct Invocation;
+L_IMPL_FN Invocation create_comp_invoke(
+  const Task& task,
+  const ComputeInvocationConfig& cfg
 );
-L_IMPL_FN void bind_pool_rsc(
-  ResourcePool& rsc_pool,
-  uint32_t idx,
-  const ImageView& img_view
+L_IMPL_FN Invocation create_graph_invoke(
+  const Task& task,
+  const GraphicsInvocationConfig& cfg
 );
+L_IMPL_FN Invocation create_pass_invoke(
+  const RenderPass& pass,
+  const RenderPassInvocationConfig& cfg
+);
+L_IMPL_FN void destroy_invoke(Invocation& invoke);
 
 
 
@@ -399,6 +488,7 @@ L_IMPL_FN void destroy_timestamp(Timestamp& timestamp);
 L_IMPL_FN double get_timestamp_result_us(const Timestamp& timestamp);
 
 
+
 enum CommandType {
   L_COMMAND_TYPE_SET_SUBMIT_TYPE,
   L_COMMAND_TYPE_INLINE_TRANSACTION,
@@ -406,15 +496,8 @@ enum CommandType {
   L_COMMAND_TYPE_COPY_IMAGE_TO_BUFFER,
   L_COMMAND_TYPE_COPY_BUFFER,
   L_COMMAND_TYPE_COPY_IMAGE,
-  L_COMMAND_TYPE_DISPATCH,
-  L_COMMAND_TYPE_DRAW,
-  L_COMMAND_TYPE_DRAW_INDEXED,
+  L_COMMAND_TYPE_INVOKE,
   L_COMMAND_TYPE_WRITE_TIMESTAMP,
-  L_COMMAND_TYPE_BUFFER_BARRIER,
-  L_COMMAND_TYPE_IMAGE_BARRIER,
-  L_COMMAND_TYPE_BEGIN_RENDER_PASS,
-  L_COMMAND_TYPE_END_RENDER_PASS,
-  L_COMMAND_TYPE_DEPTH_IMAGE_BARRIER,
 };
 enum SubmitType {
   L_SUBMIT_TYPE_COMPUTE,
@@ -447,60 +530,23 @@ struct Command {
       ImageView dst;
     } cmd_copy_img;
     struct {
-      const Task* task;
-      const ResourcePool* rsc_pool;
-      DispatchSize nworkgrp;
-    } cmd_dispatch;
-    struct {
-      const Task* task;
-      const ResourcePool* rsc_pool;
-      BufferView verts;
-      uint32_t nvert;
-      uint32_t ninst;
-    } cmd_draw;
-    struct {
-      const Task* task;
-      const ResourcePool* rsc_pool;
-      BufferView verts;
-      BufferView idxs;
-      uint32_t nidx;
-      uint32_t ninst;
-    } cmd_draw_indexed;
+      const Invocation* invoke;
+    } cmd_invoke;
     struct {
       const Timestamp* timestamp;
     } cmd_write_timestamp;
     struct {
       const Buffer* buf;
-      MemoryAccess src_dev_access;
-      MemoryAccess dst_dev_access;
       ImageUsage src_usage;
       ImageUsage dst_usage;
     } cmd_buf_barrier;
     struct {
       const Image* img;
-      MemoryAccess src_dev_access;
-      MemoryAccess dst_dev_access;
       ImageUsage src_usage;
       ImageUsage dst_usage;
     } cmd_img_barrier;
     struct {
-      const RenderPass* pass;
-      bool draw_inline;
-    } cmd_begin_pass;
-    struct {
-      const RenderPass* pass;
-    } cmd_end_pass;
-    struct {
-        uint32_t ivert_input;
-        const Buffer* vert_buf;
-    } cmd_bind_vert_buf;
-    struct {
-        const Buffer* vert_buf;
-    } cmd_bind_idx_buf;
-    struct {
       const DepthImage* depth_img;
-      MemoryAccess src_dev_access;
-      MemoryAccess dst_dev_access;
       DepthImageUsage src_usage;
       DepthImageUsage dst_usage;
     } cmd_depth_img_barrier;
@@ -547,54 +593,11 @@ inline Command cmd_copy_img(const ImageView& src, const ImageView& dst) {
   return cmd;
 }
 
-// Dispatch a task to the transaction.
-inline Command cmd_dispatch(
-  const Task& task,
-  const ResourcePool& rsc_pool,
-  DispatchSize nworkgrp
-) {
+// Realize an invocation.
+inline Command cmd_invoke(const Invocation& invoke) {
   Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_DISPATCH;
-  cmd.cmd_dispatch.task = &task;
-  cmd.cmd_dispatch.rsc_pool = &rsc_pool;
-  cmd.cmd_dispatch.nworkgrp = nworkgrp;
-  return cmd;
-}
-
-// Draw triangle lists, vertex by vertex.
-inline Command cmd_draw(
-  const Task& task,
-  const ResourcePool& rsc_pool,
-  const BufferView& verts,
-  uint32_t nvert,
-  uint32_t ninst
-) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_DRAW;
-  cmd.cmd_draw.task = &task;
-  cmd.cmd_draw.rsc_pool = &rsc_pool;
-  cmd.cmd_draw.verts = verts;
-  cmd.cmd_draw.nvert = nvert;
-  cmd.cmd_draw.ninst = ninst;
-  return cmd;
-}
-// Draw triangle lists, index by index, where each index points to a vertex.
-inline Command cmd_draw_indexed(
-  const Task& task,
-  const ResourcePool& rsc_pool,
-  const BufferView& idxs,
-  const BufferView& verts,
-  uint32_t nidx,
-  uint32_t ninst
-) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_DRAW_INDEXED;
-  cmd.cmd_draw_indexed.task = &task;
-  cmd.cmd_draw_indexed.rsc_pool = &rsc_pool;
-  cmd.cmd_draw_indexed.verts = verts;
-  cmd.cmd_draw_indexed.idxs = idxs;
-  cmd.cmd_draw_indexed.nidx = nidx;
-  cmd.cmd_draw_indexed.ninst = ninst;
+  cmd.cmd_ty = L_COMMAND_TYPE_INVOKE;
+  cmd.cmd_invoke.invoke = &invoke;
   return cmd;
 }
 
@@ -609,73 +612,6 @@ inline Command cmd_set_submit_ty(SubmitType submit_ty) {
   Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_SET_SUBMIT_TYPE;
   cmd.cmd_set_submit_ty.submit_ty = submit_ty;
-  return cmd;
-}
-
-inline Command cmd_buf_barrier(
-  const Buffer& buf,
-  BufferUsage src_usage,
-  BufferUsage dst_usage,
-  MemoryAccess src_dev_access,
-  MemoryAccess dst_dev_access
-) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_BUFFER_BARRIER;
-  cmd.cmd_buf_barrier.buf = &buf;
-  cmd.cmd_buf_barrier.src_dev_access = src_dev_access;
-  cmd.cmd_buf_barrier.dst_dev_access = dst_dev_access;
-  cmd.cmd_buf_barrier.src_usage = src_usage;
-  cmd.cmd_buf_barrier.dst_usage = dst_usage;
-  return cmd;
-}
-inline Command cmd_img_barrier(
-  const Image& img,
-  ImageUsage src_usage,
-  ImageUsage dst_usage,
-  MemoryAccess src_dev_access,
-  MemoryAccess dst_dev_access
-) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_IMAGE_BARRIER;
-  cmd.cmd_img_barrier.img = &img;
-  cmd.cmd_img_barrier.src_dev_access = src_dev_access;
-  cmd.cmd_img_barrier.dst_dev_access = dst_dev_access;
-  cmd.cmd_img_barrier.src_usage = src_usage;
-  cmd.cmd_img_barrier.dst_usage = dst_usage;
-  return cmd;
-}
-inline Command cmd_begin_pass(
-  const RenderPass& pass,
-  bool draw_inline
-) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_BEGIN_RENDER_PASS;
-  cmd.cmd_begin_pass.pass = &pass;
-  cmd.cmd_begin_pass.draw_inline = draw_inline;
-  return cmd;
-}
-inline Command cmd_end_pass(
-  const RenderPass& pass
-) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_END_RENDER_PASS;
-  cmd.cmd_end_pass.pass = &pass;
-  return cmd;
-}
-inline Command cmd_depth_img_barrier(
-  const DepthImage& depth_img,
-  DepthImageUsage src_usage,
-  DepthImageUsage dst_usage,
-  MemoryAccess src_dev_access,
-  MemoryAccess dst_dev_access
-) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_DEPTH_IMAGE_BARRIER;
-  cmd.cmd_depth_img_barrier.depth_img = &depth_img;
-  cmd.cmd_depth_img_barrier.src_dev_access = src_dev_access;
-  cmd.cmd_depth_img_barrier.dst_dev_access = dst_dev_access;
-  cmd.cmd_depth_img_barrier.src_usage = src_usage;
-  cmd.cmd_depth_img_barrier.dst_usage = dst_usage;
   return cmd;
 }
 

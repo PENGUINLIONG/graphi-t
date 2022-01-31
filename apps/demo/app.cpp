@@ -135,12 +135,14 @@ void guarded_main() {
     .read_back()
     .build();
 
-  scoped::ResourcePool rsc_pool = task.create_rsc_pool();
-  rsc_pool.bind(0, buf.view());
+  scoped::Invocation invoke = task.build_comp_invoke()
+    .rsc(buf.view())
+    .workgrp_count(4, 4, 4)
+    .build();
 
   scoped::Transaction transact = ctxt.create_transact("transact", {
     cmd_set_submit_ty(L_SUBMIT_TYPE_COMPUTE),
-    cmd_dispatch(task, rsc_pool, { 4, 4, 4 }),
+    cmd_invoke(invoke),
   });
 
   scoped::CommandDrain cmd_drain(ctxt);
@@ -290,8 +292,8 @@ void guarded_main2() {
   scoped::RenderPass pass = ctxt.build_pass("pass")
     .width(FRAMEBUF_WIDTH)
     .height(FRAMEBUF_HEIGHT)
-    .clear_store_attm(out_img)
-    .clear_store_attm(zbuf)
+    .clear_store_attm(L_FORMAT_R32G32B32A32_SFLOAT)
+    .clear_store_attm(L_DEPTH_FORMAT_D16_S0)
     .build();
 
   scoped::Task task = pass.build_graph_task("graph_task")
@@ -301,8 +303,18 @@ void guarded_main2() {
     .rsc(L_RESOURCE_TYPE_UNIFORM_BUFFER)
     .build();
 
-  scoped::ResourcePool rsc_pool = task.create_rsc_pool();
-  rsc_pool.bind(0, ubo.view());
+  scoped::Invocation draw_call = task.build_graph_invoke("draw_call")
+    .vert_buf(verts.view())
+    .idx_buf(idxs.view())
+    .rsc(ubo.view())
+    .nidx(3)
+    .build();
+
+  scoped::Invocation main_pass = pass.build_pass_invoke("main_pass")
+    .attm(out_img.view())
+    .attm(zbuf.view())
+    .invoke(draw_call)
+    .build();
 
   scoped::Buffer out_buf = ctxt.build_buf("out_buf")
     .size(FRAMEBUF_WIDTH * FRAMEBUF_HEIGHT * 4 * sizeof(float))
@@ -311,29 +323,11 @@ void guarded_main2() {
 
 
 
-
   std::vector<Command> cmds {
     cmd_set_submit_ty(L_SUBMIT_TYPE_GRAPHICS),
     dev_timer.cmd_tic(),
-    cmd_img_barrier(out_img,
-      L_IMAGE_USAGE_NONE,
-      L_IMAGE_USAGE_ATTACHMENT_BIT,
-      0,
-      L_MEMORY_ACCESS_WRITE_BIT),
-    cmd_depth_img_barrier(zbuf,
-      L_DEPTH_IMAGE_USAGE_NONE,
-      L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT,
-      0,
-      L_MEMORY_ACCESS_WRITE_BIT),
-    cmd_begin_pass(pass, true),
-    cmd_draw_indexed(task, rsc_pool, idxs.view(), verts.view(), 3, 1),
-    cmd_end_pass(pass),
+    cmd_invoke(main_pass),
     dev_timer.cmd_toc(),
-    cmd_img_barrier(out_img,
-      L_IMAGE_USAGE_STORAGE_BIT,
-      L_IMAGE_USAGE_STAGING_BIT,
-      L_MEMORY_ACCESS_WRITE_BIT,
-      L_MEMORY_ACCESS_READ_BIT),
     cmd_copy_img2buf(out_img.view(), out_buf.view()),
   };
 
