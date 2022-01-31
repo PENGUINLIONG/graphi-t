@@ -161,6 +161,19 @@ struct ComputeInvocationBuilder {
     return *this;
   }
 
+  inline Self& rsc(const BufferView& buf_view) {
+    inner.rsc_views.emplace_back(buf_view);
+    return *this;
+  }
+  inline Self& rsc(const ImageView& img_view) {
+    inner.rsc_views.emplace_back(img_view);
+    return *this;
+  }
+  inline Self& rsc(const DepthImageView& depth_img_view) {
+    inner.rsc_views.emplace_back(depth_img_view);
+    return *this;
+  }
+
   Invocation build();
 };
 struct GraphicsInvocationBuilder {
@@ -205,6 +218,41 @@ struct GraphicsInvocationBuilder {
   inline Self& rsc(const ImageView& img_view) {
     inner.rsc_views.emplace_back(img_view);
     return *this;
+  }
+  inline Self& rsc(const DepthImageView& depth_img_view) {
+    inner.rsc_views.emplace_back(depth_img_view);
+    return *this;
+  }
+
+  Invocation build();
+};
+struct RenderPassInvocationBuilder {
+  using Self = RenderPassInvocationBuilder;
+
+  const RenderPass& parent;
+  RenderPassInvocationConfig inner;
+
+  inline RenderPassInvocationBuilder(
+    const RenderPass& pass,
+    const std::string& label = ""
+  ) : parent(pass), inner() {
+    inner.label = label;
+  }
+
+  inline Self& attm(const ResourceView& rsc_view) {
+    inner.attms.emplace_back(rsc_view);
+    return *this;
+  }
+  inline Self& invoke(const Invocation& invoke) {
+    inner.invokes.emplace_back(&(const HAL_IMPL_NAMESPACE::Invocation&)invoke);
+    return *this;
+  }
+
+  inline Self& rsc(const ImageView& img_view) {
+    return rsc(img_view);
+  }
+  inline Self& rsc(const DepthImageView& depth_img_view) {
+    return rsc(depth_img_view);
   }
 
   Invocation build();
@@ -523,6 +571,18 @@ struct DepthImage {
   inline const DepthImageConfig& cfg() const {
     return get_depth_img_cfg(*inner);
   }
+
+  inline DepthImageView view(
+    uint32_t x_offset,
+    uint32_t y_offset,
+    uint32_t width,
+    uint32_t height
+  ) const {
+    return make_depth_img_view(*inner, x_offset, y_offset, width, height);
+  }
+  inline DepthImageView view() const {
+    return make_depth_img_view(*inner);
+  }
 };
 struct DepthImageBuilder {
   using Self = DepthImageBuilder;
@@ -739,6 +799,7 @@ public:
   }
 
   GraphicsTaskBuilder build_graph_task(const std::string& label) const;
+  RenderPassInvocationBuilder build_pass_invoke(const std::string& label) const;
 };
 struct RenderPassBuilder {
   using Self = RenderPassBuilder;
@@ -764,38 +825,45 @@ struct RenderPassBuilder {
     inner.height = height;
     return *this;
   }
-  inline Self& attm(AttachmentAccess access, const Image& color_img) {
+  inline Self& attm(AttachmentAccess access, PixelFormat fmt) {
     AttachmentConfig attm_cfg {};
     attm_cfg.attm_ty = L_ATTACHMENT_TYPE_COLOR;
     attm_cfg.attm_access = access;
-    attm_cfg.color_img = &(const HAL_IMPL_NAMESPACE::Image&)color_img;
-    inner.attm_cfgs.emplace_back(attm_cfg);
+    attm_cfg.color_fmt = fmt;
+
+    inner.attm_cfgs.emplace_back(std::move(attm_cfg));
     return *this;
   }
-  inline Self& attm(AttachmentAccess access, const DepthImage& depth_img) {
+  inline Self& attm(AttachmentAccess access, DepthFormat fmt) {
     AttachmentConfig attm_cfg {};
     attm_cfg.attm_ty = L_ATTACHMENT_TYPE_DEPTH;
     attm_cfg.attm_access = access;
-    attm_cfg.depth_img = &(const HAL_IMPL_NAMESPACE::DepthImage&)depth_img;
-    inner.attm_cfgs.emplace_back(attm_cfg);
+    attm_cfg.depth_fmt = fmt;
+
+    inner.attm_cfgs.emplace_back(std::move(attm_cfg));
     return *this;
   }
 
-  inline Self& load_store_attm(const Image& color_img) {
+  inline Self& next_subpass() {
+    unimplemented();
+    return *this;
+  }
+
+  inline Self& load_store_attm(PixelFormat fmt) {
     auto access = L_ATTACHMENT_ACCESS_LOAD | L_ATTACHMENT_ACCESS_STORE;
-    return attm((AttachmentAccess)access, color_img);
+    return attm((AttachmentAccess)access, fmt);
   }
-  inline Self& clear_store_attm(const Image& color_img) {
+  inline Self& clear_store_attm(PixelFormat fmt) {
     auto access = L_ATTACHMENT_ACCESS_CLEAR | L_ATTACHMENT_ACCESS_STORE;
-    return attm((AttachmentAccess)access, color_img);
+    return attm((AttachmentAccess)access, fmt);
   }
-  inline Self& load_store_attm(const DepthImage& depth_img) {
+  inline Self& load_store_depth_attm(DepthFormat fmt) {
     auto access = L_ATTACHMENT_ACCESS_LOAD | L_ATTACHMENT_ACCESS_STORE;
-    return attm((AttachmentAccess)access, depth_img);
+    return attm((AttachmentAccess)access, fmt);
   }
-  inline Self& clear_store_attm(const DepthImage& depth_img) {
+  inline Self& clear_store_attm(DepthFormat fmt) {
     auto access = L_ATTACHMENT_ACCESS_CLEAR | L_ATTACHMENT_ACCESS_STORE;
-    return attm((AttachmentAccess)access, depth_img);
+    return attm((AttachmentAccess)access, fmt);
   }
 
   RenderPass build();

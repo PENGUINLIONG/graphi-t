@@ -188,6 +188,11 @@ GraphicsTaskBuilder RenderPass::build_graph_task(
 ) const {
   return GraphicsTaskBuilder(*this, label);
 }
+RenderPassInvocationBuilder RenderPass::build_pass_invoke(
+  const std::string& label
+) const {
+  return RenderPassInvocationBuilder(*this, label);
+}
 
 
 
@@ -231,6 +236,9 @@ Invocation ComputeInvocationBuilder::build() {
 }
 Invocation GraphicsInvocationBuilder::build() {
   return create_graph_invoke(parent, inner);
+}
+Invocation RenderPassInvocationBuilder::build() {
+  return create_pass_invoke(parent, inner);
 }
 
 

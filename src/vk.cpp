@@ -519,8 +519,12 @@ Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg) {
 
   VK_ASSERT << vkBindBufferMemory(ctxt.dev, buf, devmem, 0);
 
+  BufferDynamicDetail dyn_detail {};
+  dyn_detail.access = 0;
+  dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
+
   log::debug("created buffer '", buf_cfg.label, "'");
-  return Buffer { &ctxt, devmem, buf, buf_cfg };
+  return Buffer { &ctxt, devmem, buf, buf_cfg, std::move(dyn_detail) };
 }
 void destroy_buf(Buffer& buf) {
   if (buf.buf != VK_NULL_HANDLE) {
@@ -541,8 +545,16 @@ void map_buf_mem(
   MemoryAccess map_access,
   void*& mapped
 ) {
+  assert(map_access != 0, "memory map access must be read, write or both");
+
   VK_ASSERT << vkMapMemory(buf.buf->ctxt->dev, buf.buf->devmem, buf.offset,
     buf.size, 0, &mapped);
+
+  auto& dyn_detail = (BufferDynamicDetail&)buf.buf->dyn_detail;
+  dyn_detail.access = map_access == L_MEMORY_ACCESS_READ_BIT ?
+    VK_ACCESS_HOST_READ_BIT : VK_ACCESS_HOST_WRITE_BIT;
+  dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
+
   log::debug("mapped buffer '", buf.buf->buf_cfg.label, "' from ", buf.offset,
     " to ", buf.offset + buf.size);
 }
@@ -729,10 +741,16 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
     VK_ASSERT << vkCreateImageView(ctxt.dev, &ivci, nullptr, &img_view);
   }
 
+  ImageDynamicDetail dyn_detail {};
+  dyn_detail.layout = layout;
+  dyn_detail.access = 0;
+  dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
+
   log::debug("created image '", img_cfg.label, "'");
   uint32_t qfam_idx = ctxt.get_submit_ty_qfam_idx(init_submit_ty);
   return Image {
-    &ctxt, devmem, img, img_view, img_cfg, is_staging_img
+    &ctxt, devmem, img, img_view, img_cfg, is_staging_img,
+    std::move(dyn_detail)
   };
 }
 void destroy_img(Image& img) {
@@ -855,9 +873,15 @@ DepthImage create_depth_img(
   VkImageView img_view;
   VK_ASSERT << vkCreateImageView(ctxt.dev, &ivci, nullptr, &img_view);
 
+  DepthImageDynamicDetail dyn_detail {};
+  dyn_detail.layout = layout;
+  dyn_detail.access = 0;
+  dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
+
   log::info("created depth image '", depth_img_cfg.label, "'");
   return DepthImage {
-    &ctxt, devmem, (size_t)mr.size, img, img_view, depth_img_cfg
+    &ctxt, devmem, (size_t)mr.size, img, img_view, depth_img_cfg,
+    std::move(dyn_detail)
   };
 }
 void destroy_depth_img(DepthImage& depth_img) {
@@ -882,6 +906,8 @@ void map_img_mem(
   void*& mapped,
   size_t& row_pitch
 ) {
+  assert(map_access != 0, "memory map access must be read, write or both");
+
   VkImageSubresource is {};
   is.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   is.arrayLayer = 0;
@@ -895,6 +921,13 @@ void map_img_mem(
   VK_ASSERT << vkMapMemory(img.img->ctxt->dev, img.img->devmem, sl.offset,
     sl.size, 0, &mapped);
   row_pitch = sl.rowPitch;
+
+  auto& dyn_detail = (ImageDynamicDetail&)(img.img->dyn_detail);
+  assert(dyn_detail.layout == VK_IMAGE_LAYOUT_PREINITIALIZED,
+    "linear image cannot be initialized after other use");
+  dyn_detail.access = map_access == L_MEMORY_ACCESS_READ_BIT ?
+    VK_ACCESS_HOST_READ_BIT : VK_ACCESS_HOST_WRITE_BIT;
+  dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
 
   log::debug("mapped image '", img.img->img_cfg.label, "' from (", img.x_offset,
     ", ", img.y_offset, ") to (", img.x_offset + img.width, ", ",
@@ -1036,8 +1069,9 @@ Task create_comp_task(
 
   log::debug("created compute task '", cfg.label, "'");
   return Task {
-    &ctxt, nullptr, desc_set_layout, pipe_layout, pipe, cfg.rsc_tys,
-    { shader_mod }, std::move(desc_pool_sizes), cfg.label };
+    cfg.label, L_SUBMIT_TYPE_COMPUTE, &ctxt, nullptr, desc_set_layout,
+    pipe_layout, pipe, cfg.rsc_tys, { shader_mod }, std::move(desc_pool_sizes)
+  };
 }
 VkAttachmentLoadOp _get_load_op(AttachmentAccess attm_access) {
   if (attm_access & L_ATTACHMENT_ACCESS_CLEAR) {
@@ -1079,27 +1113,25 @@ VkRenderPass _create_pass(
     switch (attm_cfg.attm_ty) {
     case L_ATTACHMENT_TYPE_COLOR:
     {
-      const Image& color_img = *attm_cfg.color_img;
       ar.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      ad.format = _make_img_fmt(color_img.img_cfg.fmt);
+      ad.format = _make_img_fmt(attm_cfg.color_fmt);
       ad.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      ad.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+      ad.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
       sar.color_attm_ref.emplace_back(std::move(ar));
       break;
     }
     case L_ATTACHMENT_TYPE_DEPTH:
     {
       assert(!sar.has_depth_attm, "subpass can only have one depth attachment");
-      const DepthImage& depth_img = *attm_cfg.depth_img;
       ar.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-      ad.format = _make_depth_fmt(depth_img.depth_img_cfg.fmt);
+      ad.format = _make_depth_fmt(attm_cfg.depth_fmt);
       ad.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-      ad.finalLayout = VK_IMAGE_LAYOUT_GENERAL;
+      ad.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
       sar.has_depth_attm = true;
       sar.depth_attm_ref = std::move(ar);
       break;
     }
-    default: panic();
+    default: unreachable();
     }
 
     ads.emplace_back(std::move(ad));
@@ -1136,51 +1168,9 @@ VkRenderPass _create_pass(
 
   return pass;
 }
-VkFramebuffer _create_framebuf(
-  const Context& ctxt,
-  VkRenderPass pass,
-  const std::vector<AttachmentConfig>& attm_cfgs,
-  uint32_t width,
-  uint32_t height
-) {
-  std::vector<VkImageView> attm_img_views;
-  for (const AttachmentConfig& attm_cfg : attm_cfgs) {
-    switch (attm_cfg.attm_ty) {
-    case L_ATTACHMENT_TYPE_COLOR:
-      assert(attm_cfg.color_img->img_cfg.width == width &&
-        attm_cfg.color_img->img_cfg.height == height,
-        "color attachment size mismatches framebuffer size");
-      attm_img_views.emplace_back(attm_cfg.color_img->img_view);
-      break;
-    case L_ATTACHMENT_TYPE_DEPTH:
-      assert(attm_cfg.depth_img->depth_img_cfg.width == width &&
-        attm_cfg.depth_img->depth_img_cfg.height == height,
-        "depth attachment size mismatches framebuffer size");
-      attm_img_views.emplace_back(attm_cfg.depth_img->img_view);
-      break;
-    default: panic("unexpected attachment type");
-    }
-  }
-
-  VkFramebufferCreateInfo fci {};
-  fci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-  fci.renderPass = pass;
-  fci.attachmentCount = (uint32_t)attm_img_views.size();
-  fci.pAttachments = attm_img_views.data();
-  fci.width = width;
-  fci.height = height;
-  fci.layers = 1;
-
-  VkFramebuffer framebuf;
-  VK_ASSERT << vkCreateFramebuffer(ctxt.dev, &fci, nullptr, &framebuf);
-
-  return framebuf;
-}
 
 RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg) {
   VkRenderPass pass = _create_pass(ctxt, cfg.attm_cfgs);
-  VkFramebuffer framebuf = _create_framebuf(ctxt, pass, cfg.attm_cfgs,
-    cfg.width, cfg.height);
 
   VkRect2D viewport {};
   viewport.extent.width = cfg.width;
@@ -1206,12 +1196,9 @@ RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg) {
   }
 
   log::info("created render pass '", cfg.label, "'");
-  return RenderPass {
-    &ctxt, std::move(viewport), pass, framebuf, cfg, clear_values
-  };
+  return RenderPass { &ctxt, viewport, pass, cfg, clear_values };
 }
 void destroy_pass(RenderPass& pass) {
-  vkDestroyFramebuffer(pass.ctxt->dev, pass.framebuf, nullptr);
   vkDestroyRenderPass(pass.ctxt->dev, pass.pass, nullptr);
   log::info("destroyed render pass '", pass.pass_cfg.label, "'");
 }
@@ -1249,7 +1236,7 @@ Task create_graph_task(
     pssci.module = frag_shader_mod;
   }
 
- VkVertexInputBindingDescription vibd {};
+  VkVertexInputBindingDescription vibd {};
   std::vector<VkVertexInputAttributeDescription> viads;
   size_t base_offset = 0;
   for (auto i = 0; i < cfg.vert_inputs.size(); ++i) {
@@ -1385,8 +1372,9 @@ Task create_graph_task(
 
   log::debug("created graphics task '", cfg.label, "'");
   return Task {
-    &ctxt, &pass, desc_set_layout, pipe_layout, pipe, cfg.rsc_tys,
-    { vert_shader_mod, frag_shader_mod }, std::move(desc_pool_sizes), cfg.label
+    cfg.label, L_SUBMIT_TYPE_GRAPHICS, &ctxt, &pass, desc_set_layout,
+    pipe_layout, pipe, cfg.rsc_tys, { vert_shader_mod, frag_shader_mod },
+    std::move(desc_pool_sizes)
   };
 }
 void destroy_task(Task& task) {
@@ -1506,35 +1494,139 @@ void _update_desc_set(
   vkUpdateDescriptorSets(ctxt.dev, (uint32_t)wdss.size(), wdss.data(), 0,
     nullptr);
 }
-Invocation _create_invoke_common(
-  const Task& task,
-  const std::vector<ResourceView>& rsc_views
+VkFramebuffer _create_framebuf(
+  const RenderPass& pass,
+  const std::vector<ResourceView>& attms
 ) {
-  assert(task.rsc_tys.size() == rsc_views.size());
+  const RenderPassConfig& pass_cfg = pass.pass_cfg;
 
-  const Context& ctxt = *task.ctxt;
+  assert(pass_cfg.attm_cfgs.size() == attms.size(),
+    "number of provided attachments mismatches render pass requirement");
+  std::vector<VkImageView> attm_img_views;
 
-  Invocation out {};
-  if (task.desc_pool_sizes.size() > 0) {
-    out.desc_pool = _create_desc_pool(ctxt, task.desc_pool_sizes);
-    out.desc_set = _alloc_desc_set(ctxt, out.desc_pool, task.desc_set_layout);
-    _update_desc_set(ctxt, out.desc_set, task.rsc_tys, rsc_views);
+  uint32_t width = pass_cfg.width;
+  uint32_t height = pass_cfg.height;
+
+  for (size_t i = 0; i < attms.size(); ++i) {
+    const AttachmentConfig& attm_cfg = pass_cfg.attm_cfgs[i];
+    const ResourceView& attm = attms[i];
+
+    switch (attm_cfg.attm_ty) {
+    case L_ATTACHMENT_TYPE_COLOR:
+    {
+      const Image& img = *attm.img_view.img;
+      const ImageConfig& img_cfg = img.img_cfg;
+      assert(attm.rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE);
+      assert(img_cfg.width == width && img_cfg.height == height,
+        "color attachment size mismatches framebuffer size");
+      attm_img_views.emplace_back(img.img_view);
+      break;
+    }
+    case L_ATTACHMENT_TYPE_DEPTH:
+    {
+      const DepthImage& depth_img = *attm.depth_img_view.depth_img;
+      const DepthImageConfig& depth_img_cfg = depth_img.depth_img_cfg;
+      assert(attm.rsc_view_ty == L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE);
+      assert(depth_img_cfg.width == width && depth_img_cfg.height == height,
+        "depth attachment size mismatches framebuffer size");
+      attm_img_views.emplace_back(depth_img.img_view);
+      break;
+    }
+    default: panic("unexpected attachment type");
+    }
   }
-  out.task = &task;
 
-  return out;
+  VkFramebufferCreateInfo fci {};
+  fci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+  fci.renderPass = pass.pass;
+  fci.attachmentCount = (uint32_t)attm_img_views.size();
+  fci.pAttachments = attm_img_views.data();
+  fci.width = width;
+  fci.height = height;
+  fci.layers = 1;
+
+  VkFramebuffer framebuf;
+  VK_ASSERT << vkCreateFramebuffer(pass.ctxt->dev, &fci, nullptr, &framebuf);
+
+  return framebuf;
+}
+void _collect_task_invoke_transit(
+  const std::vector<ResourceView> rsc_views,
+  const std::vector<ResourceType> rsc_tys,
+  InvocationTransitionDetail& transit_detail
+) {
+  assert(rsc_views.size() == rsc_tys.size());
+
+  auto& buf_transit = transit_detail.buf_transit;
+  auto& img_transit = transit_detail.img_transit;
+  auto& depth_img_transit = transit_detail.depth_img_transit;
+
+  for (size_t i = 0; i < rsc_views.size(); ++i) {
+    const ResourceView& rsc_view = rsc_views[i];
+    ResourceViewType rsc_view_ty = rsc_view.rsc_view_ty;
+    ResourceType rsc_ty = rsc_tys[i];
+
+    switch (rsc_ty) {
+    case L_RESOURCE_TYPE_UNIFORM_BUFFER:
+      if (rsc_view_ty == L_RESOURCE_VIEW_TYPE_BUFFER) {
+        transit_detail.reg(rsc_view.buf_view, L_BUFFER_USAGE_UNIFORM_BIT);
+      } else {
+        unreachable();
+      }
+      break;
+    case L_RESOURCE_TYPE_STORAGE_BUFFER:
+      if (rsc_view_ty == L_RESOURCE_VIEW_TYPE_BUFFER) {
+        transit_detail.reg(rsc_view.buf_view, L_BUFFER_USAGE_STORAGE_BIT);
+      } else {
+        unreachable();
+      }
+      break;
+    case L_RESOURCE_TYPE_SAMPLED_IMAGE:
+      if (rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE) {
+        transit_detail.reg(rsc_view.img_view, L_IMAGE_USAGE_SAMPLED_BIT);
+      } else if (rsc_view_ty == L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE) {
+        transit_detail.reg(rsc_view.depth_img_view,
+          L_DEPTH_IMAGE_USAGE_SAMPLED_BIT);
+      } else {
+        unreachable();
+      }
+      break;
+    case L_RESOURCE_TYPE_STORAGE_IMAGE:
+      if (rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE) {
+        transit_detail.reg(rsc_view.img_view, L_IMAGE_USAGE_STORAGE_BIT);
+      } else {
+        unreachable();
+      }
+      break;
+    default: unreachable();
+    }
+  }
 }
 Invocation create_comp_invoke(
   const Task& task,
   const ComputeInvocationConfig& cfg
 ) {
+  assert(task.rsc_tys.size() == cfg.rsc_views.size());
+  assert(task.submit_ty == L_SUBMIT_TYPE_COMPUTE);
   const Context& ctxt = *task.ctxt;
 
-  Invocation out = _create_invoke_common(task, cfg.rsc_views);
+  Invocation out {};
+  out.label = cfg.label;
   out.submit_ty = L_SUBMIT_TYPE_COMPUTE;
-  out.bind_pt = VK_PIPELINE_BIND_POINT_COMPUTE;
+
+  InvocationTransitionDetail transit_detail {};
+  _collect_task_invoke_transit(cfg.rsc_views, task.rsc_tys, transit_detail);
+  out.transit_detail = std::move(transit_detail);
 
   InvocationComputeDetail comp_detail {};
+  comp_detail.task = &task;
+  comp_detail.bind_pt = VK_PIPELINE_BIND_POINT_COMPUTE;
+  if (task.desc_pool_sizes.size() > 0) {
+    comp_detail.desc_pool = _create_desc_pool(ctxt, task.desc_pool_sizes);
+    comp_detail.desc_set =
+      _alloc_desc_set(ctxt, comp_detail.desc_pool, task.desc_set_layout);
+    _update_desc_set(ctxt, comp_detail.desc_set, task.rsc_tys, cfg.rsc_views);
+  }
   comp_detail.workgrp_count = cfg.workgrp_count;
 
   out.comp_detail =
@@ -1547,11 +1639,23 @@ Invocation create_graph_invoke(
   const Task& task,
   const GraphicsInvocationConfig& cfg
 ) {
+  assert(task.rsc_tys.size() == cfg.rsc_views.size());
+  assert(task.submit_ty == L_SUBMIT_TYPE_GRAPHICS);
   const Context& ctxt = *task.ctxt;
 
-  Invocation out = _create_invoke_common(task, cfg.rsc_views);
+  Invocation out {};
+  out.label = cfg.label;
   out.submit_ty = L_SUBMIT_TYPE_GRAPHICS;
-  out.bind_pt = VK_PIPELINE_BIND_POINT_GRAPHICS;
+  
+  InvocationTransitionDetail transit_detail {};
+  _collect_task_invoke_transit(cfg.rsc_views, task.rsc_tys, transit_detail);
+  for (size_t i = 0; i < cfg.vert_bufs.size(); ++i) {
+    transit_detail.reg(cfg.vert_bufs[i], L_BUFFER_USAGE_VERTEX_BIT);
+  }
+  if (cfg.nidx > 0) {
+    transit_detail.reg(cfg.idx_buf, L_BUFFER_USAGE_INDEX_BIT);
+  }
+  out.transit_detail = std::move(transit_detail);
 
   std::vector<VkBuffer> vert_bufs;
   std::vector<VkDeviceSize> vert_buf_offsets;
@@ -1564,6 +1668,14 @@ Invocation create_graph_invoke(
   }
 
   InvocationGraphicsDetail graph_detail {};
+  graph_detail.task = &task;
+  graph_detail.bind_pt = VK_PIPELINE_BIND_POINT_GRAPHICS;
+  if (task.desc_pool_sizes.size() > 0) {
+    graph_detail.desc_pool = _create_desc_pool(ctxt, task.desc_pool_sizes);
+    graph_detail.desc_set =
+      _alloc_desc_set(ctxt, graph_detail.desc_pool, task.desc_set_layout);
+    _update_desc_set(ctxt, graph_detail.desc_set, task.rsc_tys, cfg.rsc_views);
+  }
   graph_detail.vert_bufs = std::move(vert_bufs);
   graph_detail.vert_buf_offsets = std::move(vert_buf_offsets);
   graph_detail.idx_buf = cfg.idx_buf.buf->buf;
@@ -1578,11 +1690,65 @@ Invocation create_graph_invoke(
   log::debug("created graphics invocation");
   return out;
 }
-void destroy_invoke(Invocation& invoke) {
-  if (invoke.desc_pool != VK_NULL_HANDLE) {
-    vkDestroyDescriptorPool(invoke.task->ctxt->dev, invoke.desc_pool, nullptr);
-    log::debug("destroyed invocation");
+Invocation create_pass_invoke(
+  const RenderPass& pass,
+  const RenderPassInvocationConfig& cfg
+) {
+  const Context& ctxt = *pass.ctxt;
+
+  Invocation out {};
+  out.label = cfg.label;
+  out.submit_ty = L_SUBMIT_TYPE_GRAPHICS;
+
+  InvocationTransitionDetail transit_detail {};
+  for (size_t i = 0; i < cfg.attms.size(); ++i) {
+    const ResourceView& attm = cfg.attms[i];
+
+    switch (attm.rsc_view_ty) {
+    case L_RESOURCE_VIEW_TYPE_IMAGE:
+      transit_detail.reg(attm.img_view, L_IMAGE_USAGE_ATTACHMENT_BIT);
+      break;
+    case L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE:
+      transit_detail.reg(attm.depth_img_view,
+        L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT);
+      break;
+    default: panic("render pass attachment must be image or depth image");
+    }
   }
+  out.transit_detail = std::move(transit_detail);
+
+  InvocationRenderPassDetail pass_detail {};
+  pass_detail.pass = &pass;
+  pass_detail.framebuf = _create_framebuf(pass, cfg.attms);
+  // TODO: (penguinliong) Command buffer baking.
+  pass_detail.is_baked = false;
+  pass_detail.invokes = cfg.invokes;
+
+  out.pass_detail =
+    std::make_unique<InvocationRenderPassDetail>(std::move(pass_detail));
+
+  log::debug("created render pass invocation");
+  return out;
+}
+void _destroy_comp_invoke(InvocationComputeDetail& comp_detail) {
+  const Context& ctxt = *comp_detail.task->ctxt;
+  vkDestroyDescriptorPool(ctxt.dev, comp_detail.desc_pool, nullptr);
+  log::debug("destroyed compute invocation");
+}
+void _destroy_graph_invoke(InvocationGraphicsDetail& graph_detail) {
+  const Context& ctxt = *graph_detail.task->ctxt;
+  vkDestroyDescriptorPool(ctxt.dev, graph_detail.desc_pool, nullptr);
+  log::debug("destroyed graphics invocation");
+}
+void _destroy_pass_invoke(InvocationRenderPassDetail& pass_detail) {
+  const Context& ctxt = *pass_detail.pass->ctxt;
+  vkDestroyFramebuffer(ctxt.dev, pass_detail.framebuf, nullptr);
+  log::debug("destroyed render pass invocation");
+}
+void destroy_invoke(Invocation& invoke) {
+  if (invoke.comp_detail) { _destroy_comp_invoke(*invoke.comp_detail); }
+  if (invoke.graph_detail) { _destroy_graph_invoke(*invoke.graph_detail); }
+  if (invoke.pass_detail) { _destroy_pass_invoke(*invoke.pass_detail); }
   invoke = {};
 }
 
@@ -1745,204 +1911,6 @@ VkCommandBuffer _get_cmdbuf(
   return transact.submit_details.back().cmdbuf;
 }
 
-void _record_cmd_set_submit_ty(
-  TransactionLike& transact,
-  const Command& cmd
-) {
-  SubmitType submit_ty = cmd.cmd_set_submit_ty.submit_ty;
-  _get_cmdbuf(transact, submit_ty);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("command drain submit type is set");
-  }
-}
-void _record_cmd_inline_transact(
-  TransactionLike& transact,
-  const Command& cmd
-) {
-  assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-    "nested inline transaction is not allowed");
-  const auto& in = cmd.cmd_inline_transact;
-  const auto& subtransact = *in.transact;
-
-  for (auto i = 0; i < subtransact.submit_details.size(); ++i) {
-    const auto& submit_detail = subtransact.submit_details[i];
-    auto cmdbuf = _get_cmdbuf(transact, submit_detail.submit_ty);
-
-    vkCmdExecuteCommands(cmdbuf, 1, &submit_detail.cmdbuf);
-  }
-
-  log::debug("scheduled inline transaction '",
-    cmd.cmd_inline_transact.transact->label, "'");
-}
-
-void _record_cmd_copy_buf2img(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_copy_buf2img;
-  const auto& src = in.src;
-  const auto& dst = in.dst;
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
-
-  VkBufferImageCopy bic {};
-  bic.bufferOffset = src.offset;
-  bic.bufferRowLength = 0;
-  bic.bufferImageHeight = (uint32_t)dst.img->img_cfg.height;
-  bic.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  bic.imageSubresource.mipLevel = 0;
-  bic.imageSubresource.baseArrayLayer = 0;
-  bic.imageSubresource.layerCount = 1;
-  bic.imageOffset.x = dst.x_offset;
-  bic.imageOffset.y = dst.y_offset;
-  bic.imageExtent.width = dst.width;
-  bic.imageExtent.height = dst.height;
-  bic.imageExtent.depth = 1;
-
-  vkCmdCopyBufferToImage(cmdbuf, src.buf->buf, dst.img->img,
-    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bic);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled copy from buffer '", src.buf->buf_cfg.label,
-      "' to image '", dst.img->img_cfg.label, "'");
-  }
-}
-void _record_cmd_copy_img2buf(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_copy_img2buf;
-  const auto& src = in.src;
-  const auto& dst = in.dst;
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
-
-  VkBufferImageCopy bic {};
-  bic.bufferOffset = dst.offset;
-  bic.bufferRowLength = 0;
-  bic.bufferImageHeight = static_cast<uint32_t>(src.img->img_cfg.height);
-  bic.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  bic.imageSubresource.mipLevel = 0;
-  bic.imageSubresource.baseArrayLayer = 0;
-  bic.imageSubresource.layerCount = 1;
-  bic.imageOffset.x = src.x_offset;
-  bic.imageOffset.y = src.y_offset;
-  bic.imageExtent.width = src.width;
-  bic.imageExtent.height = src.height;
-  bic.imageExtent.depth = 1;
-
-  vkCmdCopyImageToBuffer(cmdbuf, src.img->img,
-    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst.buf->buf, 1, &bic);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled copy from image '", src.img->img_cfg.label,
-      "' to buffer '", dst.buf->buf_cfg.label, "'");
-  }
-}
-void _record_cmd_copy_buf(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_copy_buf;
-  const auto& src = in.src;
-  const auto& dst = in.dst;
-  assert(src.size == dst.size, "buffer copy size mismatched");
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
-
-  VkBufferCopy bc {};
-  bc.srcOffset = src.offset;
-  bc.dstOffset = dst.offset;
-  bc.size = dst.size;
-
-  vkCmdCopyBuffer(cmdbuf, src.buf->buf, dst.buf->buf, 1, &bc);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled copy from buffer '", src.buf->buf_cfg.label,
-      "' to buffer '", dst.buf->buf_cfg.label, "'");
-  }
-}
-void _record_cmd_copy_img(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_copy_img;
-  const auto& src = in.src;
-  const auto& dst = in.dst;
-  assert(src.width == dst.width && src.height == dst.height,
-    "image copy size mismatched");
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
-
-  VkImageCopy ic {};
-  ic.srcOffset.x = src.x_offset;
-  ic.srcOffset.y = src.y_offset;
-  ic.dstOffset.x = dst.x_offset;
-  ic.dstOffset.y = dst.y_offset;
-  ic.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  ic.srcSubresource.baseArrayLayer = 0;
-  ic.srcSubresource.layerCount = 1;
-  ic.srcSubresource.mipLevel = 0;
-  ic.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  ic.dstSubresource.baseArrayLayer = 0;
-  ic.dstSubresource.layerCount = 1;
-  ic.dstSubresource.mipLevel = 0;
-  ic.extent.width = dst.width;
-  ic.extent.height = dst.height;
-  ic.extent.depth = 1;
-
-  vkCmdCopyImage(cmdbuf, src.img->img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-    dst.img->img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &ic);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled copy from image '", src.img->img_cfg.label,
-      "' to image '", dst.img->img_cfg.label, "'");
-  }
-}
-
-void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_invoke;
-  const auto& invoke = *in.invoke;
-  const auto& task = *invoke.task;
-
-  VkCommandBuffer cmdbuf = _get_cmdbuf(transact, invoke.submit_ty);
-  
-  vkCmdBindPipeline(cmdbuf, invoke.bind_pt, task.pipe);
-  if (invoke.desc_set != VK_NULL_HANDLE) {
-    vkCmdBindDescriptorSets(cmdbuf, invoke.bind_pt, task.pipe_layout, 0, 1,
-      &invoke.desc_set, 0, nullptr);
-  }
-
-  switch (invoke.bind_pt) {
-  case VK_PIPELINE_BIND_POINT_COMPUTE:
-    assert(invoke.comp_detail != nullptr);
-    {
-      const InvocationComputeDetail& comp_detail = *invoke.comp_detail;
-      const DispatchSize& workgrp_count = comp_detail.workgrp_count;
-      vkCmdDispatch(cmdbuf, workgrp_count.x, workgrp_count.y, workgrp_count.z);
-    }
-    break;
-  case VK_PIPELINE_BIND_POINT_GRAPHICS:
-    assert(invoke.graph_detail != nullptr);
-    {
-      const InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
-      vkCmdBindVertexBuffers(cmdbuf, 0, (uint32_t)graph_detail.vert_bufs.size(),
-        graph_detail.vert_bufs.data(), graph_detail.vert_buf_offsets.data());
-      if (invoke.graph_detail->nidx != 0) {
-        vkCmdBindIndexBuffer(cmdbuf, graph_detail.idx_buf,
-          graph_detail.idx_buf_offset, VK_INDEX_TYPE_UINT16);
-        vkCmdDrawIndexed(cmdbuf, graph_detail.nidx, graph_detail.ninst,
-          0, 0, 0);
-      } else {
-        vkCmdDraw(cmdbuf, graph_detail.nvert, graph_detail.ninst, 0, 0);
-      }
-    }
-    break;
-  default:
-    unreachable("unexpected submit type");
-  }
-
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled invocation '", task.label, "' for execution");
-  }
-}
-
-void _record_cmd_write_timestamp(
-  TransactionLike& transact,
-  const Command& cmd
-) {
-  const auto& in = cmd.cmd_write_timestamp;
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
-
-  auto query_pool = in.timestamp->query_pool;
-  vkCmdResetQueryPool(cmdbuf, query_pool, 0, 1);
-  vkCmdWriteTimestamp(cmdbuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, query_pool, 0);
-
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled timestamp write");
-  }
-}
-
 void _make_buf_barrier_params(
   BufferUsage usage,
   VkAccessFlags& access,
@@ -1979,7 +1947,6 @@ void _make_buf_barrier_params(
     panic("destination usage cannot be a set of bits");
   }
 }
-
 void _make_img_barrier_params(
   ImageUsage usage,
   VkAccessFlags& access,
@@ -2029,125 +1996,6 @@ void _make_img_barrier_params(
     panic("destination usage cannot be a set of bits");
   }
 }
-
-void _record_cmd_buf_barrier(
-  TransactionLike& transact,
-  const Command& cmd
-) {
-  const auto& in = cmd.cmd_buf_barrier;
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
-
-  BufferUsage src_usage = in.src_usage;
-  BufferUsage dst_usage = in.dst_usage;
-
-  VkAccessFlags src_access = 0;
-  VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-  _make_buf_barrier_params(src_usage, src_access, src_stage);
-
-  VkAccessFlags dst_access = 0;
-  VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-  _make_buf_barrier_params(dst_usage, dst_access, dst_stage);
-
-  VkBufferMemoryBarrier bmb {};
-  bmb.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-  bmb.buffer = in.buf->buf;
-  bmb.srcAccessMask = src_access;
-  bmb.dstAccessMask = dst_access;
-  bmb.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  bmb.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  bmb.offset = 0;
-  bmb.size = VK_WHOLE_SIZE;
-
-  vkCmdPipelineBarrier(
-    cmdbuf,
-    src_stage,
-    dst_stage,
-    0,
-    0, nullptr,
-    1, &bmb,
-    0, nullptr);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled buffer barrier");
-  }
-}
-void _record_cmd_img_barrier(
-  TransactionLike& transact,
-  const Command& cmd
-) {
-  const auto& in = cmd.cmd_img_barrier;
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
-
-  ImageUsage src_usage = in.src_usage;
-  ImageUsage dst_usage = in.dst_usage;
-
-  VkAccessFlags src_access = 0;
-  VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-  VkImageLayout src_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-  _make_img_barrier_params(src_usage, src_access, src_stage, src_layout);
-
-  VkAccessFlags dst_access = 0;
-  VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-  VkImageLayout dst_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-  _make_img_barrier_params(dst_usage, dst_access, dst_stage, dst_layout);
-
-  VkImageMemoryBarrier imb {};
-  imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  imb.image = in.img->img;
-  imb.srcAccessMask = src_access;
-  imb.dstAccessMask = dst_access;
-  imb.oldLayout = src_layout;
-  imb.newLayout = dst_layout;
-  imb.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  imb.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-  imb.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  imb.subresourceRange.baseArrayLayer = 0;
-  imb.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
-  imb.subresourceRange.baseMipLevel = 0;
-  imb.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
-
-  vkCmdPipelineBarrier(
-    cmdbuf,
-    src_stage,
-    dst_stage,
-    0,
-    0, nullptr,
-    0, nullptr,
-    1, &imb);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled image barrier");
-  }
-}
-
-void _record_cmd_begin_pass(TransactionLike& transact, const Command& cmd) {
-  assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-  const auto& in = cmd.cmd_begin_pass;
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
-  const auto& pass = *in.pass;
-
-  VkRenderPassBeginInfo rpbi {};
-  rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-  rpbi.renderPass = pass.pass;
-  rpbi.framebuffer = pass.framebuf;
-  rpbi.renderArea.extent = pass.viewport.extent;
-  rpbi.clearValueCount = (uint32_t)pass.clear_values.size();
-  rpbi.pClearValues = pass.clear_values.data();
-  VkSubpassContents sc = in.draw_inline ?
-    VK_SUBPASS_CONTENTS_INLINE :
-    VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS;
-  vkCmdBeginRenderPass(cmdbuf, &rpbi, sc);
-
-  log::debug("scheduled render pass begin");
-}
-void _record_cmd_end_pass(TransactionLike& transact, const Command& cmd) {
-  assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-  const auto& in = cmd.cmd_end_pass;
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_GRAPHICS);
-
-  vkCmdEndRenderPass(cmdbuf);
-
-  log::debug("scheduled render pass end");
-}
-
 // TODO: (penguinliong) Check these pipeline stages.
 void _make_depth_img_barrier_params(
   DepthImageUsage usage,
@@ -2183,28 +2031,142 @@ void _make_depth_img_barrier_params(
     panic("destination usage cannot be a set of bits");
   }
 }
-void _record_cmd_depth_img_barrier(
+const BufferView& _transit_rsc(
   TransactionLike& transact,
-  const Command& cmd
+  const BufferView& buf_view,
+  BufferUsage dst_usage
 ) {
-  const auto& in = cmd.cmd_depth_img_barrier;
+  auto& dyn_detail = (BufferDynamicDetail&)buf_view.buf->dyn_detail;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
 
-  VkAccessFlags src_access = 0;
-  VkPipelineStageFlags src_stage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-  VkImageLayout src_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-  _make_depth_img_barrier_params(in.src_usage, src_access, src_stage,
-    src_layout);
+  VkAccessFlags src_access = dyn_detail.access;
+  VkPipelineStageFlags src_stage = dyn_detail.stage;
+
+  VkAccessFlags dst_access = 0;
+  VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+  _make_buf_barrier_params(dst_usage, dst_access, dst_stage);
+
+  if (src_access == dst_access && src_stage == dst_stage) {
+    return buf_view;
+  }
+
+  VkBufferMemoryBarrier bmb {};
+  bmb.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
+  bmb.buffer = buf_view.buf->buf;
+  bmb.srcAccessMask = src_access;
+  bmb.dstAccessMask = dst_access;
+  bmb.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  bmb.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  bmb.offset = buf_view.offset;
+  bmb.size = buf_view.size;
+
+  vkCmdPipelineBarrier(
+    cmdbuf,
+    src_stage,
+    dst_stage,
+    0,
+    0, nullptr,
+    1, &bmb,
+    0, nullptr);
+
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    log::debug("scheduled buffer barrier");
+  }
+
+  dyn_detail.access = dst_access;
+  dyn_detail.stage = dst_stage;
+
+  return buf_view;
+}
+const ImageView& _transit_rsc(
+  TransactionLike& transact,
+  const ImageView& img_view,
+  ImageUsage dst_usage
+) {
+  auto& dyn_detail = (ImageDynamicDetail&)img_view.img->dyn_detail;
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
+
+  VkAccessFlags src_access = dyn_detail.access;
+  VkPipelineStageFlags src_stage = dyn_detail.stage;
+  VkImageLayout src_layout = dyn_detail.layout;
 
   VkAccessFlags dst_access = 0;
   VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
   VkImageLayout dst_layout = VK_IMAGE_LAYOUT_UNDEFINED;
-  _make_depth_img_barrier_params(in.dst_usage, dst_access, dst_stage,
-    dst_layout);
+  _make_img_barrier_params(dst_usage, dst_access, dst_stage, dst_layout);
+
+  if (
+    src_access == dst_access &&
+    src_stage == dst_stage &&
+    src_layout == dst_layout
+  ) {
+    return img_view;
+  }
 
   VkImageMemoryBarrier imb {};
   imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  imb.image = in.depth_img->img;
+  imb.image = img_view.img->img;
+  imb.srcAccessMask = src_access;
+  imb.dstAccessMask = dst_access;
+  imb.oldLayout = src_layout;
+  imb.newLayout = dst_layout;
+  imb.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  imb.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+  imb.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  // TODO: (penguinliong) Multi-layer image. 
+  imb.subresourceRange.baseArrayLayer = 0;
+  imb.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+  imb.subresourceRange.baseMipLevel = 0;
+  imb.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
+
+  vkCmdPipelineBarrier(
+    cmdbuf,
+    src_stage,
+    dst_stage,
+    0,
+    0, nullptr,
+    0, nullptr,
+    1, &imb);
+
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    log::debug("scheduled image barrier");
+  }
+
+  dyn_detail.access = dst_access;
+  dyn_detail.stage = dst_stage;
+  dyn_detail.layout = dst_layout;
+
+  return img_view;
+}
+const DepthImageView& _transit_rsc(
+  TransactionLike& transact,
+  const DepthImageView& depth_img_view,
+  DepthImageUsage dst_usage
+) {
+  auto& dyn_detail =
+    (DepthImageDynamicDetail&)depth_img_view.depth_img->dyn_detail;
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
+
+  VkAccessFlags src_access = dyn_detail.access;
+  VkPipelineStageFlags src_stage = dyn_detail.stage;
+  VkImageLayout src_layout = dyn_detail.layout;
+
+  VkAccessFlags dst_access = 0;
+  VkPipelineStageFlags dst_stage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
+  VkImageLayout dst_layout = VK_IMAGE_LAYOUT_UNDEFINED;
+  _make_depth_img_barrier_params(dst_usage, dst_access, dst_stage, dst_layout);
+
+  if (
+    src_access == dst_access &&
+    src_stage == dst_stage &&
+    src_layout == dst_layout
+  ) {
+    return depth_img_view;
+  }
+
+  VkImageMemoryBarrier imb {};
+  imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+  imb.image = depth_img_view.depth_img->img;
   imb.srcAccessMask = src_access;
   imb.dstAccessMask = dst_access;
   imb.oldLayout = src_layout;
@@ -2228,6 +2190,256 @@ void _record_cmd_depth_img_barrier(
 
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
     log::debug("schedule depth image barrier");
+  }
+
+  dyn_detail.access = dst_access;
+  dyn_detail.stage = dst_stage;
+  dyn_detail.layout = dst_layout;
+
+  return depth_img_view;
+}
+
+void _record_cmd_set_submit_ty(
+  TransactionLike& transact,
+  const Command& cmd
+) {
+  SubmitType submit_ty = cmd.cmd_set_submit_ty.submit_ty;
+  _get_cmdbuf(transact, submit_ty);
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    log::debug("command drain submit type is set");
+  }
+}
+void _record_cmd_inline_transact(
+  TransactionLike& transact,
+  const Command& cmd
+) {
+  assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+    "nested inline transaction is not allowed");
+  const auto& in = cmd.cmd_inline_transact;
+  const auto& subtransact = *in.transact;
+
+  for (auto i = 0; i < subtransact.submit_details.size(); ++i) {
+    const auto& submit_detail = subtransact.submit_details[i];
+    auto cmdbuf = _get_cmdbuf(transact, submit_detail.submit_ty);
+
+    vkCmdExecuteCommands(cmdbuf, 1, &submit_detail.cmdbuf);
+  }
+
+  log::debug("scheduled inline transaction '",
+    cmd.cmd_inline_transact.transact->label, "'");
+}
+
+void _record_cmd_copy_buf2img(TransactionLike& transact, const Command& cmd) {
+  const auto& in = cmd.cmd_copy_buf2img;
+  const auto& src = _transit_rsc(transact, in.src, L_BUFFER_USAGE_STAGING_BIT);
+  const auto& dst = _transit_rsc(transact, in.dst, L_IMAGE_USAGE_STAGING_BIT);
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
+
+  VkBufferImageCopy bic {};
+  bic.bufferOffset = src.offset;
+  bic.bufferRowLength = 0;
+  bic.bufferImageHeight = (uint32_t)dst.img->img_cfg.height;
+  bic.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  bic.imageSubresource.mipLevel = 0;
+  bic.imageSubresource.baseArrayLayer = 0;
+  bic.imageSubresource.layerCount = 1;
+  bic.imageOffset.x = dst.x_offset;
+  bic.imageOffset.y = dst.y_offset;
+  bic.imageExtent.width = dst.width;
+  bic.imageExtent.height = dst.height;
+  bic.imageExtent.depth = 1;
+
+  vkCmdCopyBufferToImage(cmdbuf, src.buf->buf, dst.img->img,
+    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bic);
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    log::debug("scheduled copy from buffer '", src.buf->buf_cfg.label,
+      "' to image '", dst.img->img_cfg.label, "'");
+  }
+}
+void _record_cmd_copy_img2buf(TransactionLike& transact, const Command& cmd) {
+  const auto& in = cmd.cmd_copy_img2buf;
+  const auto& src = _transit_rsc(transact, in.src, L_BUFFER_USAGE_STAGING_BIT);
+  const auto& dst = _transit_rsc(transact, in.dst, L_IMAGE_USAGE_STAGING_BIT);
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
+
+  VkBufferImageCopy bic {};
+  bic.bufferOffset = dst.offset;
+  bic.bufferRowLength = 0;
+  bic.bufferImageHeight = static_cast<uint32_t>(src.img->img_cfg.height);
+  bic.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  bic.imageSubresource.mipLevel = 0;
+  bic.imageSubresource.baseArrayLayer = 0;
+  bic.imageSubresource.layerCount = 1;
+  bic.imageOffset.x = src.x_offset;
+  bic.imageOffset.y = src.y_offset;
+  bic.imageExtent.width = src.width;
+  bic.imageExtent.height = src.height;
+  bic.imageExtent.depth = 1;
+
+  vkCmdCopyImageToBuffer(cmdbuf, src.img->img,
+    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst.buf->buf, 1, &bic);
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    log::debug("scheduled copy from image '", src.img->img_cfg.label,
+      "' to buffer '", dst.buf->buf_cfg.label, "'");
+  }
+}
+void _record_cmd_copy_buf(TransactionLike& transact, const Command& cmd) {
+  const auto& in = cmd.cmd_copy_buf;
+  const auto& src = _transit_rsc(transact, in.src, L_BUFFER_USAGE_STAGING_BIT);
+  const auto& dst = _transit_rsc(transact, in.dst, L_BUFFER_USAGE_STAGING_BIT);
+  assert(src.size == dst.size, "buffer copy size mismatched");
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
+
+  VkBufferCopy bc {};
+  bc.srcOffset = src.offset;
+  bc.dstOffset = dst.offset;
+  bc.size = dst.size;
+
+  vkCmdCopyBuffer(cmdbuf, src.buf->buf, dst.buf->buf, 1, &bc);
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    log::debug("scheduled copy from buffer '", src.buf->buf_cfg.label,
+      "' to buffer '", dst.buf->buf_cfg.label, "'");
+  }
+}
+void _record_cmd_copy_img(TransactionLike& transact, const Command& cmd) {
+  const auto& in = cmd.cmd_copy_img;
+  const auto& src = _transit_rsc(transact, in.src, L_IMAGE_USAGE_STAGING_BIT);
+  const auto& dst = _transit_rsc(transact, in.dst, L_IMAGE_USAGE_STAGING_BIT);
+  assert(src.width == dst.width && src.height == dst.height,
+    "image copy size mismatched");
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
+
+  VkImageCopy ic {};
+  ic.srcOffset.x = src.x_offset;
+  ic.srcOffset.y = src.y_offset;
+  ic.dstOffset.x = dst.x_offset;
+  ic.dstOffset.y = dst.y_offset;
+  ic.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  ic.srcSubresource.baseArrayLayer = 0;
+  ic.srcSubresource.layerCount = 1;
+  ic.srcSubresource.mipLevel = 0;
+  ic.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  ic.dstSubresource.baseArrayLayer = 0;
+  ic.dstSubresource.layerCount = 1;
+  ic.dstSubresource.mipLevel = 0;
+  ic.extent.width = dst.width;
+  ic.extent.height = dst.height;
+  ic.extent.depth = 1;
+
+  vkCmdCopyImage(cmdbuf, src.img->img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+    dst.img->img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &ic);
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    log::debug("scheduled copy from image '", src.img->img_cfg.label,
+      "' to image '", dst.img->img_cfg.label, "'");
+  }
+}
+
+void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
+  const auto& in = cmd.cmd_invoke;
+  const auto& invoke = *in.invoke;
+
+  VkCommandBuffer cmdbuf = _get_cmdbuf(transact, invoke.submit_ty);
+
+  // Transition all referenced resources.
+  for (auto& pair : invoke.transit_detail.buf_transit) {
+    _transit_rsc(transact, pair.first, pair.second);
+  }
+  for (auto& pair : invoke.transit_detail.img_transit) {
+    _transit_rsc(transact, pair.first, pair.second);
+  }
+  for (auto& pair : invoke.transit_detail.depth_img_transit) {
+    _transit_rsc(transact, pair.first, pair.second);
+  }
+
+
+  if (invoke.comp_detail) {
+    const InvocationComputeDetail& comp_detail = *invoke.comp_detail;
+    const Task& task = *comp_detail.task;
+    const DispatchSize& workgrp_count = comp_detail.workgrp_count;
+
+    vkCmdBindPipeline(cmdbuf, comp_detail.bind_pt, task.pipe);
+    if (comp_detail.desc_set != VK_NULL_HANDLE) {
+      vkCmdBindDescriptorSets(cmdbuf, comp_detail.bind_pt, task.pipe_layout,
+        0, 1, &comp_detail.desc_set, 0, nullptr);
+    }
+    vkCmdDispatch(cmdbuf, workgrp_count.x, workgrp_count.y, workgrp_count.z);
+
+  } else if (invoke.graph_detail) {
+    const InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
+    const Task& task = *graph_detail.task;
+
+    vkCmdBindPipeline(cmdbuf, graph_detail.bind_pt, task.pipe);
+    if (graph_detail.desc_set != VK_NULL_HANDLE) {
+      vkCmdBindDescriptorSets(cmdbuf, graph_detail.bind_pt, task.pipe_layout,
+        0, 1, &graph_detail.desc_set, 0, nullptr);
+    }
+    // TODO: (penguinliong) Vertex, index buffer transition.
+    vkCmdBindVertexBuffers(cmdbuf, 0, (uint32_t)graph_detail.vert_bufs.size(),
+      graph_detail.vert_bufs.data(), graph_detail.vert_buf_offsets.data());
+    if (invoke.graph_detail->nidx != 0) {
+      vkCmdBindIndexBuffer(cmdbuf, graph_detail.idx_buf,
+        graph_detail.idx_buf_offset, VK_INDEX_TYPE_UINT16);
+      vkCmdDrawIndexed(cmdbuf, graph_detail.nidx, graph_detail.ninst,
+        0, 0, 0);
+    } else {
+      vkCmdDraw(cmdbuf, graph_detail.nvert, graph_detail.ninst, 0, 0);
+    }
+
+  } else if (invoke.pass_detail) {
+    const InvocationRenderPassDetail& pass_detail = *invoke.pass_detail;
+    const RenderPass& pass = *pass_detail.pass;
+
+    VkSubpassContents sc = pass_detail.is_baked ?
+      VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS :
+      VK_SUBPASS_CONTENTS_INLINE;
+
+    for (size_t i = 0; i < pass_detail.invokes.size(); ++i) {
+      if (i == 0) {
+        VkRenderPassBeginInfo rpbi {};
+        rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+        rpbi.renderPass = pass.pass;
+        rpbi.framebuffer = pass_detail.framebuf;
+        rpbi.renderArea.extent = pass.viewport.extent;
+        rpbi.clearValueCount = (uint32_t)pass.clear_values.size();
+        rpbi.pClearValues = pass.clear_values.data();
+        vkCmdBeginRenderPass(cmdbuf, &rpbi, sc);
+      } else {
+        vkCmdNextSubpass(cmdbuf, sc);
+      }
+
+      const const Invocation* subinvoke = pass_detail.invokes[i];
+      if (subinvoke == nullptr) {
+        log::warn("null subinvocation in render pass invocation is ignored");
+        continue;
+      }
+      assert(subinvoke->graph_detail != nullptr,
+        "render pass constituent invocations must be graphics invocations");
+      _record_cmd_invoke(transact, cmd_invoke(*subinvoke));
+    }
+    if (pass_detail.invokes.size() > 0) {
+      vkCmdEndRenderPass(cmdbuf);
+    }
+
+  }
+
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    log::debug("scheduled invocation '", invoke.label, "' for execution");
+  }
+}
+
+void _record_cmd_write_timestamp(
+  TransactionLike& transact,
+  const Command& cmd
+) {
+  const auto& in = cmd.cmd_write_timestamp;
+  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
+
+  auto query_pool = in.timestamp->query_pool;
+  vkCmdResetQueryPool(cmdbuf, query_pool, 0, 1);
+  vkCmdWriteTimestamp(cmdbuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, query_pool, 0);
+
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+    log::debug("scheduled timestamp write");
   }
 }
 
@@ -2257,21 +2469,6 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
     break;
   case L_COMMAND_TYPE_WRITE_TIMESTAMP:
     _record_cmd_write_timestamp(transact, cmd);
-    break;
-  case L_COMMAND_TYPE_BUFFER_BARRIER:
-    _record_cmd_buf_barrier(transact, cmd);
-    break;
-  case L_COMMAND_TYPE_IMAGE_BARRIER:
-    _record_cmd_img_barrier(transact, cmd);
-    break;
-  case L_COMMAND_TYPE_BEGIN_RENDER_PASS:
-    _record_cmd_begin_pass(transact, cmd);
-    break;
-  case L_COMMAND_TYPE_END_RENDER_PASS:
-    _record_cmd_end_pass(transact, cmd);
-    break;
-  case L_COMMAND_TYPE_DEPTH_IMAGE_BARRIER:
-    _record_cmd_depth_img_barrier(transact, cmd);
     break;
   default:
     log::warn("ignored unknown command: ", cmd.cmd_ty);

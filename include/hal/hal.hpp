@@ -232,6 +232,34 @@ L_IMPL_FN DepthImage create_depth_img(
 L_IMPL_FN void destroy_depth_img(DepthImage& depth_img);
 L_IMPL_FN const DepthImageConfig& get_depth_img_cfg(const DepthImage& depth_img);
 
+struct DepthImageView {
+  const DepthImage* depth_img; // Lifetime bound.
+  uint32_t x_offset;
+  uint32_t y_offset;
+  uint32_t width;
+  uint32_t height;
+};
+inline DepthImageView make_depth_img_view(
+  const DepthImage& depth_img,
+  uint32_t x_offset,
+  uint32_t y_offset,
+  uint32_t width,
+  uint32_t height
+) {
+  DepthImageView out {};
+  out.depth_img = &depth_img;
+  out.x_offset = x_offset;
+  out.y_offset = y_offset;
+  out.width = width;
+  out.height = height;
+  return out;
+}
+inline DepthImageView make_depth_img_view(const DepthImage& depth_img) {
+  const DepthImageConfig& depth_img_cfg = get_depth_img_cfg(depth_img);
+  return make_depth_img_view(depth_img, 0, 0, depth_img_cfg.width,
+    depth_img_cfg.height);
+}
+
 
 
 struct DispatchSize {
@@ -287,12 +315,14 @@ struct AttachmentConfig {
   AttachmentAccess attm_access;
   // Attachment type.
   AttachmentType attm_ty;
-  // The image to be used as an attachment.
   union {
-    const Image* color_img;
-    const DepthImage* depth_img;
+    // Color attachment format.
+    PixelFormat color_fmt;
+    // Depth attachment format.
+    DepthFormat depth_fmt;
   };
 };
+// TODO: (penguinliong) Multi-subpass rendering.
 struct RenderPassConfig {
   std::string label;
   // Width of attachments.
@@ -359,12 +389,32 @@ L_IMPL_FN void destroy_task(Task& task);
 
 
 
+enum ResourceViewType {
+  L_RESOURCE_VIEW_TYPE_BUFFER,
+  L_RESOURCE_VIEW_TYPE_IMAGE,
+  L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE,
+};
 struct ResourceView {
+  ResourceViewType rsc_view_ty;
   BufferView buf_view;
   ImageView img_view;
+  DepthImageView depth_img_view;
 
-  inline ResourceView(BufferView buf_view) : buf_view(buf_view), img_view() {}
-  inline ResourceView(ImageView img_view) : buf_view(), img_view(img_view) {}
+  inline ResourceView(BufferView buf_view) :
+    rsc_view_ty(L_RESOURCE_VIEW_TYPE_BUFFER),
+    buf_view(buf_view),
+    img_view(),
+    depth_img_view() {}
+  inline ResourceView(ImageView img_view) :
+    rsc_view_ty(L_RESOURCE_VIEW_TYPE_IMAGE),
+    buf_view(),
+    img_view(img_view),
+    depth_img_view() {}
+  inline ResourceView(DepthImageView depth_img_view) :
+    rsc_view_ty(L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE),
+    buf_view(),
+    img_view(),
+    depth_img_view(depth_img_view) {}
 };
 // Instanced invocation of a compute task, a.k.a. a dispatch.
 struct ComputeInvocationConfig {
@@ -392,6 +442,13 @@ struct GraphicsInvocationConfig {
   // MUST be zero.
   uint32_t nidx;
 };
+struct RenderPassInvocationConfig {
+  std::string label;
+  // Attachment feed in order, can be `Image` or `DepthImage` only.
+  std::vector<ResourceView> attms;
+  // Graphics invocations applied within this render pass.
+  std::vector<const struct Invocation*> invokes; // Lifetime bound.
+};
 L_IMPL_STRUCT struct Invocation;
 L_IMPL_FN Invocation create_comp_invoke(
   const Task& task,
@@ -400,6 +457,10 @@ L_IMPL_FN Invocation create_comp_invoke(
 L_IMPL_FN Invocation create_graph_invoke(
   const Task& task,
   const GraphicsInvocationConfig& cfg
+);
+L_IMPL_FN Invocation create_pass_invoke(
+  const RenderPass& pass,
+  const RenderPassInvocationConfig& cfg
 );
 L_IMPL_FN void destroy_invoke(Invocation& invoke);
 
@@ -437,11 +498,6 @@ enum CommandType {
   L_COMMAND_TYPE_COPY_IMAGE,
   L_COMMAND_TYPE_INVOKE,
   L_COMMAND_TYPE_WRITE_TIMESTAMP,
-  L_COMMAND_TYPE_BUFFER_BARRIER,
-  L_COMMAND_TYPE_IMAGE_BARRIER,
-  L_COMMAND_TYPE_BEGIN_RENDER_PASS,
-  L_COMMAND_TYPE_END_RENDER_PASS,
-  L_COMMAND_TYPE_DEPTH_IMAGE_BARRIER,
 };
 enum SubmitType {
   L_SUBMIT_TYPE_COMPUTE,
@@ -489,13 +545,6 @@ struct Command {
       ImageUsage src_usage;
       ImageUsage dst_usage;
     } cmd_img_barrier;
-    struct {
-      const RenderPass* pass;
-      bool draw_inline;
-    } cmd_begin_pass;
-    struct {
-      const RenderPass* pass;
-    } cmd_end_pass;
     struct {
       const DepthImage* depth_img;
       DepthImageUsage src_usage;
@@ -563,61 +612,6 @@ inline Command cmd_set_submit_ty(SubmitType submit_ty) {
   Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_SET_SUBMIT_TYPE;
   cmd.cmd_set_submit_ty.submit_ty = submit_ty;
-  return cmd;
-}
-
-inline Command cmd_buf_barrier(
-  const Buffer& buf,
-  BufferUsage src_usage,
-  BufferUsage dst_usage
-) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_BUFFER_BARRIER;
-  cmd.cmd_buf_barrier.buf = &buf;
-  cmd.cmd_buf_barrier.src_usage = src_usage;
-  cmd.cmd_buf_barrier.dst_usage = dst_usage;
-  return cmd;
-}
-inline Command cmd_img_barrier(
-  const Image& img,
-  ImageUsage src_usage,
-  ImageUsage dst_usage
-) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_IMAGE_BARRIER;
-  cmd.cmd_img_barrier.img = &img;
-  cmd.cmd_img_barrier.src_usage = src_usage;
-  cmd.cmd_img_barrier.dst_usage = dst_usage;
-  return cmd;
-}
-inline Command cmd_begin_pass(
-  const RenderPass& pass,
-  bool draw_inline
-) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_BEGIN_RENDER_PASS;
-  cmd.cmd_begin_pass.pass = &pass;
-  cmd.cmd_begin_pass.draw_inline = draw_inline;
-  return cmd;
-}
-inline Command cmd_end_pass(
-  const RenderPass& pass
-) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_END_RENDER_PASS;
-  cmd.cmd_end_pass.pass = &pass;
-  return cmd;
-}
-inline Command cmd_depth_img_barrier(
-  const DepthImage& depth_img,
-  DepthImageUsage src_usage,
-  DepthImageUsage dst_usage
-) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_DEPTH_IMAGE_BARRIER;
-  cmd.cmd_depth_img_barrier.depth_img = &depth_img;
-  cmd.cmd_depth_img_barrier.src_usage = src_usage;
-  cmd.cmd_depth_img_barrier.dst_usage = dst_usage;
   return cmd;
 }
 

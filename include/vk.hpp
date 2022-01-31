@@ -88,15 +88,22 @@ struct Context {
 };
 
 struct BufferDynamicDetail {
-  BufferUsage last_usage;
+  VkPipelineStageFlags stage;
+  VkAccessFlags access;
 };
 struct Buffer {
   const Context* ctxt; // Lifetime bound.
   VkDeviceMemory devmem;
   VkBuffer buf;
   BufferConfig buf_cfg;
+  BufferDynamicDetail dyn_detail;
 };
 
+struct ImageDynamicDetail {
+  VkPipelineStageFlags stage;
+  VkAccessFlags access;
+  VkImageLayout layout;
+};
 struct Image {
   const Context* ctxt; // Lifetime bound.
   VkDeviceMemory devmem;
@@ -104,8 +111,14 @@ struct Image {
   VkImageView img_view;
   ImageConfig img_cfg;
   bool is_staging_img;
+  ImageDynamicDetail dyn_detail;
 };
 
+struct DepthImageDynamicDetail {
+  VkPipelineStageFlags stage;
+  VkAccessFlags access;
+  VkImageLayout layout;
+};
 struct DepthImage {
   const Context* ctxt; // Lifetime bound.
   VkDeviceMemory devmem;
@@ -113,13 +126,13 @@ struct DepthImage {
   VkImage img;
   VkImageView img_view;
   DepthImageConfig depth_img_cfg;
+  DepthImageDynamicDetail dyn_detail;
 };
 
 struct RenderPass {
   const Context* ctxt;
   VkRect2D viewport;
   VkRenderPass pass;
-  VkFramebuffer framebuf;
   RenderPassConfig pass_cfg;
   std::vector<VkClearValue> clear_values;
 };
@@ -130,6 +143,8 @@ struct WorkgroupSizeSpecializationDetail {
   uint32_t z_spec_id;
 };
 struct Task {
+  std::string label;
+  SubmitType submit_ty;
   const Context* ctxt;
   const RenderPass* pass;
   VkDescriptorSetLayout desc_set_layout;
@@ -138,14 +153,42 @@ struct Task {
   std::vector<ResourceType> rsc_tys;
   std::vector<VkShaderModule> shader_mods;
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
-  std::string label;
   WorkgroupSizeSpecializationDetail workgrp_spec_detail;
 };
 
+struct InvocationTransitionDetail {
+  std::vector<std::pair<BufferView, BufferUsage>> buf_transit;
+  std::vector<std::pair<ImageView, ImageUsage>> img_transit;
+  std::vector<std::pair<DepthImageView, DepthImageUsage>> depth_img_transit;
+
+  inline void reg(BufferView buf_view, BufferUsage usage) {
+    buf_transit.emplace_back(
+      std::make_pair<BufferView, BufferUsage>(
+        std::move(buf_view), std::move(usage)));
+  }
+  inline void reg(ImageView img_view, ImageUsage usage) {
+    img_transit.emplace_back(
+      std::make_pair<ImageView, ImageUsage>(
+        std::move(img_view), std::move(usage)));
+  }
+  inline void reg(DepthImageView depth_img_view, DepthImageUsage usage) {
+    depth_img_transit.emplace_back(
+      std::make_pair<DepthImageView, DepthImageUsage>(
+        std::move(depth_img_view), std::move(usage)));
+  }
+};
 struct InvocationComputeDetail {
+  const Task* task;
+  VkPipelineBindPoint bind_pt;
+  VkDescriptorPool desc_pool;
+  VkDescriptorSet desc_set;
   DispatchSize workgrp_count;
 };
 struct InvocationGraphicsDetail {
+  const Task* task;
+  VkPipelineBindPoint bind_pt;
+  VkDescriptorPool desc_pool;
+  VkDescriptorSet desc_set;
   std::vector<VkBuffer> vert_bufs;
   std::vector<VkDeviceSize> vert_buf_offsets;
   VkBuffer idx_buf;
@@ -154,15 +197,19 @@ struct InvocationGraphicsDetail {
   uint32_t nvert;
   uint32_t nidx;
 };
+struct InvocationRenderPassDetail {
+  const RenderPass* pass;
+  VkFramebuffer framebuf;
+  std::vector<const Invocation*> invokes;
+  bool is_baked;
+};
 struct Invocation {
   std::string label;
-  const Task* task;
   SubmitType submit_ty;
-  VkPipelineBindPoint bind_pt;
-  VkDescriptorPool desc_pool;
-  VkDescriptorSet desc_set;
   std::unique_ptr<InvocationComputeDetail> comp_detail;
   std::unique_ptr<InvocationGraphicsDetail> graph_detail;
+  std::unique_ptr<InvocationRenderPassDetail> pass_detail;
+  InvocationTransitionDetail transit_detail;
 };
 
 struct TransactionRenderPassDetail {
