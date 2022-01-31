@@ -878,7 +878,7 @@ DepthImage create_depth_img(
   dyn_detail.access = 0;
   dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
 
-  log::info("created depth image '", depth_img_cfg.label, "'");
+  log::debug("created depth image '", depth_img_cfg.label, "'");
   return DepthImage {
     &ctxt, devmem, (size_t)mr.size, img, img_view, depth_img_cfg,
     std::move(dyn_detail)
@@ -890,7 +890,7 @@ void destroy_depth_img(DepthImage& depth_img) {
     vkDestroyImage(depth_img.ctxt->dev, depth_img.img, nullptr);
     vkFreeMemory(depth_img.ctxt->dev, depth_img.devmem, nullptr);
 
-    log::info("destroyed depth image '", depth_img.depth_img_cfg.label, "'");
+    log::debug("destroyed depth image '", depth_img.depth_img_cfg.label, "'");
     depth_img = {};
   }
 }
@@ -1195,12 +1195,12 @@ RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg) {
     }
   }
 
-  log::info("created render pass '", cfg.label, "'");
+  log::debug("created render pass '", cfg.label, "'");
   return RenderPass { &ctxt, viewport, pass, cfg, clear_values };
 }
 void destroy_pass(RenderPass& pass) {
   vkDestroyRenderPass(pass.ctxt->dev, pass.pass, nullptr);
-  log::info("destroyed render pass '", pass.pass_cfg.label, "'");
+  log::debug("destroyed render pass '", pass.pass_cfg.label, "'");
 }
 
 
@@ -2523,7 +2523,6 @@ void submit_cmds(
   util::Timer timer {};
   timer.tic();
   for (auto i = 0; i < ncmd; ++i) {
-    log::debug("recording ", i, "th command");
     _record_cmd(transact, cmds[i]);
   }
   cmd_drain.submit_details = std::move(transact.submit_details);
