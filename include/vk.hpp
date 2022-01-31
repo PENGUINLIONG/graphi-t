@@ -200,8 +200,8 @@ struct InvocationGraphicsDetail {
 struct InvocationRenderPassDetail {
   const RenderPass* pass;
   VkFramebuffer framebuf;
-  std::vector<const Invocation*> invokes;
   bool is_baked;
+  std::vector<const Invocation*> subinvokes;
 };
 struct Invocation {
   std::string label;

@@ -1602,6 +1602,23 @@ void _collect_task_invoke_transit(
     }
   }
 }
+void _merge_subinvoke_transits(
+  const std::vector<const Invocation*>& subinvokes,
+  InvocationTransitionDetail& transit_detail
+) {
+  for (const auto& subinvoke : subinvokes) {
+    assert(subinvoke != nullptr);
+    for (const auto& pair : subinvoke->transit_detail.buf_transit) {
+      transit_detail.buf_transit.emplace_back(pair);
+    }
+    for (const auto& pair : subinvoke->transit_detail.img_transit) {
+      transit_detail.img_transit.emplace_back(pair);
+    }
+    for (const auto& pair : subinvoke->transit_detail.depth_img_transit) {
+      transit_detail.depth_img_transit.emplace_back(pair);
+    }
+  }
+}
 Invocation create_comp_invoke(
   const Task& task,
   const ComputeInvocationConfig& cfg
@@ -1715,6 +1732,7 @@ Invocation create_pass_invoke(
     default: panic("render pass attachment must be image or depth image");
     }
   }
+  _merge_subinvoke_transits(cfg.invokes, transit_detail);
   out.transit_detail = std::move(transit_detail);
 
   InvocationRenderPassDetail pass_detail {};
@@ -1722,7 +1740,7 @@ Invocation create_pass_invoke(
   pass_detail.framebuf = _create_framebuf(pass, cfg.attms);
   // TODO: (penguinliong) Command buffer baking.
   pass_detail.is_baked = false;
-  pass_detail.invokes = cfg.invokes;
+  pass_detail.subinvokes = cfg.invokes;
 
   out.pass_detail =
     std::make_unique<InvocationRenderPassDetail>(std::move(pass_detail));
@@ -2393,7 +2411,7 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
       VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS :
       VK_SUBPASS_CONTENTS_INLINE;
 
-    for (size_t i = 0; i < pass_detail.invokes.size(); ++i) {
+    for (size_t i = 0; i < pass_detail.subinvokes.size(); ++i) {
       if (i == 0) {
         VkRenderPassBeginInfo rpbi {};
         rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
@@ -2407,7 +2425,7 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
         vkCmdNextSubpass(cmdbuf, sc);
       }
 
-      const const Invocation* subinvoke = pass_detail.invokes[i];
+      const Invocation* subinvoke = pass_detail.subinvokes[i];
       if (subinvoke == nullptr) {
         log::warn("null subinvocation in render pass invocation is ignored");
         continue;
@@ -2416,7 +2434,7 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
         "render pass constituent invocations must be graphics invocations");
       _record_cmd_invoke(transact, cmd_invoke(*subinvoke));
     }
-    if (pass_detail.invokes.size() > 0) {
+    if (pass_detail.subinvokes.size() > 0) {
       vkCmdEndRenderPass(cmdbuf);
     }
 
