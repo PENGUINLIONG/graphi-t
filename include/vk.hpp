@@ -92,6 +92,8 @@ struct Context {
   }
 };
 
+
+
 struct BufferDynamicDetail {
   VkPipelineStageFlags stage;
   VkAccessFlags access;
@@ -103,6 +105,8 @@ struct Buffer {
   BufferConfig buf_cfg;
   BufferDynamicDetail dyn_detail;
 };
+
+
 
 struct ImageDynamicDetail {
   VkPipelineStageFlags stage;
@@ -119,6 +123,8 @@ struct Image {
   ImageDynamicDetail dyn_detail;
 };
 
+
+
 struct DepthImageDynamicDetail {
   VkPipelineStageFlags stage;
   VkAccessFlags access;
@@ -134,6 +140,8 @@ struct DepthImage {
   DepthImageDynamicDetail dyn_detail;
 };
 
+
+
 struct RenderPass {
   const Context* ctxt;
   VkRect2D viewport;
@@ -141,6 +149,8 @@ struct RenderPass {
   RenderPassConfig pass_cfg;
   std::vector<VkClearValue> clear_values;
 };
+
+
 
 struct WorkgroupSizeSpecializationDetail {
   uint32_t x_spec_id;
@@ -160,6 +170,8 @@ struct Task {
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   WorkgroupSizeSpecializationDetail workgrp_spec_detail;
 };
+
+
 
 struct InvocationTransitionDetail {
   std::vector<std::pair<BufferView, BufferUsage>> buf_transit;

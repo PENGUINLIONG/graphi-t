@@ -11,14 +11,6 @@ namespace HAL_IMPL_NAMESPACE {
 
 namespace scoped {
 
-struct Context;
-struct Buffer;
-struct Image;
-struct RenderPass;
-struct Task;
-struct ResourcePool;
-struct Transaction;
-
 
 
 struct Transaction {

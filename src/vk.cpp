@@ -726,7 +726,6 @@ VkFormat _make_depth_fmt(fmt::DepthFormat fmt) {
   }
   return VK_FORMAT_UNDEFINED;
 }
-
 DepthImage create_depth_img(
   const Context& ctxt,
   const DepthImageConfig& depth_img_cfg
@@ -875,7 +874,6 @@ void unmap_img_mem(
 
 
 
-
 VkDescriptorSetLayout _create_desc_set_layout(
   const Context& ctxt,
   const std::vector<ResourceType> rsc_tys,
@@ -1005,6 +1003,9 @@ Task create_comp_task(
     pipe_layout, pipe, cfg.rsc_tys, { shader_mod }, std::move(desc_pool_sizes)
   };
 }
+
+
+
 VkAttachmentLoadOp _get_load_op(AttachmentAccess attm_access) {
   if (attm_access & L_ATTACHMENT_ACCESS_CLEAR) {
     return VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -1496,12 +1497,6 @@ VkQueryPool _create_query_pool(
   VK_ASSERT << vkCreateQueryPool(ctxt.dev, &qpci, nullptr, &query_pool);
 
   return query_pool;
-}
-void _destroy_query_pool(
-  const Context& ctxt,
-  VkQueryPool query_pool
-) {
-  vkDestroyQueryPool(ctxt.dev, query_pool, nullptr);
 }
 void _collect_task_invoke_transit(
   const std::vector<ResourceView> rsc_views,
@@ -2548,8 +2543,6 @@ void _record_invoke(TransactionLike& transact, const Invocation& invoke) {
 
   log::debug("scheduled invocation '", invoke.label, "' for execution");
 }
-
-
 
 bool _can_bake_invoke(const Invocation& invoke) {
   // Render pass is never baked, enforced by Vulkan specification.
