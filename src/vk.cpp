@@ -2408,10 +2408,7 @@ void _transit_rscs(
   }
 }
 
-void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_invoke;
-  const auto& invoke = *in.invoke;
-
+void _record_invoke(TransactionLike& transact, const Invocation& invoke) {
   VkCommandBuffer cmdbuf = _get_cmdbuf(transact, invoke.submit_ty);
 
   // If the invocation has been baked, simply inline the baked secondary command
@@ -2521,7 +2518,7 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
 
       const Invocation* subinvoke = pass_detail.subinvokes[i];
       assert(subinvoke != nullptr, "null subinvocation is not allowed");
-      _record_cmd_invoke(transact, cmd_invoke(*subinvoke));
+      _record_invoke(transact, *subinvoke);
     }
     vkCmdEndRenderPass(cmdbuf);
     log::debug("render pass invocation '", invoke.label, "' ended");
@@ -2535,7 +2532,7 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
     for (size_t i = 0; i < composite_detail.subinvokes.size(); ++i) {
       const Invocation* subinvoke = composite_detail.subinvokes[i];
       assert(subinvoke != nullptr, "null subinvocation is not allowed");
-      _record_cmd_invoke(transact, cmd_invoke(*subinvoke));
+      _record_invoke(transact, *subinvoke);
     }
 
     log::debug("composite invocation '", invoke.label, "' ended");
@@ -2577,7 +2574,7 @@ void bake_invoke(Invocation& invoke) {
   TransactionLike transact {};
   transact.ctxt = invoke.ctxt;
   transact.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
-  _record_cmd_invoke(transact, cmd_invoke(invoke));
+  _record_invoke(transact, invoke);
   _end_cmdbuf(transact.submit_details.back());
 
   assert(transact.submit_details.size() == 1);
@@ -2613,7 +2610,7 @@ Transaction create_transact(const Invocation& invoke) {
   transact.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
   util::Timer timer {};
   timer.tic();
-  _record_cmd_invoke(transact, cmd_invoke(invoke));
+  _record_invoke(transact, invoke);
   _end_cmdbuf(transact.submit_details.back());
   timer.toc();
 

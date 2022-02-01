@@ -43,6 +43,11 @@ extern std::vector<std::string> physdev_descs;
 
 
 
+enum SubmitType {
+  L_SUBMIT_TYPE_COMPUTE,
+  L_SUBMIT_TYPE_GRAPHICS,
+  L_SUBMIT_TYPE_ANY = ~((uint32_t)0),
+};
 struct ContextSubmitDetail {
   uint32_t qfam_idx;
   VkQueue queue;

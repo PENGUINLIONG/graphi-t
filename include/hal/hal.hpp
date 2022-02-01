@@ -495,33 +495,6 @@ L_IMPL_FN bool is_transact_done(const Transaction& transact);
 // the invocation has already been waited.
 L_IMPL_FN void wait_transact(const Transaction& transact);
 
-
-
-enum CommandType {
-  L_COMMAND_TYPE_INVOKE,
-};
-enum SubmitType {
-  L_SUBMIT_TYPE_COMPUTE,
-  L_SUBMIT_TYPE_GRAPHICS,
-  L_SUBMIT_TYPE_ANY = ~((uint32_t)0),
-};
-struct Command {
-  CommandType cmd_ty;
-  union {
-    struct {
-      const Invocation* invoke;
-    } cmd_invoke;
-  };
-};
-
-// Realize an invocation.
-inline Command cmd_invoke(const Invocation& invoke) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_INVOKE;
-  cmd.cmd_invoke.invoke = &invoke;
-  return cmd;
-}
-
 } // namespace HAL_IMPL_NAMESPACE
 
 } // namespace liong
