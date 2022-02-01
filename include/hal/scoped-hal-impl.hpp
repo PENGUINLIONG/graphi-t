@@ -37,6 +37,16 @@ ImageBuilder Context::build_img(const std::string& label) const {
 DepthImageBuilder Context::build_depth_img(const std::string& label) const {
   return DepthImageBuilder(*this, label);
 }
+TransferInvocationBuilder Context::build_trans_invoke(
+  const std::string& label
+) const {
+  return TransferInvocationBuilder(*this, label);
+}
+CompositeInvocationBuilder Context::build_composite_invoke(
+  const std::string& label
+) const {
+  return CompositeInvocationBuilder(*this, label);
+}
 
 void _copy_img_tile(
   void* dst,
@@ -127,10 +137,6 @@ Transaction Context::create_transact(
 
 CommandDrain Context::create_cmd_drain() const {
   return HAL_IMPL_NAMESPACE::create_cmd_drain(*inner);
-}
-
-Timestamp Context::create_timestamp() const {
-  return HAL_IMPL_NAMESPACE::create_timestamp(*inner);
 }
 
 
@@ -231,6 +237,9 @@ Invocation::~Invocation() {
     destroy_invoke(*inner);
   }
 }
+Invocation TransferInvocationBuilder::build() {
+  return create_trans_invoke(parent, inner);
+}
 Invocation ComputeInvocationBuilder::build() {
   return create_comp_invoke(parent, inner);
 }
@@ -239,6 +248,9 @@ Invocation GraphicsInvocationBuilder::build() {
 }
 Invocation RenderPassInvocationBuilder::build() {
   return create_pass_invoke(parent, inner);
+}
+Invocation CompositeInvocationBuilder::build() {
+  return create_composite_invoke(parent, inner);
 }
 
 
@@ -261,21 +273,6 @@ Transaction::Transaction(
 Transaction::~Transaction() {
   if (inner != nullptr) {
     destroy_transact(*inner);
-  }
-}
-
-
-
-Timestamp::Timestamp(
-  const Context& ctxt
-) : inner(std::make_unique<HAL_IMPL_NAMESPACE::Timestamp>(
-  create_timestamp(*ctxt.inner))) {}
-Timestamp::Timestamp(HAL_IMPL_NAMESPACE::Timestamp&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Timestamp>(
-    std::forward<HAL_IMPL_NAMESPACE::Timestamp>(inner))) {}
-Timestamp::~Timestamp() {
-  if (inner != nullptr) {
-    destroy_timestamp(*inner);
   }
 }
 

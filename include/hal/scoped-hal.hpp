@@ -58,31 +58,6 @@ struct CommandDrain {
 
 
 
-struct Timestamp {
-  std::unique_ptr<HAL_IMPL_NAMESPACE::Timestamp> inner;
-
-  Timestamp() = default;
-  Timestamp(const Context& ctxt);
-  Timestamp(HAL_IMPL_NAMESPACE::Timestamp&& inner);
-  Timestamp(Timestamp&&) = default;
-  ~Timestamp();
-
-  Timestamp& operator=(Timestamp&&) = default;
-
-  inline operator HAL_IMPL_NAMESPACE::Timestamp& () {
-    return *inner;
-  }
-  inline operator const HAL_IMPL_NAMESPACE::Timestamp& () const {
-    return *inner;
-  }
-
-  inline double get_result_us() const {
-    return HAL_IMPL_NAMESPACE::get_timestamp_result_us(*inner);
-  }
-};
-
-
-
 struct Transaction {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Transaction> inner;
 
@@ -133,6 +108,57 @@ struct Invocation {
   inline operator const HAL_IMPL_NAMESPACE::Invocation& () const {
     return *inner;
   }
+
+  inline double get_time_us() const {
+    return get_invoke_time_us(*this);
+  }
+};
+struct TransferInvocationBuilder {
+  using Self = TransferInvocationBuilder;
+
+  const Context& parent;
+  TransferInvocationConfig inner;
+
+  inline TransferInvocationBuilder(
+    const Context& ctxt,
+    const std::string& label = ""
+  ) : parent(ctxt), inner() {
+    inner.label = label;
+  }
+
+  inline Self& src(const ResourceView& rsc_view) {
+    inner.src_rsc_view = rsc_view;
+    return *this;
+  }
+  inline Self& dst(const ResourceView& rsc_view) {
+    inner.dst_rsc_view = rsc_view;
+    return *this;
+  }
+  inline Self& is_timed(bool is_timed = true) {
+    inner.is_timed = is_timed;
+    return *this;
+  }
+
+  inline Self& src(const BufferView& buf_view) {
+    return src(make_rsc_view(buf_view));
+  }
+  inline Self& src(const ImageView& img_view) {
+    return src(make_rsc_view(img_view));
+  }
+  inline Self& src(const DepthImageView& depth_img_view) {
+    return src(make_rsc_view(depth_img_view));
+  }
+  inline Self& dst(const BufferView& buf_view) {
+    return dst(make_rsc_view(buf_view));
+  }
+  inline Self& dst(const ImageView& img_view) {
+    return dst(make_rsc_view(img_view));
+  }
+  inline Self& dst(const DepthImageView& depth_img_view) {
+    return dst(make_rsc_view(depth_img_view));
+  }
+
+  Invocation build();
 };
 struct ComputeInvocationBuilder {
   using Self = ComputeInvocationBuilder;
@@ -160,18 +186,19 @@ struct ComputeInvocationBuilder {
     inner.workgrp_count.z = z;
     return *this;
   }
+  inline Self& is_timed(bool is_timed = true) {
+    inner.is_timed = is_timed;
+    return *this;
+  }
 
   inline Self& rsc(const BufferView& buf_view) {
-    inner.rsc_views.emplace_back(buf_view);
-    return *this;
+    return rsc(make_rsc_view(buf_view));
   }
   inline Self& rsc(const ImageView& img_view) {
-    inner.rsc_views.emplace_back(img_view);
-    return *this;
+    return rsc(make_rsc_view(img_view));
   }
   inline Self& rsc(const DepthImageView& depth_img_view) {
-    inner.rsc_views.emplace_back(depth_img_view);
-    return *this;
+    return rsc(make_rsc_view(depth_img_view));
   }
 
   Invocation build();
@@ -210,17 +237,21 @@ struct GraphicsInvocationBuilder {
     inner.nidx = nidx;
     return *this;
   }
+  inline Self& is_timed(bool is_timed = true) {
+    inner.is_timed = is_timed;
+    return *this;
+  }
 
   inline Self& rsc(const BufferView& buf_view) {
-    inner.rsc_views.emplace_back(buf_view);
+    inner.rsc_views.emplace_back(make_rsc_view(buf_view));
     return *this;
   }
   inline Self& rsc(const ImageView& img_view) {
-    inner.rsc_views.emplace_back(img_view);
+    inner.rsc_views.emplace_back(make_rsc_view(img_view));
     return *this;
   }
   inline Self& rsc(const DepthImageView& depth_img_view) {
-    inner.rsc_views.emplace_back(depth_img_view);
+    inner.rsc_views.emplace_back(make_rsc_view(depth_img_view));
     return *this;
   }
 
@@ -247,17 +278,44 @@ struct RenderPassInvocationBuilder {
     inner.invokes.emplace_back(&(const HAL_IMPL_NAMESPACE::Invocation&)invoke);
     return *this;
   }
-
-  inline Self& rsc(const ImageView& img_view) {
-    return rsc(img_view);
+  inline Self& is_timed(bool is_timed = true) {
+    inner.is_timed = is_timed;
+    return *this;
   }
-  inline Self& rsc(const DepthImageView& depth_img_view) {
-    return rsc(depth_img_view);
+
+  inline Self& attm(const ImageView& img_view) {
+    return attm(make_rsc_view(img_view));
+  }
+  inline Self& attm(const DepthImageView& depth_img_view) {
+    return attm(make_rsc_view(depth_img_view));
   }
 
   Invocation build();
 };
+struct CompositeInvocationBuilder {
+  using Self = CompositeInvocationBuilder;
 
+  const Context& parent;
+  CompositeInvocationConfig inner;
+
+  inline CompositeInvocationBuilder(
+    const Context& ctxt,
+    const std::string& label = ""
+  ) : parent(ctxt), inner() {
+    inner.label = label;
+  }
+
+  inline Self& invoke(const Invocation& invoke) {
+    inner.invokes.emplace_back(&(const HAL_IMPL_NAMESPACE::Invocation&)invoke);
+    return *this;
+  }
+  inline Self& is_timed(bool is_timed = true) {
+    inner.is_timed = is_timed;
+    return *this;
+  }
+
+  Invocation build();
+};
 
 
 struct Task {
@@ -899,6 +957,12 @@ public:
   BufferBuilder build_buf(const std::string& label = "") const;
   ImageBuilder build_img(const std::string& label = "") const;
   DepthImageBuilder build_depth_img(const std::string& label = "") const;
+  TransferInvocationBuilder build_trans_invoke(
+    const std::string& label = ""
+  ) const;
+  CompositeInvocationBuilder build_composite_invoke(
+    const std::string& label = ""
+  ) const;
 
   Transaction create_transact(
     const std::string& label,
@@ -906,8 +970,6 @@ public:
   ) const;
 
   CommandDrain create_cmd_drain() const;
-
-  Timestamp create_timestamp() const;
 };
 
 } // namespace scoped

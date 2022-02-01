@@ -1550,6 +1550,27 @@ VkFramebuffer _create_framebuf(
 
   return framebuf;
 }
+VkQueryPool _create_query_pool(
+  const Context& ctxt,
+  VkQueryType query_ty,
+  uint32_t nquery
+) {
+  VkQueryPoolCreateInfo qpci {};
+  qpci.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+  qpci.queryType = query_ty;
+  qpci.queryCount = nquery;
+
+  VkQueryPool query_pool;
+  VK_ASSERT << vkCreateQueryPool(ctxt.dev, &qpci, nullptr, &query_pool);
+
+  return query_pool;
+}
+void _destroy_query_pool(
+  const Context& ctxt,
+  VkQueryPool query_pool
+) {
+  vkDestroyQueryPool(ctxt.dev, query_pool, nullptr);
+}
 void _collect_task_invoke_transit(
   const std::vector<ResourceView> rsc_views,
   const std::vector<ResourceType> rsc_tys,
@@ -1619,6 +1640,173 @@ void _merge_subinvoke_transits(
     }
   }
 }
+void _merge_subinvoke_transits(
+  const Invocation* subinvoke,
+  InvocationTransitionDetail& transit_detail
+) {
+  std::vector<const Invocation*> subinvokes { subinvoke };
+  _merge_subinvoke_transits(subinvokes, transit_detail);
+}
+SubmitType _infer_submit_ty(const std::vector<const Invocation*>& subinvokes) {
+  for (size_t i = 0; i < subinvokes.size(); ++i) {
+    SubmitType submit_ty = subinvokes[i]->submit_ty;
+    if (submit_ty != L_SUBMIT_TYPE_ANY) { return submit_ty; }
+  }
+  return L_SUBMIT_TYPE_ANY;
+}
+VkBufferCopy _make_bc(const BufferView& src, const BufferView& dst) {
+  VkBufferCopy bc {};
+  bc.srcOffset = src.offset;
+  bc.dstOffset = dst.offset;
+  bc.size = dst.size;
+  return bc;
+}
+VkImageCopy _make_ic(const ImageView& src, const ImageView& dst) {
+  VkImageCopy ic {};
+  ic.srcOffset.x = src.x_offset;
+  ic.srcOffset.y = src.y_offset;
+  ic.dstOffset.x = dst.x_offset;
+  ic.dstOffset.y = dst.y_offset;
+  ic.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  ic.srcSubresource.baseArrayLayer = 0;
+  ic.srcSubresource.layerCount = 1;
+  ic.srcSubresource.mipLevel = 0;
+  ic.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  ic.dstSubresource.baseArrayLayer = 0;
+  ic.dstSubresource.layerCount = 1;
+  ic.dstSubresource.mipLevel = 0;
+  ic.extent.width = dst.width;
+  ic.extent.height = dst.height;
+  ic.extent.depth = 1;
+  return ic;
+}
+VkBufferImageCopy _make_bic(const BufferView& buf, const ImageView& img) {
+  VkBufferImageCopy bic {};
+  bic.bufferOffset = buf.offset;
+  bic.bufferRowLength = 0;
+  bic.bufferImageHeight = (uint32_t)img.img->img_cfg.height;
+  bic.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  bic.imageSubresource.mipLevel = 0;
+  bic.imageSubresource.baseArrayLayer = 0;
+  bic.imageSubresource.layerCount = 1;
+  bic.imageOffset.x = img.x_offset;
+  bic.imageOffset.y = img.y_offset;
+  bic.imageExtent.width = img.width;
+  bic.imageExtent.height = img.height;
+  bic.imageExtent.depth = 1;
+  return bic;
+}
+void _fill_transfer_b2b_invoke(
+  const BufferView& src,
+  const BufferView& dst,
+  Invocation& out
+) {
+  InvocationCopyBufferToBufferDetail b2b_detail {};
+  b2b_detail.bc = _make_bc(src, dst);
+  b2b_detail.src = src.buf->buf;
+  b2b_detail.dst = dst.buf->buf;
+
+  out.b2b_detail =
+    std::make_unique<InvocationCopyBufferToBufferDetail>(std::move(b2b_detail));
+
+  out.transit_detail.reg(src, L_BUFFER_USAGE_STAGING_BIT);
+  out.transit_detail.reg(dst, L_BUFFER_USAGE_STAGING_BIT);
+}
+void _fill_transfer_b2i_invoke(
+  const BufferView& src,
+  const ImageView& dst,
+  Invocation& out
+) {
+  InvocationCopyBufferToImageDetail b2i_detail {};
+  b2i_detail.bic = _make_bic(src, dst);
+  b2i_detail.src = src.buf->buf;
+  b2i_detail.dst = dst.img->img;
+
+  out.b2i_detail =
+    std::make_unique<InvocationCopyBufferToImageDetail>(std::move(b2i_detail));
+
+  out.transit_detail.reg(src, L_BUFFER_USAGE_STAGING_BIT);
+  out.transit_detail.reg(dst, L_IMAGE_USAGE_STAGING_BIT);
+}
+void _fill_transfer_i2b_invoke(
+  const ImageView& src,
+  const BufferView& dst,
+  Invocation& out
+) {
+  InvocationCopyImageToBufferDetail i2b_detail {};
+  i2b_detail.bic = _make_bic(dst, src);
+  i2b_detail.src = src.img->img;
+  i2b_detail.dst = dst.buf->buf;
+
+  out.i2b_detail =
+    std::make_unique<InvocationCopyImageToBufferDetail>(std::move(i2b_detail));
+
+  out.transit_detail.reg(src, L_IMAGE_USAGE_STAGING_BIT);
+  out.transit_detail.reg(dst, L_BUFFER_USAGE_STAGING_BIT);
+}
+void _fill_transfer_i2i_invoke(
+  const ImageView& src,
+  const ImageView& dst,
+  Invocation& out
+) {
+  InvocationCopyImageToImageDetail i2i_detail {};
+  i2i_detail.ic = _make_ic(src, dst);
+  i2i_detail.src = src.img->img;
+  i2i_detail.dst = dst.img->img;
+
+  out.i2i_detail =
+    std::make_unique<InvocationCopyImageToImageDetail>(std::move(i2i_detail));
+
+  out.transit_detail.reg(src, L_IMAGE_USAGE_STAGING_BIT);
+  out.transit_detail.reg(dst, L_IMAGE_USAGE_STAGING_BIT);
+}
+Invocation create_trans_invoke(
+  const Context& ctxt,
+  const TransferInvocationConfig& cfg
+) {
+  const ResourceView& src_rsc_view = cfg.src_rsc_view;
+  const ResourceView& dst_rsc_view = cfg.dst_rsc_view;
+  ResourceViewType src_rsc_view_ty = src_rsc_view.rsc_view_ty;
+  ResourceViewType dst_rsc_view_ty = dst_rsc_view.rsc_view_ty;
+
+  Invocation out {};
+  out.label = cfg.label;
+  out.ctxt = &ctxt;
+  out.submit_ty = L_SUBMIT_TYPE_ANY;
+  out.query_pool = cfg.is_timed ?
+    _create_query_pool(ctxt, VK_QUERY_TYPE_TIMESTAMP, 2) : VK_NULL_HANDLE;
+
+  if (
+    src_rsc_view_ty == L_RESOURCE_VIEW_TYPE_BUFFER &&
+    dst_rsc_view_ty == L_RESOURCE_VIEW_TYPE_BUFFER
+  ) {
+    _fill_transfer_b2b_invoke(
+      src_rsc_view.buf_view, dst_rsc_view.buf_view, out);
+  } else if (
+    src_rsc_view_ty == L_RESOURCE_VIEW_TYPE_BUFFER &&
+    dst_rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE
+  ) {
+    _fill_transfer_b2i_invoke(
+      src_rsc_view.buf_view, dst_rsc_view.img_view, out);
+  } else if (
+    src_rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE &&
+    dst_rsc_view_ty == L_RESOURCE_VIEW_TYPE_BUFFER
+  ) {
+    _fill_transfer_i2b_invoke(
+      src_rsc_view.img_view, dst_rsc_view.buf_view, out);
+  } else if (
+    src_rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE &&
+    dst_rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE
+  ) {
+    _fill_transfer_i2i_invoke(
+      src_rsc_view.img_view, dst_rsc_view.img_view, out);
+  } else {
+    panic("depth image cannot be transferred");
+  }
+
+  log::debug("created transfer invocation");
+  return out;
+}
 Invocation create_comp_invoke(
   const Task& task,
   const ComputeInvocationConfig& cfg
@@ -1629,7 +1817,10 @@ Invocation create_comp_invoke(
 
   Invocation out {};
   out.label = cfg.label;
+  out.ctxt = &ctxt;
   out.submit_ty = L_SUBMIT_TYPE_COMPUTE;
+  out.query_pool = cfg.is_timed ?
+    _create_query_pool(ctxt, VK_QUERY_TYPE_TIMESTAMP, 2) : VK_NULL_HANDLE;
 
   InvocationTransitionDetail transit_detail {};
   _collect_task_invoke_transit(cfg.rsc_views, task.rsc_tys, transit_detail);
@@ -1662,8 +1853,11 @@ Invocation create_graph_invoke(
 
   Invocation out {};
   out.label = cfg.label;
+  out.ctxt = &ctxt;
   out.submit_ty = L_SUBMIT_TYPE_GRAPHICS;
-  
+  out.query_pool = cfg.is_timed ?
+    _create_query_pool(ctxt, VK_QUERY_TYPE_TIMESTAMP, 2) : VK_NULL_HANDLE;
+
   InvocationTransitionDetail transit_detail {};
   _collect_task_invoke_transit(cfg.rsc_views, task.rsc_tys, transit_detail);
   for (size_t i = 0; i < cfg.vert_bufs.size(); ++i) {
@@ -1715,7 +1909,10 @@ Invocation create_pass_invoke(
 
   Invocation out {};
   out.label = cfg.label;
+  out.ctxt = &ctxt;
   out.submit_ty = L_SUBMIT_TYPE_GRAPHICS;
+  out.query_pool = cfg.is_timed ?
+    _create_query_pool(ctxt, VK_QUERY_TYPE_TIMESTAMP, 2) : VK_NULL_HANDLE;
 
   InvocationTransitionDetail transit_detail {};
   for (size_t i = 0; i < cfg.attms.size(); ++i) {
@@ -1742,32 +1939,88 @@ Invocation create_pass_invoke(
   pass_detail.is_baked = false;
   pass_detail.subinvokes = cfg.invokes;
 
+  for (size_t i = 0; i < cfg.invokes.size(); ++i) {
+    const Invocation& invoke = *cfg.invokes[i];
+    assert(invoke.graph_detail != nullptr,
+      "render pass invocation constituent must be graphics task invocation");
+  }
+
   out.pass_detail =
     std::make_unique<InvocationRenderPassDetail>(std::move(pass_detail));
 
   log::debug("created render pass invocation");
   return out;
 }
-void _destroy_comp_invoke(InvocationComputeDetail& comp_detail) {
-  const Context& ctxt = *comp_detail.task->ctxt;
-  vkDestroyDescriptorPool(ctxt.dev, comp_detail.desc_pool, nullptr);
-  log::debug("destroyed compute invocation");
-}
-void _destroy_graph_invoke(InvocationGraphicsDetail& graph_detail) {
-  const Context& ctxt = *graph_detail.task->ctxt;
-  vkDestroyDescriptorPool(ctxt.dev, graph_detail.desc_pool, nullptr);
-  log::debug("destroyed graphics invocation");
-}
-void _destroy_pass_invoke(InvocationRenderPassDetail& pass_detail) {
-  const Context& ctxt = *pass_detail.pass->ctxt;
-  vkDestroyFramebuffer(ctxt.dev, pass_detail.framebuf, nullptr);
-  log::debug("destroyed render pass invocation");
+Invocation create_composite_invoke(
+  const Context& ctxt,
+  const CompositeInvocationConfig& cfg
+) {
+  assert(cfg.invokes.size() > 0);
+
+  Invocation out {};
+  out.label = cfg.label;
+  out.ctxt = &ctxt;
+  out.submit_ty = _infer_submit_ty(cfg.invokes);
+  out.query_pool = cfg.is_timed ?
+    _create_query_pool(ctxt, VK_QUERY_TYPE_TIMESTAMP, 2) : VK_NULL_HANDLE;
+
+  InvocationTransitionDetail transit_detail {};
+  _merge_subinvoke_transits(cfg.invokes, transit_detail);
+  out.transit_detail = std::move(transit_detail);
+
+  InvocationCompositeDetail composite_detail {};
+  composite_detail.subinvokes = cfg.invokes;
+
+  out.composite_detail =
+    std::make_unique<InvocationCompositeDetail>(std::move(composite_detail));
+
+  log::debug("created composition invocation");
+  return out;
 }
 void destroy_invoke(Invocation& invoke) {
-  if (invoke.comp_detail) { _destroy_comp_invoke(*invoke.comp_detail); }
-  if (invoke.graph_detail) { _destroy_graph_invoke(*invoke.graph_detail); }
-  if (invoke.pass_detail) { _destroy_pass_invoke(*invoke.pass_detail); }
+  const Context& ctxt = *invoke.ctxt;
+  if (
+    invoke.b2b_detail ||
+    invoke.b2i_detail ||
+    invoke.i2b_detail ||
+    invoke.i2i_detail
+  ) {
+    log::debug("destroyed transfer invocation '", invoke.label, "'");
+  }
+  if (invoke.comp_detail) {
+    const InvocationComputeDetail& comp_detail = *invoke.comp_detail;
+    vkDestroyDescriptorPool(ctxt.dev, comp_detail.desc_pool, nullptr);
+    log::debug("destroyed compute invocation '", invoke.label, "'");
+  }
+  if (invoke.graph_detail) {
+    const InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
+    vkDestroyDescriptorPool(ctxt.dev, graph_detail.desc_pool, nullptr);
+    log::debug("destroyed graphics invocation '", invoke.label, "'");
+  }
+  if (invoke.pass_detail) {
+    const InvocationRenderPassDetail& pass_detail = *invoke.pass_detail;
+    vkDestroyFramebuffer(ctxt.dev, pass_detail.framebuf, nullptr);
+    log::debug("destroyed render pass invocation '", invoke.label, "'");
+  }
+  if (invoke.composite_detail) {
+    log::debug("destroyed composite invocation '", invoke.label, "'");
+  }
+
+  if (invoke.query_pool != VK_NULL_HANDLE) {
+    vkDestroyQueryPool(ctxt.dev, invoke.query_pool, nullptr);
+  }
+
   invoke = {};
+}
+
+double get_invoke_time_us(const Invocation& invoke) {
+  if (invoke.query_pool == VK_NULL_HANDLE) { return 0.0; }
+  uint64_t t[2];
+  VK_ASSERT << vkGetQueryPoolResults(invoke.ctxt->dev, invoke.query_pool,
+    0, 2, sizeof(uint64_t) * 2, &t, sizeof(uint64_t),
+    VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT); // Wait till ready.
+  double ns_per_tick = invoke.ctxt->physdev_prop.limits.timestampPeriod;
+  return (t[1] - t[0]) * ns_per_tick / 1000.0;
 }
 
 
@@ -2088,7 +2341,7 @@ const BufferView& _transit_rsc(
     0, nullptr);
 
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled buffer barrier");
+    log::debug("inserted buffer barrier");
   }
 
   dyn_detail.access = dst_access;
@@ -2147,7 +2400,7 @@ const ImageView& _transit_rsc(
     1, &imb);
 
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled image barrier");
+    log::debug("inserted image barrier");
   }
 
   dyn_detail.access = dst_access;
@@ -2207,7 +2460,7 @@ const DepthImageView& _transit_rsc(
     1, &imb);
 
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("schedule depth image barrier");
+    log::debug("inserted depth image barrier");
   }
 
   dyn_detail.access = dst_access;
@@ -2215,6 +2468,21 @@ const DepthImageView& _transit_rsc(
   dyn_detail.layout = dst_layout;
 
   return depth_img_view;
+}
+void _transit_rscs(
+  TransactionLike& transact,
+  const InvocationTransitionDetail& transit_detail
+) {
+  // Transition all referenced resources.
+  for (auto& pair : transit_detail.buf_transit) {
+    _transit_rsc(transact, pair.first, pair.second);
+  }
+  for (auto& pair : transit_detail.img_transit) {
+    _transit_rsc(transact, pair.first, pair.second);
+  }
+  for (auto& pair : transit_detail.depth_img_transit) {
+    _transit_rsc(transact, pair.first, pair.second);
+  }
 }
 
 void _record_cmd_set_submit_ty(
@@ -2247,130 +2515,54 @@ void _record_cmd_inline_transact(
     cmd.cmd_inline_transact.transact->label, "'");
 }
 
-void _record_cmd_copy_buf2img(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_copy_buf2img;
-  const auto& src = _transit_rsc(transact, in.src, L_BUFFER_USAGE_STAGING_BIT);
-  const auto& dst = _transit_rsc(transact, in.dst, L_IMAGE_USAGE_STAGING_BIT);
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
-
-  VkBufferImageCopy bic {};
-  bic.bufferOffset = src.offset;
-  bic.bufferRowLength = 0;
-  bic.bufferImageHeight = (uint32_t)dst.img->img_cfg.height;
-  bic.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  bic.imageSubresource.mipLevel = 0;
-  bic.imageSubresource.baseArrayLayer = 0;
-  bic.imageSubresource.layerCount = 1;
-  bic.imageOffset.x = dst.x_offset;
-  bic.imageOffset.y = dst.y_offset;
-  bic.imageExtent.width = dst.width;
-  bic.imageExtent.height = dst.height;
-  bic.imageExtent.depth = 1;
-
-  vkCmdCopyBufferToImage(cmdbuf, src.buf->buf, dst.img->img,
-    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bic);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled copy from buffer '", src.buf->buf_cfg.label,
-      "' to image '", dst.img->img_cfg.label, "'");
-  }
-}
-void _record_cmd_copy_img2buf(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_copy_img2buf;
-  const auto& src = _transit_rsc(transact, in.src, L_BUFFER_USAGE_STAGING_BIT);
-  const auto& dst = _transit_rsc(transact, in.dst, L_IMAGE_USAGE_STAGING_BIT);
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
-
-  VkBufferImageCopy bic {};
-  bic.bufferOffset = dst.offset;
-  bic.bufferRowLength = 0;
-  bic.bufferImageHeight = static_cast<uint32_t>(src.img->img_cfg.height);
-  bic.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  bic.imageSubresource.mipLevel = 0;
-  bic.imageSubresource.baseArrayLayer = 0;
-  bic.imageSubresource.layerCount = 1;
-  bic.imageOffset.x = src.x_offset;
-  bic.imageOffset.y = src.y_offset;
-  bic.imageExtent.width = src.width;
-  bic.imageExtent.height = src.height;
-  bic.imageExtent.depth = 1;
-
-  vkCmdCopyImageToBuffer(cmdbuf, src.img->img,
-    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst.buf->buf, 1, &bic);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled copy from image '", src.img->img_cfg.label,
-      "' to buffer '", dst.buf->buf_cfg.label, "'");
-  }
-}
-void _record_cmd_copy_buf(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_copy_buf;
-  const auto& src = _transit_rsc(transact, in.src, L_BUFFER_USAGE_STAGING_BIT);
-  const auto& dst = _transit_rsc(transact, in.dst, L_BUFFER_USAGE_STAGING_BIT);
-  assert(src.size == dst.size, "buffer copy size mismatched");
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
-
-  VkBufferCopy bc {};
-  bc.srcOffset = src.offset;
-  bc.dstOffset = dst.offset;
-  bc.size = dst.size;
-
-  vkCmdCopyBuffer(cmdbuf, src.buf->buf, dst.buf->buf, 1, &bc);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled copy from buffer '", src.buf->buf_cfg.label,
-      "' to buffer '", dst.buf->buf_cfg.label, "'");
-  }
-}
-void _record_cmd_copy_img(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_copy_img;
-  const auto& src = _transit_rsc(transact, in.src, L_IMAGE_USAGE_STAGING_BIT);
-  const auto& dst = _transit_rsc(transact, in.dst, L_IMAGE_USAGE_STAGING_BIT);
-  assert(src.width == dst.width && src.height == dst.height,
-    "image copy size mismatched");
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
-
-  VkImageCopy ic {};
-  ic.srcOffset.x = src.x_offset;
-  ic.srcOffset.y = src.y_offset;
-  ic.dstOffset.x = dst.x_offset;
-  ic.dstOffset.y = dst.y_offset;
-  ic.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  ic.srcSubresource.baseArrayLayer = 0;
-  ic.srcSubresource.layerCount = 1;
-  ic.srcSubresource.mipLevel = 0;
-  ic.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  ic.dstSubresource.baseArrayLayer = 0;
-  ic.dstSubresource.layerCount = 1;
-  ic.dstSubresource.mipLevel = 0;
-  ic.extent.width = dst.width;
-  ic.extent.height = dst.height;
-  ic.extent.depth = 1;
-
-  vkCmdCopyImage(cmdbuf, src.img->img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-    dst.img->img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &ic);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled copy from image '", src.img->img_cfg.label,
-      "' to image '", dst.img->img_cfg.label, "'");
-  }
-}
-
 void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
   const auto& in = cmd.cmd_invoke;
   const auto& invoke = *in.invoke;
 
+  // FIXME: (penguinliong) Actually it should be the subinvocations not allowed
+  // to be baked.
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
+    assert(invoke.query_pool == VK_NULL_HANDLE,
+      "timed invocation cannot be baked");
+  }
+
   VkCommandBuffer cmdbuf = _get_cmdbuf(transact, invoke.submit_ty);
 
-  // Transition all referenced resources.
-  for (auto& pair : invoke.transit_detail.buf_transit) {
-    _transit_rsc(transact, pair.first, pair.second);
-  }
-  for (auto& pair : invoke.transit_detail.img_transit) {
-    _transit_rsc(transact, pair.first, pair.second);
-  }
-  for (auto& pair : invoke.transit_detail.depth_img_transit) {
-    _transit_rsc(transact, pair.first, pair.second);
+  if (invoke.query_pool != VK_NULL_HANDLE) {
+    vkCmdResetQueryPool(cmdbuf, invoke.query_pool, 0, 2);
+    vkCmdWriteTimestamp(cmdbuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+      invoke.query_pool, 0);
+
+    log::debug("invocation '", invoke.label, "' will be timed");
   }
 
+  _transit_rscs(transact, invoke.transit_detail);
 
-  if (invoke.comp_detail) {
+  if (invoke.b2b_detail) {
+    const InvocationCopyBufferToBufferDetail& b2b_detail =
+      *invoke.b2b_detail;
+    vkCmdCopyBuffer(cmdbuf, b2b_detail.src, b2b_detail.dst, 1, &b2b_detail.bc);
+    log::debug("applied transfer invocation '", invoke.label, "'");
+
+  } else if (invoke.b2i_detail) {
+    const InvocationCopyBufferToImageDetail& b2i_detail = *invoke.b2i_detail;
+    vkCmdCopyBufferToImage(cmdbuf, b2i_detail.src, b2i_detail.dst,
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b2i_detail.bic);
+    log::debug("applied transfer invocation '", invoke.label, "'");
+
+  } else if (invoke.i2b_detail) {
+    const InvocationCopyImageToBufferDetail& i2b_detail = *invoke.i2b_detail;
+    vkCmdCopyImageToBuffer(cmdbuf, i2b_detail.src,
+      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, i2b_detail.dst, 1, &i2b_detail.bic);
+    log::debug("applied transfer invocation '", invoke.label, "'");
+
+  } else if (invoke.i2i_detail) {
+    const InvocationCopyImageToImageDetail& i2i_detail = *invoke.i2i_detail;
+    vkCmdCopyImage(cmdbuf, i2i_detail.src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+      i2i_detail.dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &i2i_detail.ic);
+    log::debug("applied transfer invocation '", invoke.label, "'");
+
+  } else if (invoke.comp_detail) {
     const InvocationComputeDetail& comp_detail = *invoke.comp_detail;
     const Task& task = *comp_detail.task;
     const DispatchSize& workgrp_count = comp_detail.workgrp_count;
@@ -2381,6 +2573,7 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
         0, 1, &comp_detail.desc_set, 0, nullptr);
     }
     vkCmdDispatch(cmdbuf, workgrp_count.x, workgrp_count.y, workgrp_count.z);
+    log::debug("applied compute invocation '", invoke.label, "'");
 
   } else if (invoke.graph_detail) {
     const InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
@@ -2402,6 +2595,7 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
     } else {
       vkCmdDraw(cmdbuf, graph_detail.nvert, graph_detail.ninst, 0, 0);
     }
+    log::debug("applied graphics invocation '", invoke.label, "'");
 
   } else if (invoke.pass_detail) {
     const InvocationRenderPassDetail& pass_detail = *invoke.pass_detail;
@@ -2411,54 +2605,54 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
       VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS :
       VK_SUBPASS_CONTENTS_INLINE;
 
+    VkRenderPassBeginInfo rpbi {};
+    rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    rpbi.renderPass = pass.pass;
+    rpbi.framebuffer = pass_detail.framebuf;
+    rpbi.renderArea.extent = pass.viewport.extent;
+    rpbi.clearValueCount = (uint32_t)pass.clear_values.size();
+    rpbi.pClearValues = pass.clear_values.data();
+    vkCmdBeginRenderPass(cmdbuf, &rpbi, sc);
+    log::debug("render pass invocation '", invoke.label, "' began");
+
     for (size_t i = 0; i < pass_detail.subinvokes.size(); ++i) {
-      if (i == 0) {
-        VkRenderPassBeginInfo rpbi {};
-        rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        rpbi.renderPass = pass.pass;
-        rpbi.framebuffer = pass_detail.framebuf;
-        rpbi.renderArea.extent = pass.viewport.extent;
-        rpbi.clearValueCount = (uint32_t)pass.clear_values.size();
-        rpbi.pClearValues = pass.clear_values.data();
-        vkCmdBeginRenderPass(cmdbuf, &rpbi, sc);
-      } else {
+      if (i > 0) {
         vkCmdNextSubpass(cmdbuf, sc);
+        log::debug("render pass invocation '", invoke.label, "' switched to a "
+          "next subpass");
       }
 
       const Invocation* subinvoke = pass_detail.subinvokes[i];
-      if (subinvoke == nullptr) {
-        log::warn("null subinvocation in render pass invocation is ignored");
-        continue;
-      }
-      assert(subinvoke->graph_detail != nullptr,
-        "render pass constituent invocations must be graphics invocations");
+      assert(subinvoke != nullptr, "null subinvocation is not allowed");
       _record_cmd_invoke(transact, cmd_invoke(*subinvoke));
     }
-    if (pass_detail.subinvokes.size() > 0) {
-      vkCmdEndRenderPass(cmdbuf);
+    vkCmdEndRenderPass(cmdbuf);
+    log::debug("render pass invocation '", invoke.label, "' ended");
+
+  } else if (invoke.composite_detail) {
+    const InvocationCompositeDetail& composite_detail =
+      *invoke.composite_detail;
+
+    log::debug("composite invocation '", invoke.label, "' began");
+
+    for (size_t i = 0; i < composite_detail.subinvokes.size(); ++i) {
+      const Invocation* subinvoke = composite_detail.subinvokes[i];
+      assert(subinvoke != nullptr, "null subinvocation is not allowed");
+      _record_cmd_invoke(transact, cmd_invoke(*subinvoke));
     }
 
+    log::debug("composite invocation '", invoke.label, "' ended");
+
+  } else {
+    unreachable();
   }
 
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled invocation '", invoke.label, "' for execution");
+  if (invoke.query_pool != VK_NULL_HANDLE) {
+    vkCmdWriteTimestamp(cmdbuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+      invoke.query_pool, 1);
   }
-}
 
-void _record_cmd_write_timestamp(
-  TransactionLike& transact,
-  const Command& cmd
-) {
-  const auto& in = cmd.cmd_write_timestamp;
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
-
-  auto query_pool = in.timestamp->query_pool;
-  vkCmdResetQueryPool(cmdbuf, query_pool, 0, 1);
-  vkCmdWriteTimestamp(cmdbuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, query_pool, 0);
-
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled timestamp write");
-  }
+  log::debug("scheduled invocation '", invoke.label, "' for execution");
 }
 
 // Returns whether the submit queue to submit has changed.
@@ -2470,23 +2664,8 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
   case L_COMMAND_TYPE_INLINE_TRANSACTION:
     _record_cmd_inline_transact(transact, cmd);
     break;
-  case L_COMMAND_TYPE_COPY_BUFFER_TO_IMAGE:
-    _record_cmd_copy_buf2img(transact, cmd);
-    break;
-  case L_COMMAND_TYPE_COPY_IMAGE_TO_BUFFER:
-    _record_cmd_copy_img2buf(transact, cmd);
-    break;
-  case L_COMMAND_TYPE_COPY_BUFFER:
-    _record_cmd_copy_buf(transact, cmd);
-    break;
-  case L_COMMAND_TYPE_COPY_IMAGE:
-    _record_cmd_copy_img(transact, cmd);
-    break;
   case L_COMMAND_TYPE_INVOKE:
     _record_cmd_invoke(transact, cmd);
-    break;
-  case L_COMMAND_TYPE_WRITE_TIMESTAMP:
-    _record_cmd_write_timestamp(transact, cmd);
     break;
   default:
     log::warn("ignored unknown command: ", cmd.cmd_ty);
@@ -2591,36 +2770,6 @@ void destroy_transact(Transaction& transact) {
   _clear_transact_submit_detail(*transact.ctxt, transact.submit_details);
   transact = {};
   log::debug("destroyed transaction");
-}
-
-
-
-Timestamp create_timestamp(const Context& ctxt) {
-  VkQueryPoolCreateInfo qpci {};
-  qpci.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
-  qpci.queryCount = 1;
-  qpci.queryType = VK_QUERY_TYPE_TIMESTAMP;
-
-  VkQueryPool query_pool;
-  VK_ASSERT << vkCreateQueryPool(ctxt.dev, &qpci, nullptr, &query_pool);
-
-  log::debug("created timestamp");
-  return Timestamp { &ctxt, query_pool };
-}
-void destroy_timestamp(Timestamp& timestamp) {
-  if (timestamp.query_pool != VK_NULL_HANDLE) {
-    vkDestroyQueryPool(timestamp.ctxt->dev, timestamp.query_pool, nullptr);
-    timestamp = {};
-    log::debug("destroyed timestamp");
-  }
-}
-double get_timestamp_result_us(const Timestamp& timestamp) {
-  uint64_t t;
-  VK_ASSERT << vkGetQueryPoolResults(timestamp.ctxt->dev, timestamp.query_pool,
-    0, 1, sizeof(uint64_t), &t, sizeof(uint64_t),
-    VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT); // Wait till ready.
-  double ns_per_tick = timestamp.ctxt->physdev_prop.limits.timestampPeriod;
-  return t * ns_per_tick / 1000.0;
 }
 
 
