@@ -43,6 +43,11 @@ extern std::vector<std::string> physdev_descs;
 
 
 
+enum SubmitType {
+  L_SUBMIT_TYPE_COMPUTE,
+  L_SUBMIT_TYPE_GRAPHICS,
+  L_SUBMIT_TYPE_ANY = ~((uint32_t)0),
+};
 struct ContextSubmitDetail {
   uint32_t qfam_idx;
   VkQueue queue;
@@ -87,6 +92,8 @@ struct Context {
   }
 };
 
+
+
 struct BufferDynamicDetail {
   VkPipelineStageFlags stage;
   VkAccessFlags access;
@@ -98,6 +105,8 @@ struct Buffer {
   BufferConfig buf_cfg;
   BufferDynamicDetail dyn_detail;
 };
+
+
 
 struct ImageDynamicDetail {
   VkPipelineStageFlags stage;
@@ -114,6 +123,8 @@ struct Image {
   ImageDynamicDetail dyn_detail;
 };
 
+
+
 struct DepthImageDynamicDetail {
   VkPipelineStageFlags stage;
   VkAccessFlags access;
@@ -129,6 +140,8 @@ struct DepthImage {
   DepthImageDynamicDetail dyn_detail;
 };
 
+
+
 struct RenderPass {
   const Context* ctxt;
   VkRect2D viewport;
@@ -136,6 +149,8 @@ struct RenderPass {
   RenderPassConfig pass_cfg;
   std::vector<VkClearValue> clear_values;
 };
+
+
 
 struct WorkgroupSizeSpecializationDetail {
   uint32_t x_spec_id;
@@ -155,6 +170,8 @@ struct Task {
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   WorkgroupSizeSpecializationDetail workgrp_spec_detail;
 };
+
+
 
 struct InvocationTransitionDetail {
   std::vector<std::pair<BufferView, BufferUsage>> buf_transit;
@@ -226,9 +243,15 @@ struct InvocationRenderPassDetail {
 struct InvocationCompositeDetail {
   std::vector<const Invocation*> subinvokes;
 };
+struct InvocationBakingDetail {
+  VkCommandPool cmd_pool;
+  VkCommandBuffer cmdbuf;
+};
 struct Invocation {
   std::string label;
+  // Execution context of the invocation.
   const Context* ctxt;
+  // Submit type of this invocation or the first non-any subinvocation.
   SubmitType submit_ty;
   std::unique_ptr<InvocationCopyBufferToBufferDetail> b2b_detail;
   std::unique_ptr<InvocationCopyBufferToImageDetail> b2i_detail;
@@ -238,38 +261,28 @@ struct Invocation {
   std::unique_ptr<InvocationGraphicsDetail> graph_detail;
   std::unique_ptr<InvocationRenderPassDetail> pass_detail;
   std::unique_ptr<InvocationCompositeDetail> composite_detail;
+  // Managed transitioning of resources referenced by invocation.
   InvocationTransitionDetail transit_detail;
-  VkQueryPool query_pool; // For device-side timing.
+  // Query pool for device-side timing, if required.
+  VkQueryPool query_pool;
+  // Baking artifacts. Currently we don't support baking render pass invocations
+  // and those with switching submit types.
+  std::unique_ptr<InvocationBakingDetail> bake_detail;
 };
 
-struct TransactionRenderPassDetail {
-  VkRenderPass pass;
-  VkFramebuffer framebuf;
-  VkExtent2D render_area;
-  VkClearValue clear_value;
-};
+
+
 struct TransactionSubmitDetail {
-  const Context* ctxt;
   SubmitType submit_ty;
   VkCommandPool cmd_pool;
   VkCommandBuffer cmdbuf;
   VkSemaphore wait_sema;
   VkSemaphore signal_sema;
-  // If the `pass` member is not null, then there should be only one submit
-  // detail in `submit_details` containing all the rendering command in the
-  // render pass.
-  TransactionRenderPassDetail pass_detail;
 };
-struct CommandDrain {
-  const Context* ctxt;
+struct Transaction {
+  const Invocation* invoke;
   std::vector<TransactionSubmitDetail> submit_details;
   VkFence fence;
-};
-
-struct Transaction {
-  std::string label;
-  const Context* ctxt;
-  std::vector<TransactionSubmitDetail> submit_details;
 };
 
 } // namespace vk

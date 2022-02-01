@@ -9,14 +9,13 @@
 
 // Don't use `#pragma once` here.
 #pragma once
-#include <cmath>
 #include <array>
 #include <memory>
 #include <vector>
 #include <string>
 #include <cstdint>
 #include "assert.hpp"
-#include "px-fmt.hpp"
+#include "fmt.hpp"
 
 #ifndef HAL_IMPL_NAMESPACE
 static_assert(false, "please specify the implementation namespace (e.g. `vk`)");
@@ -132,12 +131,12 @@ struct ImageConfig {
   // Human-readable label of the image.
   std::string label;
   MemoryAccess host_access;
-  // Number of rows, or height of the image.
+  // Height of the image, or zero if not 2D or 3D texture.
   uint32_t height;
-  // Number of columns, or width of the image.
+  // Width of the image.
   uint32_t width;
   // Pixel format of the image.
-  PixelFormat fmt;
+  fmt::Format fmt;
   // Usage of the image.
   ImageUsage usage;
 };
@@ -202,7 +201,7 @@ struct DepthImageConfig {
   // attachment size.
   uint32_t height;
   // Pixel format of depth image.
-  DepthFormat fmt;
+  fmt::DepthFormat fmt;
   // Usage of the depth image.
   DepthImageUsage usage;
 };
@@ -299,9 +298,9 @@ struct AttachmentConfig {
   AttachmentType attm_ty;
   union {
     // Color attachment format.
-    PixelFormat color_fmt;
+    fmt::Format color_fmt;
     // Depth attachment format.
-    DepthFormat depth_fmt;
+    fmt::DepthFormat depth_fmt;
   };
 };
 // TODO: (penguinliong) Multi-subpass rendering.
@@ -328,7 +327,7 @@ enum VertexInputRate {
   L_VERTEX_INPUT_RATE_INSTANCE,
 };
 struct VertexInput {
-  PixelFormat fmt;
+  fmt::Format fmt;
   VertexInputRate rate;
 };
 struct GraphicsTaskConfig {
@@ -484,104 +483,17 @@ L_IMPL_FN double get_invoke_time_us(const Invocation& invoke);
 // device-side procedures.
 L_IMPL_FN void bake_invoke(Invocation& invoke);
 
-/*
-struct TransactionConfig {
-  std::string label;
-  // Invocation to be realized on device.
-  const Invocation* invoke;
-};
+
+
 L_IMPL_STRUCT struct Transaction;
-// Submit the invocation to device for execution.
-L_IMPL_FN Transaction create_transact(const Context& ctxt);
-// Wait the invocation submitted to device for execution. Returns immediately if
-// the invocation is not submitted.
-L_IMPL_FN void wait_transact(Transaction& transact);
-*/
-
-
-
-struct Command;
-// A wrapping of reusable commands. The resources used in commands of a
-// transaction MUST be kept alive during transaction's entire lifetime. A
-// transaction MUST NOT inline another transaction in its commands.
-L_IMPL_STRUCT struct Transaction;
-L_IMPL_FN Transaction create_transact(
-  const std::string& label,
-  const Context& ctxt,
-  const Command* cmds,
-  size_t ncmd
-);
+// Create a device transactiona and submit `invoke` to device for execution.
+L_IMPL_FN Transaction create_transact(const Invocation& invoke);
 L_IMPL_FN void destroy_transact(Transaction& transact);
-
-
-
-enum CommandType {
-  L_COMMAND_TYPE_SET_SUBMIT_TYPE,
-  L_COMMAND_TYPE_INLINE_TRANSACTION,
-  L_COMMAND_TYPE_INVOKE,
-};
-enum SubmitType {
-  L_SUBMIT_TYPE_COMPUTE,
-  L_SUBMIT_TYPE_GRAPHICS,
-  L_SUBMIT_TYPE_ANY = ~((uint32_t)0),
-};
-struct Command {
-  CommandType cmd_ty;
-  union {
-    struct {
-      SubmitType submit_ty;
-    } cmd_set_submit_ty;
-    struct {
-      const Transaction* transact;
-    } cmd_inline_transact;
-    struct {
-      const Invocation* invoke;
-    } cmd_invoke;
-  };
-};
-
-inline Command cmd_inline_transact(const Transaction& transact) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_INLINE_TRANSACTION;
-  cmd.cmd_inline_transact.transact = &transact;
-  return cmd;
-}
-
-// Realize an invocation.
-inline Command cmd_invoke(const Invocation& invoke) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_INVOKE;
-  cmd.cmd_invoke.invoke = &invoke;
-  return cmd;
-}
-
-inline Command cmd_set_submit_ty(SubmitType submit_ty) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_SET_SUBMIT_TYPE;
-  cmd.cmd_set_submit_ty.submit_ty = submit_ty;
-  return cmd;
-}
-
-
-
-L_IMPL_STRUCT struct CommandDrain;
-L_IMPL_FN CommandDrain create_cmd_drain(const Context& ctxt);
-L_IMPL_FN void destroy_cmd_drain(CommandDrain& cmd_drain);
-// Submit commands and inlined transactions to the device for execution.
-L_IMPL_FN void submit_cmds(
-  CommandDrain& cmd_drain,
-  const Command* cmds,
-  size_t ncmd
-);
-// Wait until the command drain consumed all the commands and finished
-// execution.
-L_IMPL_FN void wait_cmd_drain(CommandDrain& cmd_drain);
-
-namespace ext {
-
-std::vector<uint8_t> load_code(const std::string& prefix);
-
-} // namespace ext
+// Check whether the transaction is finished. `true` is returned if so.
+L_IMPL_FN bool is_transact_done(const Transaction& transact);
+// Wait the invocation submitted to device for execution. Returns immediately if
+// the invocation has already been waited.
+L_IMPL_FN void wait_transact(const Transaction& transact);
 
 } // namespace HAL_IMPL_NAMESPACE
 

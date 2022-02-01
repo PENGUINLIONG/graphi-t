@@ -4,6 +4,7 @@
 
 using namespace liong;
 using namespace vk;
+using namespace fmt;
 
 namespace {
 
@@ -138,24 +139,10 @@ void guarded_main() {
     .rsc(buf.view())
     .workgrp_count(4, 4, 4)
     .build();
+  invoke.bake();
 
-  scoped::Transaction transact = ctxt.create_transact("transact", {
-    cmd_set_submit_ty(L_SUBMIT_TYPE_COMPUTE),
-    cmd_invoke(invoke),
-  });
-
-  scoped::CommandDrain cmd_drain(ctxt);
-  cmd_drain.submit({
-    cmd_set_submit_ty(L_SUBMIT_TYPE_COMPUTE),
-    cmd_inline_transact(transact),
-  });
-  cmd_drain.wait();
-
-  cmd_drain.submit({
-    cmd_set_submit_ty(L_SUBMIT_TYPE_COMPUTE),
-    cmd_inline_transact(transact),
-  });
-  cmd_drain.wait();
+  invoke.submit().wait();
+  invoke.submit().wait();
 
   std::vector<float> dbuf;
   dbuf.resize(16);
@@ -275,7 +262,7 @@ void guarded_main2() {
   scoped::DepthImage zbuf = ctxt.build_depth_img("zbuf")
     .width(4)
     .height(4)
-    .fmt(L_DEPTH_FORMAT_D16_S0)
+    .fmt(L_DEPTH_FORMAT_D16_UNORM)
     .attachment()
     .build();
   scoped::Image out_img = ctxt.build_img("attm")
@@ -291,7 +278,7 @@ void guarded_main2() {
     .width(FRAMEBUF_WIDTH)
     .height(FRAMEBUF_HEIGHT)
     .clear_store_attm(L_FORMAT_R32G32B32A32_SFLOAT)
-    .clear_store_attm(L_DEPTH_FORMAT_D16_S0)
+    .clear_store_attm(L_DEPTH_FORMAT_D16_UNORM)
     .build();
 
   scoped::Task task = pass.build_graph_task("graph_task")
@@ -330,15 +317,7 @@ void guarded_main2() {
     .invoke(write_back)
     .build();
 
-
-  std::vector<Command> cmds {
-    cmd_set_submit_ty(L_SUBMIT_TYPE_GRAPHICS),
-    cmd_invoke(proc),
-  };
-
-  scoped::CommandDrain cmd_drain = ctxt.create_cmd_drain();
-  cmd_drain.submit(cmds);
-  cmd_drain.wait();
+  proc.submit().wait();
 
   liong::log::warn("drawing took ", main_pass.get_time_us(), "us");
 

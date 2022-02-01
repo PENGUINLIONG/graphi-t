@@ -11,73 +11,14 @@ namespace HAL_IMPL_NAMESPACE {
 
 namespace scoped {
 
-struct Context;
-struct Buffer;
-struct Image;
-struct RenderPass;
-struct Task;
-struct ResourcePool;
-struct Transaction;
-struct CommandDrain;
-
-
-
-struct CommandDrain {
-  std::unique_ptr<HAL_IMPL_NAMESPACE::CommandDrain> inner;
-
-  CommandDrain() = default;
-  CommandDrain(const Context& ctxt);
-  CommandDrain(HAL_IMPL_NAMESPACE::CommandDrain&& inner);
-  CommandDrain(CommandDrain&&) = default;
-  ~CommandDrain();
-
-  CommandDrain& operator=(CommandDrain&&) = default;
-
-  inline operator HAL_IMPL_NAMESPACE::CommandDrain& () {
-    return *inner;
-  }
-  inline operator const HAL_IMPL_NAMESPACE::CommandDrain& () const {
-    return *inner;
-  }
-
-  inline void submit(const Command* cmds, size_t ncmd) {
-    submit_cmds(*inner, cmds, ncmd);
-  }
-  inline void submit(const std::vector<Command>& cmds) {
-    submit(cmds.data(), cmds.size());
-  }
-  template<size_t N>
-  inline void submit(const std::array<Command, N>& cmds) {
-    submit(cmds.data(), N);
-  }
-
-  inline void wait() {
-    wait_cmd_drain(*inner);
-  }
-};
-
 
 
 struct Transaction {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Transaction> inner;
 
   Transaction() = default;
-  Transaction(
-    const Context& ctxt,
-    const std::string& label,
-    const Command* cmds, size_t ncmd);
   Transaction(HAL_IMPL_NAMESPACE::Transaction&& inner);
   Transaction(Transaction&&) = default;
-  Transaction(
-    const Context& ctxt,
-    const std::string& label,
-    const std::vector<Command>& cmds);
-  template<size_t N>
-  Transaction(
-    const Context& ctxt,
-    const std::string& label,
-    const std::array<Command, N>& cmds
-  ) : Transaction(ctxt, cmds.data(), N) {}
   ~Transaction();
 
   Transaction& operator=(Transaction&&) = default;
@@ -87,6 +28,13 @@ struct Transaction {
   }
   inline operator const HAL_IMPL_NAMESPACE::Transaction& () const {
     return *inner;
+  }
+
+  inline bool is_done() const {
+    return is_transact_done(*this);
+  }
+  inline void wait() {
+    wait_transact(*this);
   }
 };
 
@@ -112,6 +60,11 @@ struct Invocation {
   inline double get_time_us() const {
     return get_invoke_time_us(*this);
   }
+  inline void bake() {
+    bake_invoke(*this);
+  }
+
+  Transaction submit();
 };
 struct TransferInvocationBuilder {
   using Self = TransferInvocationBuilder;
@@ -424,7 +377,7 @@ struct GraphicsTaskBuilder {
     inner.topo = topo;
     return *this;
   }
-  inline Self& vert_input(PixelFormat fmt, VertexInputRate rate) {
+  inline Self& vert_input(fmt::Format fmt, VertexInputRate rate) {
     inner.vert_inputs.emplace_back(VertexInput { fmt, rate });
     return *this;
   }
@@ -442,10 +395,10 @@ struct GraphicsTaskBuilder {
     return frag(buf.data(), buf.size() * sizeof(TContainer::value_type));
   }
 
-  inline Self& per_vert_input(PixelFormat fmt) {
+  inline Self& per_vert_input(fmt::Format fmt) {
     return vert_input(fmt, L_VERTEX_INPUT_RATE_VERTEX);
   }
-  inline Self& per_inst_input(PixelFormat fmt) {
+  inline Self& per_inst_input(fmt::Format fmt) {
     return vert_input(fmt, L_VERTEX_INPUT_RATE_INSTANCE);
   }
 
@@ -577,7 +530,7 @@ struct ImageBuilder {
     inner.height = height;
     return *this;
   }
-  inline Self& fmt(PixelFormat fmt) {
+  inline Self& fmt(fmt::Format fmt) {
     inner.fmt = fmt;
     return *this;
   }
@@ -665,7 +618,7 @@ struct DepthImageBuilder {
     inner.height = height;
     return *this;
   }
-  inline Self& fmt(DepthFormat fmt) {
+  inline Self& fmt(fmt::DepthFormat fmt) {
     inner.fmt = fmt;
     return *this;
   }
@@ -883,7 +836,7 @@ struct RenderPassBuilder {
     inner.height = height;
     return *this;
   }
-  inline Self& attm(AttachmentAccess access, PixelFormat fmt) {
+  inline Self& attm(AttachmentAccess access, fmt::Format fmt) {
     AttachmentConfig attm_cfg {};
     attm_cfg.attm_ty = L_ATTACHMENT_TYPE_COLOR;
     attm_cfg.attm_access = access;
@@ -892,7 +845,7 @@ struct RenderPassBuilder {
     inner.attm_cfgs.emplace_back(std::move(attm_cfg));
     return *this;
   }
-  inline Self& attm(AttachmentAccess access, DepthFormat fmt) {
+  inline Self& attm(AttachmentAccess access, fmt::DepthFormat fmt) {
     AttachmentConfig attm_cfg {};
     attm_cfg.attm_ty = L_ATTACHMENT_TYPE_DEPTH;
     attm_cfg.attm_access = access;
@@ -907,19 +860,19 @@ struct RenderPassBuilder {
     return *this;
   }
 
-  inline Self& load_store_attm(PixelFormat fmt) {
+  inline Self& load_store_attm(fmt::Format fmt) {
     auto access = L_ATTACHMENT_ACCESS_LOAD | L_ATTACHMENT_ACCESS_STORE;
     return attm((AttachmentAccess)access, fmt);
   }
-  inline Self& clear_store_attm(PixelFormat fmt) {
+  inline Self& clear_store_attm(fmt::Format fmt) {
     auto access = L_ATTACHMENT_ACCESS_CLEAR | L_ATTACHMENT_ACCESS_STORE;
     return attm((AttachmentAccess)access, fmt);
   }
-  inline Self& load_store_depth_attm(DepthFormat fmt) {
+  inline Self& load_store_depth_attm(fmt::DepthFormat fmt) {
     auto access = L_ATTACHMENT_ACCESS_LOAD | L_ATTACHMENT_ACCESS_STORE;
     return attm((AttachmentAccess)access, fmt);
   }
-  inline Self& clear_store_attm(DepthFormat fmt) {
+  inline Self& clear_store_attm(fmt::DepthFormat fmt) {
     auto access = L_ATTACHMENT_ACCESS_CLEAR | L_ATTACHMENT_ACCESS_STORE;
     return attm((AttachmentAccess)access, fmt);
   }
@@ -963,13 +916,6 @@ public:
   CompositeInvocationBuilder build_composite_invoke(
     const std::string& label = ""
   ) const;
-
-  Transaction create_transact(
-    const std::string& label,
-    const std::vector<Command>& cmds
-  ) const;
-
-  CommandDrain create_cmd_drain() const;
 };
 
 } // namespace scoped

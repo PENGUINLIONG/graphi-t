@@ -568,66 +568,14 @@ void unmap_buf_mem(
 
 
 
-VkFormat _make_img_fmt(PixelFormat fmt) {
-  if (fmt.is_half) {
-    panic("half-precision texture not supported");
-  } else if (fmt.is_single) {
-    switch (fmt.get_ncomp()) {
-    case 1: return VK_FORMAT_R32_SFLOAT;
-    case 2: return VK_FORMAT_R32G32_SFLOAT;
-    case 3: return VK_FORMAT_R32G32B32_SFLOAT;
-    case 4: return VK_FORMAT_R32G32B32A32_SFLOAT;
-    }
-  } else if (fmt.is_signed) {
-    switch (fmt.int_exp2) {
-    case 1:
-      switch (fmt.get_ncomp()) {
-      case 1: return VK_FORMAT_R8_SNORM;
-      case 2: return VK_FORMAT_R8G8_SNORM;
-      case 3: return VK_FORMAT_R8G8B8_SNORM;
-      case 4: return VK_FORMAT_R8G8B8A8_SNORM;
-      }
-    case 2:
-      switch (fmt.int_exp2) {
-      case 1: return VK_FORMAT_R16_SINT;
-      case 2: return VK_FORMAT_R16G16_SINT;
-      case 3: return VK_FORMAT_R16G16B16_SINT;
-      case 4: return VK_FORMAT_R16G16B16A16_SINT;
-      }
-    case 3:
-      switch (fmt.int_exp2) {
-      case 1: return VK_FORMAT_R32_SINT;
-      case 2: return VK_FORMAT_R32G32_SINT;
-      case 3: return VK_FORMAT_R32G32B32_SINT;
-      case 4: return VK_FORMAT_R32G32B32A32_SINT;
-      }
-    }
-  } else {
-    switch (fmt.int_exp2) {
-    case 1:
-      switch (fmt.get_ncomp()) {
-      case 1: return VK_FORMAT_R8_UNORM;
-      case 2: return VK_FORMAT_R8G8_UNORM;
-      case 3: return VK_FORMAT_R8G8B8_UNORM;
-      case 4: return VK_FORMAT_R8G8B8A8_UNORM;
-      }
-    case 2:
-      switch (fmt.int_exp2) {
-      case 1: return VK_FORMAT_R16_UINT;
-      case 2: return VK_FORMAT_R16G16_UINT;
-      case 3: return VK_FORMAT_R16G16B16_UINT;
-      case 4: return VK_FORMAT_R16G16B16A16_UINT;
-      }
-    case 3:
-      switch (fmt.int_exp2) {
-      case 1: return VK_FORMAT_R32_UINT;
-      case 2: return VK_FORMAT_R32G32_UINT;
-      case 3: return VK_FORMAT_R32G32B32_UINT;
-      case 4: return VK_FORMAT_R32G32B32A32_UINT;
-      }
-    }
+VkFormat _make_img_fmt(fmt::Format fmt) {
+  using namespace fmt;
+  switch (fmt) {
+  case L_FORMAT_R8G8B8A8_UNORM_PACK32: return VK_FORMAT_R8G8B8A8_UNORM;
+  case L_FORMAT_R16G16B16A16_SFLOAT: return VK_FORMAT_R16G16B16A16_SFLOAT;
+  case L_FORMAT_R32G32B32A32_SFLOAT: return VK_FORMAT_R32G32B32A32_SFLOAT;
+  default: panic("unrecognized pixel format");
   }
-  panic("unrecognized pixel format");
   return VK_FORMAT_UNDEFINED;
 }
 Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
@@ -661,8 +609,8 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   }
   // KEEP THIS AT THE END.
   if (img_cfg.usage & L_IMAGE_USAGE_STAGING_BIT) {
-    assert((img_cfg.usage & (~L_IMAGE_USAGE_STAGING_BIT)) == 0, "staging image "
-      "can only be used for transfer");
+    assert((img_cfg.usage & (~L_IMAGE_USAGE_STAGING_BIT)) == 0,
+      "staging image can only be used for transfer");
     usage |=
       VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -769,32 +717,15 @@ const ImageConfig& get_img_cfg(const Image& img) {
 
 
 
-VkFormat _make_depth_fmt(DepthFormat fmt) {
-  if (fmt.nbit_depth == 16 && fmt.nbit_stencil == 0) {
-    return VK_FORMAT_D16_UNORM;
+VkFormat _make_depth_fmt(fmt::DepthFormat fmt) {
+  using namespace fmt;
+  switch (fmt) {
+  case L_DEPTH_FORMAT_D16_UNORM: return VK_FORMAT_D16_UNORM;
+  case L_DEPTH_FORMAT_D32_SFLOAT: return VK_FORMAT_D32_SFLOAT;
+  default: panic("unsupported depth format");
   }
-  if (fmt.nbit_depth == 24 && fmt.nbit_stencil == 0) {
-    return VK_FORMAT_X8_D24_UNORM_PACK32;
-  }
-  if (fmt.nbit_depth == 32 && fmt.nbit_stencil == 0) {
-    return VK_FORMAT_D32_SFLOAT;
-  }
-  if (fmt.nbit_depth == 0 && fmt.nbit_stencil == 8) {
-    return VK_FORMAT_S8_UINT;
-  }
-  if (fmt.nbit_depth == 16 && fmt.nbit_stencil == 8) {
-    return VK_FORMAT_D16_UNORM_S8_UINT;
-  }
-  if (fmt.nbit_depth == 24 && fmt.nbit_stencil == 8) {
-    return VK_FORMAT_D24_UNORM_S8_UINT;
-  }
-  if (fmt.nbit_depth == 32 && fmt.nbit_stencil == 8) {
-    return VK_FORMAT_D32_SFLOAT_S8_UINT;
-  }
-  panic("unsupported depth format");
   return VK_FORMAT_UNDEFINED;
 }
-
 DepthImage create_depth_img(
   const Context& ctxt,
   const DepthImageConfig& depth_img_cfg
@@ -863,8 +794,8 @@ DepthImage create_depth_img(
   ivci.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
   ivci.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
   ivci.subresourceRange.aspectMask =
-    (depth_img_cfg.fmt.nbit_depth > 0 ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) |
-    (depth_img_cfg.fmt.nbit_stencil > 0 ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
+    (fmt::get_fmt_depth_nbit(depth_img_cfg.fmt) > 0 ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) |
+    (fmt::get_fmt_stencil_nbit(depth_img_cfg.fmt) > 0 ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
   ivci.subresourceRange.baseArrayLayer = 0;
   ivci.subresourceRange.layerCount = 1;
   ivci.subresourceRange.baseMipLevel = 0;
@@ -940,7 +871,6 @@ void unmap_img_mem(
   vkUnmapMemory(img.img->ctxt->dev, img.img->devmem);
   log::debug("unmapped image '", img.img->img_cfg.label, "'");
 }
-
 
 
 
@@ -1073,6 +1003,9 @@ Task create_comp_task(
     pipe_layout, pipe, cfg.rsc_tys, { shader_mod }, std::move(desc_pool_sizes)
   };
 }
+
+
+
 VkAttachmentLoadOp _get_load_op(AttachmentAccess attm_access) {
   if (attm_access & L_ATTACHMENT_ACCESS_CLEAR) {
     return VK_ATTACHMENT_LOAD_OP_CLEAR;
@@ -1241,7 +1174,7 @@ Task create_graph_task(
   size_t base_offset = 0;
   for (auto i = 0; i < cfg.vert_inputs.size(); ++i) {
     auto& vert_input = cfg.vert_inputs[i];
-    size_t fmt_size = vert_input.fmt.get_fmt_size();
+    size_t fmt_size = fmt::get_fmt_size(vert_input.fmt);
 
     vibd.binding = 0;
     vibd.stride = 0; // Will be assigned later.
@@ -1564,12 +1497,6 @@ VkQueryPool _create_query_pool(
   VK_ASSERT << vkCreateQueryPool(ctxt.dev, &qpci, nullptr, &query_pool);
 
   return query_pool;
-}
-void _destroy_query_pool(
-  const Context& ctxt,
-  VkQueryPool query_pool
-) {
-  vkDestroyQueryPool(ctxt.dev, query_pool, nullptr);
 }
 void _collect_task_invoke_transit(
   const std::vector<ResourceView> rsc_views,
@@ -2008,6 +1935,13 @@ void destroy_invoke(Invocation& invoke) {
 
   if (invoke.query_pool != VK_NULL_HANDLE) {
     vkDestroyQueryPool(ctxt.dev, invoke.query_pool, nullptr);
+    log::debug("destroyed timing objects");
+  }
+
+  if (invoke.bake_detail) {
+    const InvocationBakingDetail& bake_detail = *invoke.bake_detail;
+    vkDestroyCommandPool(ctxt.dev, bake_detail.cmd_pool, nullptr);
+    log::debug("destroyed baking artifacts");
   }
 
   invoke = {};
@@ -2023,8 +1957,6 @@ double get_invoke_time_us(const Invocation& invoke) {
   return (t[1] - t[0]) * ns_per_tick / 1000.0;
 }
 
-
-
 VkSemaphore _create_sema(const Context& ctxt) {
   VkSemaphoreCreateInfo sci {};
   sci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -2032,14 +1964,6 @@ VkSemaphore _create_sema(const Context& ctxt) {
   VkSemaphore sema;
   VK_ASSERT << vkCreateSemaphore(ctxt.dev, &sci, nullptr, &sema);
   return sema;
-}
-VkFence _create_fence(const Context& ctxt) {
-  VkFenceCreateInfo fci {};
-  fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-
-  VkFence fence;
-  VK_ASSERT << vkCreateFence(ctxt.dev, &fci, nullptr, &fence);
-  return fence;
 }
 
 VkCommandPool _create_cmd_pool(const Context& ctxt, SubmitType submit_ty) {
@@ -2108,19 +2032,13 @@ void _push_transact_submit_detail(
   submit_detail.cmdbuf = cmdbuf;
   submit_detail.wait_sema = submit_details.empty() ?
     VK_NULL_HANDLE : submit_details.back().signal_sema;
-  submit_detail.signal_sema = _create_sema(ctxt);
+  if (level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
+    submit_detail.signal_sema = VK_NULL_HANDLE;
+  } else {
+    submit_detail.signal_sema = _create_sema(ctxt);
+  }
 
   submit_details.emplace_back(std::move(submit_detail));
-}
-void _clear_transact_submit_detail(
-  const Context& ctxt,
-  std::vector<TransactionSubmitDetail>& submit_details
-) {
-  for (auto& submit_detail : submit_details) {
-    vkDestroySemaphore(ctxt.dev, submit_detail.signal_sema, nullptr);
-    vkDestroyCommandPool(ctxt.dev, submit_detail.cmd_pool, nullptr);
-  }
-  submit_details.clear();
 }
 void _submit_transact_submit_detail(
   const Context& ctxt,
@@ -2485,48 +2403,15 @@ void _transit_rscs(
   }
 }
 
-void _record_cmd_set_submit_ty(
-  TransactionLike& transact,
-  const Command& cmd
-) {
-  SubmitType submit_ty = cmd.cmd_set_submit_ty.submit_ty;
-  _get_cmdbuf(transact, submit_ty);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("command drain submit type is set");
-  }
-}
-void _record_cmd_inline_transact(
-  TransactionLike& transact,
-  const Command& cmd
-) {
-  assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-    "nested inline transaction is not allowed");
-  const auto& in = cmd.cmd_inline_transact;
-  const auto& subtransact = *in.transact;
-
-  for (auto i = 0; i < subtransact.submit_details.size(); ++i) {
-    const auto& submit_detail = subtransact.submit_details[i];
-    auto cmdbuf = _get_cmdbuf(transact, submit_detail.submit_ty);
-
-    vkCmdExecuteCommands(cmdbuf, 1, &submit_detail.cmdbuf);
-  }
-
-  log::debug("scheduled inline transaction '",
-    cmd.cmd_inline_transact.transact->label, "'");
-}
-
-void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_invoke;
-  const auto& invoke = *in.invoke;
-
-  // FIXME: (penguinliong) Actually it should be the subinvocations not allowed
-  // to be baked.
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
-    assert(invoke.query_pool == VK_NULL_HANDLE,
-      "timed invocation cannot be baked");
-  }
-
+void _record_invoke(TransactionLike& transact, const Invocation& invoke) {
   VkCommandBuffer cmdbuf = _get_cmdbuf(transact, invoke.submit_ty);
+
+  // If the invocation has been baked, simply inline the baked secondary command
+  // buffer.
+  if (invoke.bake_detail) {
+    vkCmdExecuteCommands(cmdbuf, 1, &invoke.bake_detail->cmdbuf);
+    return;
+  }
 
   if (invoke.query_pool != VK_NULL_HANDLE) {
     vkCmdResetQueryPool(cmdbuf, invoke.query_pool, 0, 2);
@@ -2600,8 +2485,9 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
   } else if (invoke.pass_detail) {
     const InvocationRenderPassDetail& pass_detail = *invoke.pass_detail;
     const RenderPass& pass = *pass_detail.pass;
+    const std::vector<const Invocation*>& subinvokes = pass_detail.subinvokes;
 
-    VkSubpassContents sc = pass_detail.is_baked ?
+    VkSubpassContents sc = subinvokes.size() > 0 && subinvokes[0]->bake_detail ?
       VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS :
       VK_SUBPASS_CONTENTS_INLINE;
 
@@ -2617,6 +2503,9 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
 
     for (size_t i = 0; i < pass_detail.subinvokes.size(); ++i) {
       if (i > 0) {
+        sc = subinvokes[i]->bake_detail ?
+          VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS :
+          VK_SUBPASS_CONTENTS_INLINE;
         vkCmdNextSubpass(cmdbuf, sc);
         log::debug("render pass invocation '", invoke.label, "' switched to a "
           "next subpass");
@@ -2624,7 +2513,7 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
 
       const Invocation* subinvoke = pass_detail.subinvokes[i];
       assert(subinvoke != nullptr, "null subinvocation is not allowed");
-      _record_cmd_invoke(transact, cmd_invoke(*subinvoke));
+      _record_invoke(transact, *subinvoke);
     }
     vkCmdEndRenderPass(cmdbuf);
     log::debug("render pass invocation '", invoke.label, "' ended");
@@ -2638,7 +2527,7 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
     for (size_t i = 0; i < composite_detail.subinvokes.size(); ++i) {
       const Invocation* subinvoke = composite_detail.subinvokes[i];
       assert(subinvoke != nullptr, "null subinvocation is not allowed");
-      _record_cmd_invoke(transact, cmd_invoke(*subinvoke));
+      _record_invoke(transact, *subinvoke);
     }
 
     log::debug("composite invocation '", invoke.label, "' ended");
@@ -2655,76 +2544,115 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
   log::debug("scheduled invocation '", invoke.label, "' for execution");
 }
 
-// Returns whether the submit queue to submit has changed.
-void _record_cmd(TransactionLike& transact, const Command& cmd) {
-  switch (cmd.cmd_ty) {
-  case L_COMMAND_TYPE_SET_SUBMIT_TYPE:
-    _record_cmd_set_submit_ty(transact, cmd);
-    break;
-  case L_COMMAND_TYPE_INLINE_TRANSACTION:
-    _record_cmd_inline_transact(transact, cmd);
-    break;
-  case L_COMMAND_TYPE_INVOKE:
-    _record_cmd_invoke(transact, cmd);
-    break;
-  default:
-    log::warn("ignored unknown command: ", cmd.cmd_ty);
-    break;
+bool _can_bake_invoke(const Invocation& invoke) {
+  // Render pass is never baked, enforced by Vulkan specification.
+  if (invoke.pass_detail != nullptr) { return false; }
+
+  if (invoke.composite_detail != nullptr) {
+    uint32_t submit_ty = ~uint32_t(0);
+    for (const Invocation* subinvoke : invoke.composite_detail->subinvokes) {
+      // If a subinvocation cannot be baked, this invocation too cannot.
+      if (!_can_bake_invoke(*subinvoke)) { return false; }
+      submit_ty &= subinvoke->submit_ty;
+    }
+    // Multiple subinvocations but their submit types mismatch.
+    if (submit_ty == 0) { return 0; }
   }
-}
 
-
-
-CommandDrain create_cmd_drain(const Context& ctxt) {
-  auto fence = _create_fence(ctxt);
-  log::debug("created command drain");
-  return CommandDrain { &ctxt, {}, fence };
+  return true;
 }
-void destroy_cmd_drain(CommandDrain& cmd_drain) {
-  if (cmd_drain.fence != VK_NULL_HANDLE) {
-    _clear_transact_submit_detail(*cmd_drain.ctxt, cmd_drain.submit_details);
-    vkDestroyFence(cmd_drain.ctxt->dev, cmd_drain.fence, nullptr);
-    cmd_drain = {};
-    log::debug("destroyed command drain");
-  }
-}
-void submit_cmds(
-  CommandDrain& cmd_drain,
-  const Command* cmds,
-  size_t ncmd
-) {
-  assert(ncmd > 0, "cannot submit empty command buffer");
+void bake_invoke(Invocation& invoke) {
+  if (!_can_bake_invoke(invoke)) { return; }
 
   TransactionLike transact {};
-  transact.ctxt = cmd_drain.ctxt;
-  transact.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  transact.ctxt = invoke.ctxt;
+  transact.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+  _record_invoke(transact, invoke);
+  _end_cmdbuf(transact.submit_details.back());
 
+  assert(transact.submit_details.size() == 1);
+  const TransactionSubmitDetail& submit_detail = transact.submit_details[0];
+  assert(submit_detail.submit_ty == invoke.submit_ty);
+  assert(submit_detail.signal_sema == VK_NULL_HANDLE);
+
+  InvocationBakingDetail bake_detail {};
+  bake_detail.cmd_pool = submit_detail.cmd_pool;
+  bake_detail.cmdbuf = submit_detail.cmdbuf;
+
+  invoke.bake_detail =
+    std::make_unique<InvocationBakingDetail>(std::move(bake_detail));
+
+  log::debug("baked invocation '", invoke.label, "'");
+}
+
+
+
+VkFence _create_fence(const Context& ctxt) {
+  VkFenceCreateInfo fci {};
+  fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+
+  VkFence fence;
+  VK_ASSERT << vkCreateFence(ctxt.dev, &fci, nullptr, &fence);
+  return fence;
+}
+Transaction create_transact(const Invocation& invoke) {
+  const Context& ctxt = *invoke.ctxt;
+
+  TransactionLike transact {};
+  transact.ctxt = invoke.ctxt;
+  transact.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
   util::Timer timer {};
   timer.tic();
-  for (auto i = 0; i < ncmd; ++i) {
-    _record_cmd(transact, cmds[i]);
-  }
-  cmd_drain.submit_details = std::move(transact.submit_details);
+  _record_invoke(transact, invoke);
+  _end_cmdbuf(transact.submit_details.back());
   timer.toc();
 
-  _end_cmdbuf(cmd_drain.submit_details.back());
-  _submit_transact_submit_detail(*cmd_drain.ctxt,
-    cmd_drain.submit_details.back(), cmd_drain.fence);
+  Transaction out {};
+  out.invoke = &invoke;
+  out.submit_details = std::move(transact.submit_details);
+  out.fence = _create_fence(ctxt);
 
-  log::debug("submitted transaction for execution, command recording took ",
-    timer.us(), "us");
+  _submit_transact_submit_detail(ctxt, out.submit_details.back(), out.fence);
+
+  log::debug("created and submitted transaction for execution, command "
+    "recording took ", timer.us(), "us");
+  return out;
 }
-void _reset_cmd_drain(CommandDrain& cmd_drain) {
-  _clear_transact_submit_detail(*cmd_drain.ctxt, cmd_drain.submit_details);
-  VK_ASSERT << vkResetFences(cmd_drain.ctxt->dev, 1, &cmd_drain.fence);
+void destroy_transact(Transaction& transact) {
+  const Context& ctxt = *transact.invoke->ctxt;
+  if (transact.fence != VK_NULL_HANDLE) {
+    for (auto& submit_detail : transact.submit_details) {
+      if (submit_detail.signal_sema != VK_NULL_HANDLE) {
+        vkDestroySemaphore(ctxt.dev, submit_detail.signal_sema, nullptr);
+      }
+      if (submit_detail.cmd_pool != VK_NULL_HANDLE) {
+        vkDestroyCommandPool(ctxt.dev, submit_detail.cmd_pool, nullptr);
+      }
+    }
+    vkDestroyFence(ctxt.dev, transact.fence, nullptr);
+    log::debug("destroyed transaction");
+  }
+  transact = {};
 }
-void wait_cmd_drain(CommandDrain& cmd_drain) {
+bool is_transact_done(const Transaction& transact) {
+  const Context& ctxt = *transact.invoke->ctxt;
+  VkResult err = vkGetFenceStatus(ctxt.dev, transact.fence);
+  if (err == VK_NOT_READY) {
+    return false;
+  } else {
+    VK_ASSERT << err;
+    return true;
+  }
+}
+void wait_transact(const Transaction& transact) {
   const uint32_t SPIN_INTERVAL = 3000;
+
+  const Context& ctxt = *transact.invoke->ctxt;
 
   util::Timer wait_timer {};
   wait_timer.tic();
   for (VkResult err;;) {
-    err = vkWaitForFences(cmd_drain.ctxt->dev, 1, &cmd_drain.fence, VK_TRUE,
+    err = vkWaitForFences(ctxt.dev, 1, &transact.fence, VK_TRUE,
         SPIN_INTERVAL);
     if (err == VK_TIMEOUT) {
       // log::warn("timeout after 3000ns");
@@ -2735,53 +2663,9 @@ void wait_cmd_drain(CommandDrain& cmd_drain) {
   }
   wait_timer.toc();
 
-  util::Timer reset_timer {};
-  reset_timer.tic();
-
-  _reset_cmd_drain(cmd_drain);
-
-  reset_timer.toc();
-
   log::debug("command drain returned after ", wait_timer.us(), "us since the "
-    "wait started (spin interval = ", SPIN_INTERVAL / 1000.0, "us; resource "
-    "recycling took ", reset_timer.us(), "us)");
+    "wait started (spin interval = ", SPIN_INTERVAL / 1000.0, "us");
 }
-
-
-
-Transaction create_transact(
-  const std::string& label,
-  const Context& ctxt,
-  const Command* cmds,
-  size_t ncmd
-) {
-  TransactionLike transact {};
-  transact.ctxt = &ctxt;
-  transact.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
-  for (auto i = 0; i < ncmd; ++i) {
-    _record_cmd(transact, cmds[i]);
-  }
-  _end_cmdbuf(transact.submit_details.back());
-
-  log::debug("created transaction");
-  return Transaction { label, &ctxt, std::move(transact.submit_details) };
-}
-void destroy_transact(Transaction& transact) {
-  _clear_transact_submit_detail(*transact.ctxt, transact.submit_details);
-  transact = {};
-  log::debug("destroyed transaction");
-}
-
-
-
-namespace ext {
-
-std::vector<uint8_t> load_code(const std::string& prefix) {
-  auto path = prefix + ".comp.spv";
-  return util::load_file(path.c_str());
-}
-
-} // namespace ext
 
 } // namespace HAL_IMPL_NAMESPACE
 
