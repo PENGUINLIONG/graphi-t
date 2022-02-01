@@ -127,13 +127,7 @@ MappedImage::~MappedImage() {
   unmap_img_mem(view, mapped);
 }
 
-Transaction Context::create_transact(
-  const std::string& label,
-  const std::vector<Command>& cmds
-) const {
-  return HAL_IMPL_NAMESPACE::create_transact(label, *inner, cmds.data(),
-    cmds.size());
-}
+
 
 CommandDrain Context::create_cmd_drain() const {
   return HAL_IMPL_NAMESPACE::create_cmd_drain(*inner);
@@ -251,29 +245,6 @@ Invocation RenderPassInvocationBuilder::build() {
 }
 Invocation CompositeInvocationBuilder::build() {
   return create_composite_invoke(parent, inner);
-}
-
-
-
-Transaction::Transaction(
-  const Context& ctxt,
-  const std::string& label,
-  const Command* cmds,
-  size_t ncmd
-) : inner(std::make_unique<HAL_IMPL_NAMESPACE::Transaction>(
-    create_transact(label, *ctxt.inner, cmds, ncmd))) {}
-Transaction::Transaction(HAL_IMPL_NAMESPACE::Transaction&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Transaction>(
-    std::forward<HAL_IMPL_NAMESPACE::Transaction>(inner))) {}
-Transaction::Transaction(
-  const Context& ctxt,
-  const std::string& label,
-  const std::vector<Command>& cmds
-) : Transaction(ctxt, label, cmds.data(), cmds.size()) {}
-Transaction::~Transaction() {
-  if (inner != nullptr) {
-    destroy_transact(*inner);
-  }
 }
 
 

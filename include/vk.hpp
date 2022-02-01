@@ -226,9 +226,15 @@ struct InvocationRenderPassDetail {
 struct InvocationCompositeDetail {
   std::vector<const Invocation*> subinvokes;
 };
+struct InvocationBakingDetail {
+  VkCommandPool cmd_pool;
+  VkCommandBuffer cmdbuf;
+};
 struct Invocation {
   std::string label;
+  // Execution context of the invocation.
   const Context* ctxt;
+  // Submit type of this invocation or the first non-any subinvocation.
   SubmitType submit_ty;
   std::unique_ptr<InvocationCopyBufferToBufferDetail> b2b_detail;
   std::unique_ptr<InvocationCopyBufferToImageDetail> b2i_detail;
@@ -238,8 +244,13 @@ struct Invocation {
   std::unique_ptr<InvocationGraphicsDetail> graph_detail;
   std::unique_ptr<InvocationRenderPassDetail> pass_detail;
   std::unique_ptr<InvocationCompositeDetail> composite_detail;
+  // Managed transitioning of resources referenced by invocation.
   InvocationTransitionDetail transit_detail;
-  VkQueryPool query_pool; // For device-side timing.
+  // Query pool for device-side timing, if required.
+  VkQueryPool query_pool;
+  // Baking artifacts. Currently we don't support baking render pass invocations
+  // and those with switching submit types.
+  std::unique_ptr<InvocationBakingDetail> bake_detail;
 };
 
 struct TransactionRenderPassDetail {
@@ -264,12 +275,6 @@ struct CommandDrain {
   const Context* ctxt;
   std::vector<TransactionSubmitDetail> submit_details;
   VkFence fence;
-};
-
-struct Transaction {
-  std::string label;
-  const Context* ctxt;
-  std::vector<TransactionSubmitDetail> submit_details;
 };
 
 } // namespace vk

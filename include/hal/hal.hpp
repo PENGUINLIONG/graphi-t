@@ -499,23 +499,7 @@ L_IMPL_FN void wait_transact(Transaction& transact);
 
 
 
-struct Command;
-// A wrapping of reusable commands. The resources used in commands of a
-// transaction MUST be kept alive during transaction's entire lifetime. A
-// transaction MUST NOT inline another transaction in its commands.
-L_IMPL_STRUCT struct Transaction;
-L_IMPL_FN Transaction create_transact(
-  const std::string& label,
-  const Context& ctxt,
-  const Command* cmds,
-  size_t ncmd
-);
-L_IMPL_FN void destroy_transact(Transaction& transact);
-
-
-
 enum CommandType {
-  L_COMMAND_TYPE_INLINE_TRANSACTION,
   L_COMMAND_TYPE_INVOKE,
 };
 enum SubmitType {
@@ -527,20 +511,10 @@ struct Command {
   CommandType cmd_ty;
   union {
     struct {
-      const Transaction* transact;
-    } cmd_inline_transact;
-    struct {
       const Invocation* invoke;
     } cmd_invoke;
   };
 };
-
-inline Command cmd_inline_transact(const Transaction& transact) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_INLINE_TRANSACTION;
-  cmd.cmd_inline_transact.transact = &transact;
-  return cmd;
-}
 
 // Realize an invocation.
 inline Command cmd_invoke(const Invocation& invoke) {
@@ -563,12 +537,6 @@ L_IMPL_FN void submit_cmds(
 // Wait until the command drain consumed all the commands and finished
 // execution.
 L_IMPL_FN void wait_cmd_drain(CommandDrain& cmd_drain);
-
-namespace ext {
-
-std::vector<uint8_t> load_code(const std::string& prefix);
-
-} // namespace ext
 
 } // namespace HAL_IMPL_NAMESPACE
 

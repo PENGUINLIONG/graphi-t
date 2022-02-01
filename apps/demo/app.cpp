@@ -139,19 +139,16 @@ void guarded_main() {
     .rsc(buf.view())
     .workgrp_count(4, 4, 4)
     .build();
-
-  scoped::Transaction transact = ctxt.create_transact("transact", {
-    cmd_invoke(invoke),
-  });
+  invoke.bake();
 
   scoped::CommandDrain cmd_drain(ctxt);
   cmd_drain.submit({
-    cmd_inline_transact(transact),
+    cmd_invoke(invoke),
   });
   cmd_drain.wait();
 
   cmd_drain.submit({
-    cmd_inline_transact(transact),
+    cmd_invoke(invoke),
   });
   cmd_drain.wait();
 

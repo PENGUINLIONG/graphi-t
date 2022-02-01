@@ -1940,6 +1940,13 @@ void destroy_invoke(Invocation& invoke) {
 
   if (invoke.query_pool != VK_NULL_HANDLE) {
     vkDestroyQueryPool(ctxt.dev, invoke.query_pool, nullptr);
+    log::debug("destroyed timing objects");
+  }
+
+  if (invoke.bake_detail) {
+    const InvocationBakingDetail& bake_detail = *invoke.bake_detail;
+    vkDestroyCommandPool(ctxt.dev, bake_detail.cmd_pool, nullptr);
+    log::debug("destroyed baking artifacts");
   }
 
   invoke = {};
@@ -1954,8 +1961,6 @@ double get_invoke_time_us(const Invocation& invoke) {
   double ns_per_tick = invoke.ctxt->physdev_prop.limits.timestampPeriod;
   return (t[1] - t[0]) * ns_per_tick / 1000.0;
 }
-
-
 
 VkSemaphore _create_sema(const Context& ctxt) {
   VkSemaphoreCreateInfo sci {};
@@ -2040,7 +2045,11 @@ void _push_transact_submit_detail(
   submit_detail.cmdbuf = cmdbuf;
   submit_detail.wait_sema = submit_details.empty() ?
     VK_NULL_HANDLE : submit_details.back().signal_sema;
-  submit_detail.signal_sema = _create_sema(ctxt);
+  if (level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
+    submit_detail.signal_sema = VK_NULL_HANDLE;
+  } else {
+    submit_detail.signal_sema = _create_sema(ctxt);
+  }
 
   submit_details.emplace_back(std::move(submit_detail));
 }
@@ -2417,38 +2426,18 @@ void _transit_rscs(
   }
 }
 
-void _record_cmd_inline_transact(
-  TransactionLike& transact,
-  const Command& cmd
-) {
-  assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY,
-    "nested inline transaction is not allowed");
-  const auto& in = cmd.cmd_inline_transact;
-  const auto& subtransact = *in.transact;
-
-  for (auto i = 0; i < subtransact.submit_details.size(); ++i) {
-    const auto& submit_detail = subtransact.submit_details[i];
-    auto cmdbuf = _get_cmdbuf(transact, submit_detail.submit_ty);
-
-    vkCmdExecuteCommands(cmdbuf, 1, &submit_detail.cmdbuf);
-  }
-
-  log::debug("scheduled inline transaction '",
-    cmd.cmd_inline_transact.transact->label, "'");
-}
-
 void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
   const auto& in = cmd.cmd_invoke;
   const auto& invoke = *in.invoke;
 
-  // FIXME: (penguinliong) Actually it should be the subinvocations not allowed
-  // to be baked.
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
-    assert(invoke.query_pool == VK_NULL_HANDLE,
-      "timed invocation cannot be baked");
-  }
-
   VkCommandBuffer cmdbuf = _get_cmdbuf(transact, invoke.submit_ty);
+
+  // If the invocation has been baked, simply inline the baked secondary command
+  // buffer.
+  if (invoke.bake_detail) {
+    vkCmdExecuteCommands(cmdbuf, 1, &invoke.bake_detail->cmdbuf);
+    return;
+  }
 
   if (invoke.query_pool != VK_NULL_HANDLE) {
     vkCmdResetQueryPool(cmdbuf, invoke.query_pool, 0, 2);
@@ -2522,8 +2511,9 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
   } else if (invoke.pass_detail) {
     const InvocationRenderPassDetail& pass_detail = *invoke.pass_detail;
     const RenderPass& pass = *pass_detail.pass;
+    const std::vector<const Invocation*>& subinvokes = pass_detail.subinvokes;
 
-    VkSubpassContents sc = pass_detail.is_baked ?
+    VkSubpassContents sc = subinvokes.size() > 0 && subinvokes[0]->bake_detail ?
       VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS :
       VK_SUBPASS_CONTENTS_INLINE;
 
@@ -2539,6 +2529,9 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
 
     for (size_t i = 0; i < pass_detail.subinvokes.size(); ++i) {
       if (i > 0) {
+        sc = subinvokes[i]->bake_detail ?
+          VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS :
+          VK_SUBPASS_CONTENTS_INLINE;
         vkCmdNextSubpass(cmdbuf, sc);
         log::debug("render pass invocation '", invoke.label, "' switched to a "
           "next subpass");
@@ -2580,9 +2573,6 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
 // Returns whether the submit queue to submit has changed.
 void _record_cmd(TransactionLike& transact, const Command& cmd) {
   switch (cmd.cmd_ty) {
-  case L_COMMAND_TYPE_INLINE_TRANSACTION:
-    _record_cmd_inline_transact(transact, cmd);
-    break;
   case L_COMMAND_TYPE_INVOKE:
     _record_cmd_invoke(transact, cmd);
     break;
@@ -2668,39 +2658,46 @@ void wait_cmd_drain(CommandDrain& cmd_drain) {
 
 
 
-Transaction create_transact(
-  const std::string& label,
-  const Context& ctxt,
-  const Command* cmds,
-  size_t ncmd
-) {
-  TransactionLike transact {};
-  transact.ctxt = &ctxt;
-  transact.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
-  for (auto i = 0; i < ncmd; ++i) {
-    _record_cmd(transact, cmds[i]);
+bool _can_bake_invoke(const Invocation& invoke) {
+  // Render pass is never baked, enforced by Vulkan specification.
+  if (invoke.pass_detail != nullptr) { return false; }
+
+  if (invoke.composite_detail != nullptr) {
+    uint32_t submit_ty = ~uint32_t(0);
+    for (const Invocation* subinvoke : invoke.composite_detail->subinvokes) {
+      // If a subinvocation cannot be baked, this invocation too cannot.
+      if (!_can_bake_invoke(*subinvoke)) { return false; }
+      submit_ty &= subinvoke->submit_ty;
+    }
+    // Multiple subinvocations but their submit types mismatch.
+    if (submit_ty == 0) { return 0; }
   }
+
+  return true;
+}
+void bake_invoke(Invocation& invoke) {
+  if (!_can_bake_invoke(invoke)) { return; }
+
+  TransactionLike transact {};
+  transact.ctxt = invoke.ctxt;
+  transact.level = VK_COMMAND_BUFFER_LEVEL_SECONDARY;
+  _record_cmd_invoke(transact, cmd_invoke(invoke));
   _end_cmdbuf(transact.submit_details.back());
 
-  log::debug("created transaction");
-  return Transaction { label, &ctxt, std::move(transact.submit_details) };
+  assert(transact.submit_details.size() == 1);
+  const TransactionSubmitDetail& submit_detail = transact.submit_details[0];
+  assert(submit_detail.submit_ty == invoke.submit_ty);
+  assert(submit_detail.signal_sema == VK_NULL_HANDLE);
+
+  InvocationBakingDetail bake_detail {};
+  bake_detail.cmd_pool = submit_detail.cmd_pool;
+  bake_detail.cmdbuf = submit_detail.cmdbuf;
+
+  invoke.bake_detail =
+    std::make_unique<InvocationBakingDetail>(std::move(bake_detail));
+
+  log::debug("baked invocation '", invoke.label, "'");
 }
-void destroy_transact(Transaction& transact) {
-  _clear_transact_submit_detail(*transact.ctxt, transact.submit_details);
-  transact = {};
-  log::debug("destroyed transaction");
-}
-
-
-
-namespace ext {
-
-std::vector<uint8_t> load_code(const std::string& prefix) {
-  auto path = prefix + ".comp.spv";
-  return util::load_file(path.c_str());
-}
-
-} // namespace ext
 
 } // namespace HAL_IMPL_NAMESPACE
 

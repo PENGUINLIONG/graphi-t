@@ -17,7 +17,6 @@ struct Image;
 struct RenderPass;
 struct Task;
 struct ResourcePool;
-struct Transaction;
 struct CommandDrain;
 
 
@@ -58,40 +57,6 @@ struct CommandDrain {
 
 
 
-struct Transaction {
-  std::unique_ptr<HAL_IMPL_NAMESPACE::Transaction> inner;
-
-  Transaction() = default;
-  Transaction(
-    const Context& ctxt,
-    const std::string& label,
-    const Command* cmds, size_t ncmd);
-  Transaction(HAL_IMPL_NAMESPACE::Transaction&& inner);
-  Transaction(Transaction&&) = default;
-  Transaction(
-    const Context& ctxt,
-    const std::string& label,
-    const std::vector<Command>& cmds);
-  template<size_t N>
-  Transaction(
-    const Context& ctxt,
-    const std::string& label,
-    const std::array<Command, N>& cmds
-  ) : Transaction(ctxt, cmds.data(), N) {}
-  ~Transaction();
-
-  Transaction& operator=(Transaction&&) = default;
-
-  inline operator HAL_IMPL_NAMESPACE::Transaction& () {
-    return *inner;
-  }
-  inline operator const HAL_IMPL_NAMESPACE::Transaction& () const {
-    return *inner;
-  }
-};
-
-
-
 struct Invocation {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Invocation> inner;
 
@@ -111,6 +76,9 @@ struct Invocation {
 
   inline double get_time_us() const {
     return get_invoke_time_us(*this);
+  }
+  inline void bake() {
+    bake_invoke(*this);
   }
 };
 struct TransferInvocationBuilder {
@@ -962,11 +930,6 @@ public:
   ) const;
   CompositeInvocationBuilder build_composite_invoke(
     const std::string& label = ""
-  ) const;
-
-  Transaction create_transact(
-    const std::string& label,
-    const std::vector<Command>& cmds
   ) const;
 
   CommandDrain create_cmd_drain() const;
