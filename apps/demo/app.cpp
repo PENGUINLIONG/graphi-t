@@ -141,16 +141,8 @@ void guarded_main() {
     .build();
   invoke.bake();
 
-  scoped::CommandDrain cmd_drain(ctxt);
-  cmd_drain.submit({
-    cmd_invoke(invoke),
-  });
-  cmd_drain.wait();
-
-  cmd_drain.submit({
-    cmd_invoke(invoke),
-  });
-  cmd_drain.wait();
+  invoke.submit().wait();
+  invoke.submit().wait();
 
   std::vector<float> dbuf;
   dbuf.resize(16);
@@ -325,14 +317,7 @@ void guarded_main2() {
     .invoke(write_back)
     .build();
 
-
-  std::vector<Command> cmds {
-    cmd_invoke(proc),
-  };
-
-  scoped::CommandDrain cmd_drain = ctxt.create_cmd_drain();
-  cmd_drain.submit(cmds);
-  cmd_drain.wait();
+  proc.submit().wait();
 
   liong::log::warn("drawing took ", main_pass.get_time_us(), "us");
 

@@ -17,41 +17,32 @@ struct Image;
 struct RenderPass;
 struct Task;
 struct ResourcePool;
-struct CommandDrain;
+struct Transaction;
 
 
 
-struct CommandDrain {
-  std::unique_ptr<HAL_IMPL_NAMESPACE::CommandDrain> inner;
+struct Transaction {
+  std::unique_ptr<HAL_IMPL_NAMESPACE::Transaction> inner;
 
-  CommandDrain() = default;
-  CommandDrain(const Context& ctxt);
-  CommandDrain(HAL_IMPL_NAMESPACE::CommandDrain&& inner);
-  CommandDrain(CommandDrain&&) = default;
-  ~CommandDrain();
+  Transaction() = default;
+  Transaction(HAL_IMPL_NAMESPACE::Transaction&& inner);
+  Transaction(Transaction&&) = default;
+  ~Transaction();
 
-  CommandDrain& operator=(CommandDrain&&) = default;
+  Transaction& operator=(Transaction&&) = default;
 
-  inline operator HAL_IMPL_NAMESPACE::CommandDrain& () {
+  inline operator HAL_IMPL_NAMESPACE::Transaction& () {
     return *inner;
   }
-  inline operator const HAL_IMPL_NAMESPACE::CommandDrain& () const {
+  inline operator const HAL_IMPL_NAMESPACE::Transaction& () const {
     return *inner;
   }
 
-  inline void submit(const Command* cmds, size_t ncmd) {
-    submit_cmds(*inner, cmds, ncmd);
+  inline bool is_done() const {
+    return is_transact_done(*this);
   }
-  inline void submit(const std::vector<Command>& cmds) {
-    submit(cmds.data(), cmds.size());
-  }
-  template<size_t N>
-  inline void submit(const std::array<Command, N>& cmds) {
-    submit(cmds.data(), N);
-  }
-
   inline void wait() {
-    wait_cmd_drain(*inner);
+    wait_transact(*this);
   }
 };
 
@@ -80,6 +71,8 @@ struct Invocation {
   inline void bake() {
     bake_invoke(*this);
   }
+
+  Transaction submit();
 };
 struct TransferInvocationBuilder {
   using Self = TransferInvocationBuilder;
@@ -931,8 +924,6 @@ public:
   CompositeInvocationBuilder build_composite_invoke(
     const std::string& label = ""
   ) const;
-
-  CommandDrain create_cmd_drain() const;
 };
 
 } // namespace scoped

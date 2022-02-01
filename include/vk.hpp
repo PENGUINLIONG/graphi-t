@@ -253,26 +253,17 @@ struct Invocation {
   std::unique_ptr<InvocationBakingDetail> bake_detail;
 };
 
-struct TransactionRenderPassDetail {
-  VkRenderPass pass;
-  VkFramebuffer framebuf;
-  VkExtent2D render_area;
-  VkClearValue clear_value;
-};
+
+
 struct TransactionSubmitDetail {
-  const Context* ctxt;
   SubmitType submit_ty;
   VkCommandPool cmd_pool;
   VkCommandBuffer cmdbuf;
   VkSemaphore wait_sema;
   VkSemaphore signal_sema;
-  // If the `pass` member is not null, then there should be only one submit
-  // detail in `submit_details` containing all the rendering command in the
-  // render pass.
-  TransactionRenderPassDetail pass_detail;
 };
-struct CommandDrain {
-  const Context* ctxt;
+struct Transaction {
+  const Invocation* invoke;
   std::vector<TransactionSubmitDetail> submit_details;
   VkFence fence;
 };

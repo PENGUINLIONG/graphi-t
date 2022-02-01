@@ -129,12 +129,6 @@ MappedImage::~MappedImage() {
 
 
 
-CommandDrain Context::create_cmd_drain() const {
-  return HAL_IMPL_NAMESPACE::create_cmd_drain(*inner);
-}
-
-
-
 Buffer::Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::Buffer>(
     std::forward<HAL_IMPL_NAMESPACE::Buffer>(inner))),
@@ -223,6 +217,7 @@ GraphicsInvocationBuilder Task::build_graph_invoke(
 }
 
 
+
 Invocation::Invocation(HAL_IMPL_NAMESPACE::Invocation&& inner) :
   inner(std::make_unique<HAL_IMPL_NAMESPACE::Invocation>(
     std::forward<HAL_IMPL_NAMESPACE::Invocation>(inner))) {}
@@ -246,18 +241,17 @@ Invocation RenderPassInvocationBuilder::build() {
 Invocation CompositeInvocationBuilder::build() {
   return create_composite_invoke(parent, inner);
 }
+Transaction Invocation::submit() {
+  return create_transact(*inner);
+}
 
 
-
-CommandDrain::CommandDrain(const Context& ctxt) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::CommandDrain>(
-    create_cmd_drain(*ctxt.inner))) {}
-CommandDrain::CommandDrain(HAL_IMPL_NAMESPACE::CommandDrain&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::CommandDrain>(
-    std::forward<HAL_IMPL_NAMESPACE::CommandDrain>(inner))) {}
-CommandDrain::~CommandDrain() {
+Transaction::Transaction(HAL_IMPL_NAMESPACE::Transaction&& inner) :
+  inner(std::make_unique<HAL_IMPL_NAMESPACE::Transaction>(
+    std::forward<HAL_IMPL_NAMESPACE::Transaction>(inner))) {}
+Transaction::~Transaction() {
   if (inner != nullptr) {
-    destroy_cmd_drain(*inner);
+    destroy_transact(*inner);
   }
 }
 

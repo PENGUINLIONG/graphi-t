@@ -1970,14 +1970,6 @@ VkSemaphore _create_sema(const Context& ctxt) {
   VK_ASSERT << vkCreateSemaphore(ctxt.dev, &sci, nullptr, &sema);
   return sema;
 }
-VkFence _create_fence(const Context& ctxt) {
-  VkFenceCreateInfo fci {};
-  fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-
-  VkFence fence;
-  VK_ASSERT << vkCreateFence(ctxt.dev, &fci, nullptr, &fence);
-  return fence;
-}
 
 VkCommandPool _create_cmd_pool(const Context& ctxt, SubmitType submit_ty) {
   VkCommandPoolCreateInfo cpci {};
@@ -2052,16 +2044,6 @@ void _push_transact_submit_detail(
   }
 
   submit_details.emplace_back(std::move(submit_detail));
-}
-void _clear_transact_submit_detail(
-  const Context& ctxt,
-  std::vector<TransactionSubmitDetail>& submit_details
-) {
-  for (auto& submit_detail : submit_details) {
-    vkDestroySemaphore(ctxt.dev, submit_detail.signal_sema, nullptr);
-    vkDestroyCommandPool(ctxt.dev, submit_detail.cmd_pool, nullptr);
-  }
-  submit_details.clear();
 }
 void _submit_transact_submit_detail(
   const Context& ctxt,
@@ -2570,92 +2552,6 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
   log::debug("scheduled invocation '", invoke.label, "' for execution");
 }
 
-// Returns whether the submit queue to submit has changed.
-void _record_cmd(TransactionLike& transact, const Command& cmd) {
-  switch (cmd.cmd_ty) {
-  case L_COMMAND_TYPE_INVOKE:
-    _record_cmd_invoke(transact, cmd);
-    break;
-  default:
-    log::warn("ignored unknown command: ", cmd.cmd_ty);
-    break;
-  }
-}
-
-
-
-CommandDrain create_cmd_drain(const Context& ctxt) {
-  auto fence = _create_fence(ctxt);
-  log::debug("created command drain");
-  return CommandDrain { &ctxt, {}, fence };
-}
-void destroy_cmd_drain(CommandDrain& cmd_drain) {
-  if (cmd_drain.fence != VK_NULL_HANDLE) {
-    _clear_transact_submit_detail(*cmd_drain.ctxt, cmd_drain.submit_details);
-    vkDestroyFence(cmd_drain.ctxt->dev, cmd_drain.fence, nullptr);
-    cmd_drain = {};
-    log::debug("destroyed command drain");
-  }
-}
-void submit_cmds(
-  CommandDrain& cmd_drain,
-  const Command* cmds,
-  size_t ncmd
-) {
-  assert(ncmd > 0, "cannot submit empty command buffer");
-
-  TransactionLike transact {};
-  transact.ctxt = cmd_drain.ctxt;
-  transact.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-
-  util::Timer timer {};
-  timer.tic();
-  for (auto i = 0; i < ncmd; ++i) {
-    _record_cmd(transact, cmds[i]);
-  }
-  cmd_drain.submit_details = std::move(transact.submit_details);
-  timer.toc();
-
-  _end_cmdbuf(cmd_drain.submit_details.back());
-  _submit_transact_submit_detail(*cmd_drain.ctxt,
-    cmd_drain.submit_details.back(), cmd_drain.fence);
-
-  log::debug("submitted transaction for execution, command recording took ",
-    timer.us(), "us");
-}
-void _reset_cmd_drain(CommandDrain& cmd_drain) {
-  _clear_transact_submit_detail(*cmd_drain.ctxt, cmd_drain.submit_details);
-  VK_ASSERT << vkResetFences(cmd_drain.ctxt->dev, 1, &cmd_drain.fence);
-}
-void wait_cmd_drain(CommandDrain& cmd_drain) {
-  const uint32_t SPIN_INTERVAL = 3000;
-
-  util::Timer wait_timer {};
-  wait_timer.tic();
-  for (VkResult err;;) {
-    err = vkWaitForFences(cmd_drain.ctxt->dev, 1, &cmd_drain.fence, VK_TRUE,
-        SPIN_INTERVAL);
-    if (err == VK_TIMEOUT) {
-      // log::warn("timeout after 3000ns");
-    } else {
-      VK_ASSERT << err;
-      break;
-    }
-  }
-  wait_timer.toc();
-
-  util::Timer reset_timer {};
-  reset_timer.tic();
-
-  _reset_cmd_drain(cmd_drain);
-
-  reset_timer.toc();
-
-  log::debug("command drain returned after ", wait_timer.us(), "us since the "
-    "wait started (spin interval = ", SPIN_INTERVAL / 1000.0, "us; resource "
-    "recycling took ", reset_timer.us(), "us)");
-}
-
 
 
 bool _can_bake_invoke(const Invocation& invoke) {
@@ -2697,6 +2593,88 @@ void bake_invoke(Invocation& invoke) {
     std::make_unique<InvocationBakingDetail>(std::move(bake_detail));
 
   log::debug("baked invocation '", invoke.label, "'");
+}
+
+
+
+VkFence _create_fence(const Context& ctxt) {
+  VkFenceCreateInfo fci {};
+  fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+
+  VkFence fence;
+  VK_ASSERT << vkCreateFence(ctxt.dev, &fci, nullptr, &fence);
+  return fence;
+}
+Transaction create_transact(const Invocation& invoke) {
+  const Context& ctxt = *invoke.ctxt;
+
+  TransactionLike transact {};
+  transact.ctxt = invoke.ctxt;
+  transact.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+  util::Timer timer {};
+  timer.tic();
+  _record_cmd_invoke(transact, cmd_invoke(invoke));
+  _end_cmdbuf(transact.submit_details.back());
+  timer.toc();
+
+  Transaction out {};
+  out.invoke = &invoke;
+  out.submit_details = std::move(transact.submit_details);
+  out.fence = _create_fence(ctxt);
+
+  _submit_transact_submit_detail(ctxt, out.submit_details.back(), out.fence);
+
+  log::debug("created and submitted transaction for execution, command "
+    "recording took ", timer.us(), "us");
+  return out;
+}
+void destroy_transact(Transaction& transact) {
+  const Context& ctxt = *transact.invoke->ctxt;
+  if (transact.fence != VK_NULL_HANDLE) {
+    for (auto& submit_detail : transact.submit_details) {
+      if (submit_detail.signal_sema != VK_NULL_HANDLE) {
+        vkDestroySemaphore(ctxt.dev, submit_detail.signal_sema, nullptr);
+      }
+      if (submit_detail.cmd_pool != VK_NULL_HANDLE) {
+        vkDestroyCommandPool(ctxt.dev, submit_detail.cmd_pool, nullptr);
+      }
+    }
+    vkDestroyFence(ctxt.dev, transact.fence, nullptr);
+    log::debug("destroyed transaction");
+  }
+  transact = {};
+}
+bool is_transact_done(const Transaction& transact) {
+  const Context& ctxt = *transact.invoke->ctxt;
+  VkResult err = vkGetFenceStatus(ctxt.dev, transact.fence);
+  if (err == VK_NOT_READY) {
+    return false;
+  } else {
+    VK_ASSERT << err;
+    return true;
+  }
+}
+void wait_transact(const Transaction& transact) {
+  const uint32_t SPIN_INTERVAL = 3000;
+
+  const Context& ctxt = *transact.invoke->ctxt;
+
+  util::Timer wait_timer {};
+  wait_timer.tic();
+  for (VkResult err;;) {
+    err = vkWaitForFences(ctxt.dev, 1, &transact.fence, VK_TRUE,
+        SPIN_INTERVAL);
+    if (err == VK_TIMEOUT) {
+      // log::warn("timeout after 3000ns");
+    } else {
+      VK_ASSERT << err;
+      break;
+    }
+  }
+  wait_timer.toc();
+
+  log::debug("command drain returned after ", wait_timer.us(), "us since the "
+    "wait started (spin interval = ", SPIN_INTERVAL / 1000.0, "us");
 }
 
 } // namespace HAL_IMPL_NAMESPACE

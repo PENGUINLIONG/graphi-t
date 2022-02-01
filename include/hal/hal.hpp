@@ -483,19 +483,17 @@ L_IMPL_FN double get_invoke_time_us(const Invocation& invoke);
 // device-side procedures.
 L_IMPL_FN void bake_invoke(Invocation& invoke);
 
-/*
-struct TransactionConfig {
-  std::string label;
-  // Invocation to be realized on device.
-  const Invocation* invoke;
-};
+
+
 L_IMPL_STRUCT struct Transaction;
-// Submit the invocation to device for execution.
-L_IMPL_FN Transaction create_transact(const Context& ctxt);
+// Create a device transactiona and submit `invoke` to device for execution.
+L_IMPL_FN Transaction create_transact(const Invocation& invoke);
+L_IMPL_FN void destroy_transact(Transaction& transact);
+// Check whether the transaction is finished. `true` is returned if so.
+L_IMPL_FN bool is_transact_done(const Transaction& transact);
 // Wait the invocation submitted to device for execution. Returns immediately if
-// the invocation is not submitted.
-L_IMPL_FN void wait_transact(Transaction& transact);
-*/
+// the invocation has already been waited.
+L_IMPL_FN void wait_transact(const Transaction& transact);
 
 
 
@@ -523,20 +521,6 @@ inline Command cmd_invoke(const Invocation& invoke) {
   cmd.cmd_invoke.invoke = &invoke;
   return cmd;
 }
-
-
-L_IMPL_STRUCT struct CommandDrain;
-L_IMPL_FN CommandDrain create_cmd_drain(const Context& ctxt);
-L_IMPL_FN void destroy_cmd_drain(CommandDrain& cmd_drain);
-// Submit commands and inlined transactions to the device for execution.
-L_IMPL_FN void submit_cmds(
-  CommandDrain& cmd_drain,
-  const Command* cmds,
-  size_t ncmd
-);
-// Wait until the command drain consumed all the commands and finished
-// execution.
-L_IMPL_FN void wait_cmd_drain(CommandDrain& cmd_drain);
 
 } // namespace HAL_IMPL_NAMESPACE
 
