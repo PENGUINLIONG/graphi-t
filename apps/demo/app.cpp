@@ -141,19 +141,16 @@ void guarded_main() {
     .build();
 
   scoped::Transaction transact = ctxt.create_transact("transact", {
-    cmd_set_submit_ty(L_SUBMIT_TYPE_COMPUTE),
     cmd_invoke(invoke),
   });
 
   scoped::CommandDrain cmd_drain(ctxt);
   cmd_drain.submit({
-    cmd_set_submit_ty(L_SUBMIT_TYPE_COMPUTE),
     cmd_inline_transact(transact),
   });
   cmd_drain.wait();
 
   cmd_drain.submit({
-    cmd_set_submit_ty(L_SUBMIT_TYPE_COMPUTE),
     cmd_inline_transact(transact),
   });
   cmd_drain.wait();
@@ -333,7 +330,6 @@ void guarded_main2() {
 
 
   std::vector<Command> cmds {
-    cmd_set_submit_ty(L_SUBMIT_TYPE_GRAPHICS),
     cmd_invoke(proc),
   };
 

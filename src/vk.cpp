@@ -2417,16 +2417,6 @@ void _transit_rscs(
   }
 }
 
-void _record_cmd_set_submit_ty(
-  TransactionLike& transact,
-  const Command& cmd
-) {
-  SubmitType submit_ty = cmd.cmd_set_submit_ty.submit_ty;
-  _get_cmdbuf(transact, submit_ty);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("command drain submit type is set");
-  }
-}
 void _record_cmd_inline_transact(
   TransactionLike& transact,
   const Command& cmd
@@ -2590,9 +2580,6 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
 // Returns whether the submit queue to submit has changed.
 void _record_cmd(TransactionLike& transact, const Command& cmd) {
   switch (cmd.cmd_ty) {
-  case L_COMMAND_TYPE_SET_SUBMIT_TYPE:
-    _record_cmd_set_submit_ty(transact, cmd);
-    break;
   case L_COMMAND_TYPE_INLINE_TRANSACTION:
     _record_cmd_inline_transact(transact, cmd);
     break;

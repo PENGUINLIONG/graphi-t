@@ -515,7 +515,6 @@ L_IMPL_FN void destroy_transact(Transaction& transact);
 
 
 enum CommandType {
-  L_COMMAND_TYPE_SET_SUBMIT_TYPE,
   L_COMMAND_TYPE_INLINE_TRANSACTION,
   L_COMMAND_TYPE_INVOKE,
 };
@@ -527,9 +526,6 @@ enum SubmitType {
 struct Command {
   CommandType cmd_ty;
   union {
-    struct {
-      SubmitType submit_ty;
-    } cmd_set_submit_ty;
     struct {
       const Transaction* transact;
     } cmd_inline_transact;
@@ -553,14 +549,6 @@ inline Command cmd_invoke(const Invocation& invoke) {
   cmd.cmd_invoke.invoke = &invoke;
   return cmd;
 }
-
-inline Command cmd_set_submit_ty(SubmitType submit_ty) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_SET_SUBMIT_TYPE;
-  cmd.cmd_set_submit_ty.submit_ty = submit_ty;
-  return cmd;
-}
-
 
 
 L_IMPL_STRUCT struct CommandDrain;
