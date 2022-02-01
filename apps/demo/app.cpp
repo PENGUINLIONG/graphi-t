@@ -1,6 +1,5 @@
 #include "log.hpp"
 #include "vk.hpp"
-#include "hal/hal-timer.hpp"
 #include "glslang.hpp"
 
 using namespace liong;
@@ -273,7 +272,6 @@ void guarded_main2() {
     idxs.map_write().write(data);
   }
 
-  ext::DeviceTimer dev_timer(ctxt);
   scoped::DepthImage zbuf = ctxt.build_depth_img("zbuf")
     .width(4)
     .height(4)
@@ -314,6 +312,7 @@ void guarded_main2() {
     .attm(out_img.view())
     .attm(zbuf.view())
     .invoke(draw_call)
+    .is_timed()
     .build();
 
   scoped::Buffer out_buf = ctxt.build_buf("out_buf")
@@ -325,9 +324,7 @@ void guarded_main2() {
 
   std::vector<Command> cmds {
     cmd_set_submit_ty(L_SUBMIT_TYPE_GRAPHICS),
-    dev_timer.cmd_tic(),
     cmd_invoke(main_pass),
-    dev_timer.cmd_toc(),
     cmd_copy_img2buf(out_img.view(), out_buf.view()),
   };
 
@@ -335,7 +332,7 @@ void guarded_main2() {
   cmd_drain.submit(cmds);
   cmd_drain.wait();
 
-  liong::log::warn("drawing took ", dev_timer.us(), "us");
+  liong::log::warn("drawing took ", main_pass.get_time_us(), "us");
 
   {
     scoped::MappedBuffer mapped = out_buf.map(L_MEMORY_ACCESS_READ_BIT);

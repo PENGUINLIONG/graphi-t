@@ -1550,6 +1550,27 @@ VkFramebuffer _create_framebuf(
 
   return framebuf;
 }
+VkQueryPool _create_query_pool(
+  const Context& ctxt,
+  VkQueryType query_ty,
+  uint32_t nquery
+) {
+  VkQueryPoolCreateInfo qpci {};
+  qpci.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+  qpci.queryType = query_ty;
+  qpci.queryCount = nquery;
+
+  VkQueryPool query_pool;
+  VK_ASSERT << vkCreateQueryPool(ctxt.dev, &qpci, nullptr, &query_pool);
+
+  return query_pool;
+}
+void _destroy_query_pool(
+  const Context& ctxt,
+  VkQueryPool query_pool
+) {
+  vkDestroyQueryPool(ctxt.dev, query_pool, nullptr);
+}
 void _collect_task_invoke_transit(
   const std::vector<ResourceView> rsc_views,
   const std::vector<ResourceType> rsc_tys,
@@ -1619,6 +1640,13 @@ void _merge_subinvoke_transits(
     }
   }
 }
+void _merge_subinvoke_transits(
+  const Invocation* subinvoke,
+  InvocationTransitionDetail& transit_detail
+) {
+  std::vector<const Invocation*> subinvokes { subinvoke };
+  _merge_subinvoke_transits(subinvokes, transit_detail);
+}
 Invocation create_comp_invoke(
   const Task& task,
   const ComputeInvocationConfig& cfg
@@ -1629,7 +1657,10 @@ Invocation create_comp_invoke(
 
   Invocation out {};
   out.label = cfg.label;
+  out.ctxt = &ctxt;
   out.submit_ty = L_SUBMIT_TYPE_COMPUTE;
+  out.query_pool = cfg.is_timed ?
+    _create_query_pool(ctxt, VK_QUERY_TYPE_TIMESTAMP, 2) : VK_NULL_HANDLE;
 
   InvocationTransitionDetail transit_detail {};
   _collect_task_invoke_transit(cfg.rsc_views, task.rsc_tys, transit_detail);
@@ -1662,8 +1693,11 @@ Invocation create_graph_invoke(
 
   Invocation out {};
   out.label = cfg.label;
+  out.ctxt = &ctxt;
   out.submit_ty = L_SUBMIT_TYPE_GRAPHICS;
-  
+  out.query_pool = cfg.is_timed ?
+    _create_query_pool(ctxt, VK_QUERY_TYPE_TIMESTAMP, 2) : VK_NULL_HANDLE;
+
   InvocationTransitionDetail transit_detail {};
   _collect_task_invoke_transit(cfg.rsc_views, task.rsc_tys, transit_detail);
   for (size_t i = 0; i < cfg.vert_bufs.size(); ++i) {
@@ -1715,7 +1749,10 @@ Invocation create_pass_invoke(
 
   Invocation out {};
   out.label = cfg.label;
+  out.ctxt = &ctxt;
   out.submit_ty = L_SUBMIT_TYPE_GRAPHICS;
+  out.query_pool = cfg.is_timed ?
+    _create_query_pool(ctxt, VK_QUERY_TYPE_TIMESTAMP, 2) : VK_NULL_HANDLE;
 
   InvocationTransitionDetail transit_detail {};
   for (size_t i = 0; i < cfg.attms.size(); ++i) {
@@ -1748,26 +1785,37 @@ Invocation create_pass_invoke(
   log::debug("created render pass invocation");
   return out;
 }
-void _destroy_comp_invoke(InvocationComputeDetail& comp_detail) {
-  const Context& ctxt = *comp_detail.task->ctxt;
-  vkDestroyDescriptorPool(ctxt.dev, comp_detail.desc_pool, nullptr);
-  log::debug("destroyed compute invocation");
-}
-void _destroy_graph_invoke(InvocationGraphicsDetail& graph_detail) {
-  const Context& ctxt = *graph_detail.task->ctxt;
-  vkDestroyDescriptorPool(ctxt.dev, graph_detail.desc_pool, nullptr);
-  log::debug("destroyed graphics invocation");
-}
-void _destroy_pass_invoke(InvocationRenderPassDetail& pass_detail) {
-  const Context& ctxt = *pass_detail.pass->ctxt;
-  vkDestroyFramebuffer(ctxt.dev, pass_detail.framebuf, nullptr);
-  log::debug("destroyed render pass invocation");
-}
 void destroy_invoke(Invocation& invoke) {
-  if (invoke.comp_detail) { _destroy_comp_invoke(*invoke.comp_detail); }
-  if (invoke.graph_detail) { _destroy_graph_invoke(*invoke.graph_detail); }
-  if (invoke.pass_detail) { _destroy_pass_invoke(*invoke.pass_detail); }
+  const Context& ctxt = *invoke.ctxt;
+  if (invoke.comp_detail) {
+    const InvocationComputeDetail& comp_detail = *invoke.comp_detail;
+    vkDestroyDescriptorPool(ctxt.dev, comp_detail.desc_pool, nullptr);
+    log::debug("destroyed compute invocation");
+  }
+  if (invoke.graph_detail) {
+    const InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
+    vkDestroyDescriptorPool(ctxt.dev, graph_detail.desc_pool, nullptr);
+    log::debug("destroyed graphics invocation");
+  }
+  if (invoke.pass_detail) {
+    const InvocationRenderPassDetail& pass_detail = *invoke.pass_detail;
+    vkDestroyFramebuffer(ctxt.dev, pass_detail.framebuf, nullptr);
+    log::debug("destroyed render pass invocation");
+  }
+  if (invoke.query_pool != VK_NULL_HANDLE) {
+    vkDestroyQueryPool(ctxt.dev, invoke.query_pool, nullptr);
+  }
   invoke = {};
+}
+
+double get_invoke_time_us(const Invocation& invoke) {
+  if (invoke.query_pool == VK_NULL_HANDLE) { return 0.0; }
+  uint64_t t[2];
+  VK_ASSERT << vkGetQueryPoolResults(invoke.ctxt->dev, invoke.query_pool,
+    0, 2, sizeof(uint64_t) * 2, &t, sizeof(uint64_t),
+    VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT); // Wait till ready.
+  double ns_per_tick = invoke.ctxt->physdev_prop.limits.timestampPeriod;
+  return (t[1] - t[0]) * ns_per_tick / 1000.0;
 }
 
 
@@ -2358,6 +2406,16 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
 
   VkCommandBuffer cmdbuf = _get_cmdbuf(transact, invoke.submit_ty);
 
+  if (invoke.query_pool != VK_NULL_HANDLE) {
+    vkCmdResetQueryPool(cmdbuf, invoke.query_pool, 0, 2);
+    vkCmdWriteTimestamp(cmdbuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+      invoke.query_pool, 0);
+
+    if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+      log::debug("invocation '", invoke.label, "' will be timed");
+    }
+  }
+
   // Transition all referenced resources.
   for (auto& pair : invoke.transit_detail.buf_transit) {
     _transit_rsc(transact, pair.first, pair.second);
@@ -2368,7 +2426,6 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
   for (auto& pair : invoke.transit_detail.depth_img_transit) {
     _transit_rsc(transact, pair.first, pair.second);
   }
-
 
   if (invoke.comp_detail) {
     const InvocationComputeDetail& comp_detail = *invoke.comp_detail;
@@ -2440,24 +2497,13 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
 
   }
 
+  if (invoke.query_pool != VK_NULL_HANDLE) {
+    vkCmdWriteTimestamp(cmdbuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+      invoke.query_pool, 1);
+  }
+
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
     log::debug("scheduled invocation '", invoke.label, "' for execution");
-  }
-}
-
-void _record_cmd_write_timestamp(
-  TransactionLike& transact,
-  const Command& cmd
-) {
-  const auto& in = cmd.cmd_write_timestamp;
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
-
-  auto query_pool = in.timestamp->query_pool;
-  vkCmdResetQueryPool(cmdbuf, query_pool, 0, 1);
-  vkCmdWriteTimestamp(cmdbuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT, query_pool, 0);
-
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled timestamp write");
   }
 }
 
@@ -2484,9 +2530,6 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
     break;
   case L_COMMAND_TYPE_INVOKE:
     _record_cmd_invoke(transact, cmd);
-    break;
-  case L_COMMAND_TYPE_WRITE_TIMESTAMP:
-    _record_cmd_write_timestamp(transact, cmd);
     break;
   default:
     log::warn("ignored unknown command: ", cmd.cmd_ty);
@@ -2591,36 +2634,6 @@ void destroy_transact(Transaction& transact) {
   _clear_transact_submit_detail(*transact.ctxt, transact.submit_details);
   transact = {};
   log::debug("destroyed transaction");
-}
-
-
-
-Timestamp create_timestamp(const Context& ctxt) {
-  VkQueryPoolCreateInfo qpci {};
-  qpci.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
-  qpci.queryCount = 1;
-  qpci.queryType = VK_QUERY_TYPE_TIMESTAMP;
-
-  VkQueryPool query_pool;
-  VK_ASSERT << vkCreateQueryPool(ctxt.dev, &qpci, nullptr, &query_pool);
-
-  log::debug("created timestamp");
-  return Timestamp { &ctxt, query_pool };
-}
-void destroy_timestamp(Timestamp& timestamp) {
-  if (timestamp.query_pool != VK_NULL_HANDLE) {
-    vkDestroyQueryPool(timestamp.ctxt->dev, timestamp.query_pool, nullptr);
-    timestamp = {};
-    log::debug("destroyed timestamp");
-  }
-}
-double get_timestamp_result_us(const Timestamp& timestamp) {
-  uint64_t t;
-  VK_ASSERT << vkGetQueryPoolResults(timestamp.ctxt->dev, timestamp.query_pool,
-    0, 1, sizeof(uint64_t), &t, sizeof(uint64_t),
-    VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT); // Wait till ready.
-  double ns_per_tick = timestamp.ctxt->physdev_prop.limits.timestampPeriod;
-  return t * ns_per_tick / 1000.0;
 }
 
 

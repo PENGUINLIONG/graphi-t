@@ -58,31 +58,6 @@ struct CommandDrain {
 
 
 
-struct Timestamp {
-  std::unique_ptr<HAL_IMPL_NAMESPACE::Timestamp> inner;
-
-  Timestamp() = default;
-  Timestamp(const Context& ctxt);
-  Timestamp(HAL_IMPL_NAMESPACE::Timestamp&& inner);
-  Timestamp(Timestamp&&) = default;
-  ~Timestamp();
-
-  Timestamp& operator=(Timestamp&&) = default;
-
-  inline operator HAL_IMPL_NAMESPACE::Timestamp& () {
-    return *inner;
-  }
-  inline operator const HAL_IMPL_NAMESPACE::Timestamp& () const {
-    return *inner;
-  }
-
-  inline double get_result_us() const {
-    return HAL_IMPL_NAMESPACE::get_timestamp_result_us(*inner);
-  }
-};
-
-
-
 struct Transaction {
   std::unique_ptr<HAL_IMPL_NAMESPACE::Transaction> inner;
 
@@ -133,6 +108,10 @@ struct Invocation {
   inline operator const HAL_IMPL_NAMESPACE::Invocation& () const {
     return *inner;
   }
+
+  inline double get_time_us() const {
+    return get_invoke_time_us(*this);
+  }
 };
 struct ComputeInvocationBuilder {
   using Self = ComputeInvocationBuilder;
@@ -158,6 +137,10 @@ struct ComputeInvocationBuilder {
     inner.workgrp_count.x = x;
     inner.workgrp_count.y = y;
     inner.workgrp_count.z = z;
+    return *this;
+  }
+  inline Self& is_timed(bool is_timed = true) {
+    inner.is_timed = is_timed;
     return *this;
   }
 
@@ -210,6 +193,10 @@ struct GraphicsInvocationBuilder {
     inner.nidx = nidx;
     return *this;
   }
+  inline Self& is_timed(bool is_timed = true) {
+    inner.is_timed = is_timed;
+    return *this;
+  }
 
   inline Self& rsc(const BufferView& buf_view) {
     inner.rsc_views.emplace_back(buf_view);
@@ -245,6 +232,10 @@ struct RenderPassInvocationBuilder {
   }
   inline Self& invoke(const Invocation& invoke) {
     inner.invokes.emplace_back(&(const HAL_IMPL_NAMESPACE::Invocation&)invoke);
+    return *this;
+  }
+  inline Self& is_timed(bool is_timed = true) {
+    inner.is_timed = is_timed;
     return *this;
   }
 
@@ -906,8 +897,6 @@ public:
   ) const;
 
   CommandDrain create_cmd_drain() const;
-
-  Timestamp create_timestamp() const;
 };
 
 } // namespace scoped

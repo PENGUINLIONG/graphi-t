@@ -205,11 +205,13 @@ struct InvocationRenderPassDetail {
 };
 struct Invocation {
   std::string label;
+  const Context* ctxt;
   SubmitType submit_ty;
   std::unique_ptr<InvocationComputeDetail> comp_detail;
   std::unique_ptr<InvocationGraphicsDetail> graph_detail;
   std::unique_ptr<InvocationRenderPassDetail> pass_detail;
   InvocationTransitionDetail transit_detail;
+  VkQueryPool query_pool; // For device-side timing.
 };
 
 struct TransactionRenderPassDetail {
@@ -240,11 +242,6 @@ struct Transaction {
   std::string label;
   const Context* ctxt;
   std::vector<TransactionSubmitDetail> submit_details;
-};
-
-struct Timestamp {
-  const Context* ctxt;
-  VkQueryPool query_pool;
 };
 
 } // namespace vk

@@ -423,6 +423,8 @@ struct ComputeInvocationConfig {
   std::vector<ResourceView> rsc_views;
   // Number of workgroups dispatched in this invocation.
   DispatchSize workgrp_count;
+  // Set `true` if the device-side execution time is wanted.
+  bool is_timed;
 };
 // Instanced invocation of a graphics task, a.k.a. a draw call.
 struct GraphicsInvocationConfig {
@@ -441,6 +443,8 @@ struct GraphicsInvocationConfig {
   // Number of indices to be drawn in this draw. If `nvert` is non-zero, `nidx`
   // MUST be zero.
   uint32_t nidx;
+  // Set `true` if the device-side execution time is wanted.
+  bool is_timed;
 };
 struct RenderPassInvocationConfig {
   std::string label;
@@ -448,6 +452,8 @@ struct RenderPassInvocationConfig {
   std::vector<ResourceView> attms;
   // Graphics invocations applied within this render pass.
   std::vector<const struct Invocation*> invokes; // Lifetime bound.
+  // Set `true` if the device-side execution time is wanted.
+  bool is_timed;
 };
 L_IMPL_STRUCT struct Invocation;
 L_IMPL_FN Invocation create_comp_invoke(
@@ -463,6 +469,7 @@ L_IMPL_FN Invocation create_pass_invoke(
   const RenderPassInvocationConfig& cfg
 );
 L_IMPL_FN void destroy_invoke(Invocation& invoke);
+L_IMPL_FN double get_invoke_time_us(const Invocation& invoke);
 
 
 
@@ -481,14 +488,6 @@ L_IMPL_FN void destroy_transact(Transaction& transact);
 
 
 
-// A timestamp object written by the GPU, usually for precise timing.
-L_IMPL_STRUCT struct Timestamp;
-L_IMPL_FN Timestamp create_timestamp(const Context& ctxt);
-L_IMPL_FN void destroy_timestamp(Timestamp& timestamp);
-L_IMPL_FN double get_timestamp_result_us(const Timestamp& timestamp);
-
-
-
 enum CommandType {
   L_COMMAND_TYPE_SET_SUBMIT_TYPE,
   L_COMMAND_TYPE_INLINE_TRANSACTION,
@@ -497,7 +496,6 @@ enum CommandType {
   L_COMMAND_TYPE_COPY_BUFFER,
   L_COMMAND_TYPE_COPY_IMAGE,
   L_COMMAND_TYPE_INVOKE,
-  L_COMMAND_TYPE_WRITE_TIMESTAMP,
 };
 enum SubmitType {
   L_SUBMIT_TYPE_COMPUTE,
@@ -532,24 +530,6 @@ struct Command {
     struct {
       const Invocation* invoke;
     } cmd_invoke;
-    struct {
-      const Timestamp* timestamp;
-    } cmd_write_timestamp;
-    struct {
-      const Buffer* buf;
-      ImageUsage src_usage;
-      ImageUsage dst_usage;
-    } cmd_buf_barrier;
-    struct {
-      const Image* img;
-      ImageUsage src_usage;
-      ImageUsage dst_usage;
-    } cmd_img_barrier;
-    struct {
-      const DepthImage* depth_img;
-      DepthImageUsage src_usage;
-      DepthImageUsage dst_usage;
-    } cmd_depth_img_barrier;
   };
 };
 
@@ -598,13 +578,6 @@ inline Command cmd_invoke(const Invocation& invoke) {
   Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_INVOKE;
   cmd.cmd_invoke.invoke = &invoke;
-  return cmd;
-}
-
-inline Command cmd_write_timestamp(const Timestamp& timestamp) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_WRITE_TIMESTAMP;
-  cmd.cmd_write_timestamp.timestamp = &timestamp;
   return cmd;
 }
 

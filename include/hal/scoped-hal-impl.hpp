@@ -129,10 +129,6 @@ CommandDrain Context::create_cmd_drain() const {
   return HAL_IMPL_NAMESPACE::create_cmd_drain(*inner);
 }
 
-Timestamp Context::create_timestamp() const {
-  return HAL_IMPL_NAMESPACE::create_timestamp(*inner);
-}
-
 
 
 Buffer::Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner) :
@@ -261,21 +257,6 @@ Transaction::Transaction(
 Transaction::~Transaction() {
   if (inner != nullptr) {
     destroy_transact(*inner);
-  }
-}
-
-
-
-Timestamp::Timestamp(
-  const Context& ctxt
-) : inner(std::make_unique<HAL_IMPL_NAMESPACE::Timestamp>(
-  create_timestamp(*ctxt.inner))) {}
-Timestamp::Timestamp(HAL_IMPL_NAMESPACE::Timestamp&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Timestamp>(
-    std::forward<HAL_IMPL_NAMESPACE::Timestamp>(inner))) {}
-Timestamp::~Timestamp() {
-  if (inner != nullptr) {
-    destroy_timestamp(*inner);
   }
 }
 
