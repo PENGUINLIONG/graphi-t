@@ -1979,20 +1979,31 @@ Invocation create_composite_invoke(
 }
 void destroy_invoke(Invocation& invoke) {
   const Context& ctxt = *invoke.ctxt;
+  if (
+    invoke.b2b_detail ||
+    invoke.b2i_detail ||
+    invoke.i2b_detail ||
+    invoke.i2i_detail
+  ) {
+    log::debug("destroyed transfer invocation '", invoke.label, "'");
+  }
   if (invoke.comp_detail) {
     const InvocationComputeDetail& comp_detail = *invoke.comp_detail;
     vkDestroyDescriptorPool(ctxt.dev, comp_detail.desc_pool, nullptr);
-    log::debug("destroyed compute invocation");
+    log::debug("destroyed compute invocation '", invoke.label, "'");
   }
   if (invoke.graph_detail) {
     const InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
     vkDestroyDescriptorPool(ctxt.dev, graph_detail.desc_pool, nullptr);
-    log::debug("destroyed graphics invocation");
+    log::debug("destroyed graphics invocation '", invoke.label, "'");
   }
   if (invoke.pass_detail) {
     const InvocationRenderPassDetail& pass_detail = *invoke.pass_detail;
     vkDestroyFramebuffer(ctxt.dev, pass_detail.framebuf, nullptr);
-    log::debug("destroyed render pass invocation");
+    log::debug("destroyed render pass invocation '", invoke.label, "'");
+  }
+  if (invoke.composite_detail) {
+    log::debug("destroyed composite invocation '", invoke.label, "'");
   }
 
   if (invoke.query_pool != VK_NULL_HANDLE) {
@@ -2458,6 +2469,21 @@ const DepthImageView& _transit_rsc(
 
   return depth_img_view;
 }
+void _transit_rscs(
+  TransactionLike& transact,
+  const InvocationTransitionDetail& transit_detail
+) {
+  // Transition all referenced resources.
+  for (auto& pair : transit_detail.buf_transit) {
+    _transit_rsc(transact, pair.first, pair.second);
+  }
+  for (auto& pair : transit_detail.img_transit) {
+    _transit_rsc(transact, pair.first, pair.second);
+  }
+  for (auto& pair : transit_detail.depth_img_transit) {
+    _transit_rsc(transact, pair.first, pair.second);
+  }
+}
 
 void _record_cmd_set_submit_ty(
   TransactionLike& transact,
@@ -2493,6 +2519,13 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
   const auto& in = cmd.cmd_invoke;
   const auto& invoke = *in.invoke;
 
+  // FIXME: (penguinliong) Actually it should be the subinvocations not allowed
+  // to be baked.
+  if (transact.level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
+    assert(invoke.query_pool == VK_NULL_HANDLE,
+      "timed invocation cannot be baked");
+  }
+
   VkCommandBuffer cmdbuf = _get_cmdbuf(transact, invoke.submit_ty);
 
   if (invoke.query_pool != VK_NULL_HANDLE) {
@@ -2503,16 +2536,7 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
     log::debug("invocation '", invoke.label, "' will be timed");
   }
 
-  // Transition all referenced resources.
-  for (auto& pair : invoke.transit_detail.buf_transit) {
-    _transit_rsc(transact, pair.first, pair.second);
-  }
-  for (auto& pair : invoke.transit_detail.img_transit) {
-    _transit_rsc(transact, pair.first, pair.second);
-  }
-  for (auto& pair : invoke.transit_detail.depth_img_transit) {
-    _transit_rsc(transact, pair.first, pair.second);
-  }
+  _transit_rscs(transact, invoke.transit_detail);
 
   if (invoke.b2b_detail) {
     const InvocationCopyBufferToBufferDetail& b2b_detail =
