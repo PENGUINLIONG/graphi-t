@@ -424,7 +424,7 @@ struct GraphicsTaskBuilder {
     inner.topo = topo;
     return *this;
   }
-  inline Self& vert_input(PixelFormat fmt, VertexInputRate rate) {
+  inline Self& vert_input(fmt::Format fmt, VertexInputRate rate) {
     inner.vert_inputs.emplace_back(VertexInput { fmt, rate });
     return *this;
   }
@@ -442,10 +442,10 @@ struct GraphicsTaskBuilder {
     return frag(buf.data(), buf.size() * sizeof(TContainer::value_type));
   }
 
-  inline Self& per_vert_input(PixelFormat fmt) {
+  inline Self& per_vert_input(fmt::Format fmt) {
     return vert_input(fmt, L_VERTEX_INPUT_RATE_VERTEX);
   }
-  inline Self& per_inst_input(PixelFormat fmt) {
+  inline Self& per_inst_input(fmt::Format fmt) {
     return vert_input(fmt, L_VERTEX_INPUT_RATE_INSTANCE);
   }
 
@@ -577,7 +577,7 @@ struct ImageBuilder {
     inner.height = height;
     return *this;
   }
-  inline Self& fmt(PixelFormat fmt) {
+  inline Self& fmt(fmt::Format fmt) {
     inner.fmt = fmt;
     return *this;
   }
@@ -665,7 +665,7 @@ struct DepthImageBuilder {
     inner.height = height;
     return *this;
   }
-  inline Self& fmt(DepthFormat fmt) {
+  inline Self& fmt(fmt::DepthFormat fmt) {
     inner.fmt = fmt;
     return *this;
   }
@@ -883,7 +883,7 @@ struct RenderPassBuilder {
     inner.height = height;
     return *this;
   }
-  inline Self& attm(AttachmentAccess access, PixelFormat fmt) {
+  inline Self& attm(AttachmentAccess access, fmt::Format fmt) {
     AttachmentConfig attm_cfg {};
     attm_cfg.attm_ty = L_ATTACHMENT_TYPE_COLOR;
     attm_cfg.attm_access = access;
@@ -892,7 +892,7 @@ struct RenderPassBuilder {
     inner.attm_cfgs.emplace_back(std::move(attm_cfg));
     return *this;
   }
-  inline Self& attm(AttachmentAccess access, DepthFormat fmt) {
+  inline Self& attm(AttachmentAccess access, fmt::DepthFormat fmt) {
     AttachmentConfig attm_cfg {};
     attm_cfg.attm_ty = L_ATTACHMENT_TYPE_DEPTH;
     attm_cfg.attm_access = access;
@@ -907,19 +907,19 @@ struct RenderPassBuilder {
     return *this;
   }
 
-  inline Self& load_store_attm(PixelFormat fmt) {
+  inline Self& load_store_attm(fmt::Format fmt) {
     auto access = L_ATTACHMENT_ACCESS_LOAD | L_ATTACHMENT_ACCESS_STORE;
     return attm((AttachmentAccess)access, fmt);
   }
-  inline Self& clear_store_attm(PixelFormat fmt) {
+  inline Self& clear_store_attm(fmt::Format fmt) {
     auto access = L_ATTACHMENT_ACCESS_CLEAR | L_ATTACHMENT_ACCESS_STORE;
     return attm((AttachmentAccess)access, fmt);
   }
-  inline Self& load_store_depth_attm(DepthFormat fmt) {
+  inline Self& load_store_depth_attm(fmt::DepthFormat fmt) {
     auto access = L_ATTACHMENT_ACCESS_LOAD | L_ATTACHMENT_ACCESS_STORE;
     return attm((AttachmentAccess)access, fmt);
   }
-  inline Self& clear_store_attm(DepthFormat fmt) {
+  inline Self& clear_store_attm(fmt::DepthFormat fmt) {
     auto access = L_ATTACHMENT_ACCESS_CLEAR | L_ATTACHMENT_ACCESS_STORE;
     return attm((AttachmentAccess)access, fmt);
   }

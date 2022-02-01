@@ -4,6 +4,7 @@
 
 using namespace liong;
 using namespace vk;
+using namespace fmt;
 
 namespace {
 
@@ -275,7 +276,7 @@ void guarded_main2() {
   scoped::DepthImage zbuf = ctxt.build_depth_img("zbuf")
     .width(4)
     .height(4)
-    .fmt(L_DEPTH_FORMAT_D16_S0)
+    .fmt(L_DEPTH_FORMAT_D16_UNORM)
     .attachment()
     .build();
   scoped::Image out_img = ctxt.build_img("attm")
@@ -291,7 +292,7 @@ void guarded_main2() {
     .width(FRAMEBUF_WIDTH)
     .height(FRAMEBUF_HEIGHT)
     .clear_store_attm(L_FORMAT_R32G32B32A32_SFLOAT)
-    .clear_store_attm(L_DEPTH_FORMAT_D16_S0)
+    .clear_store_attm(L_DEPTH_FORMAT_D16_UNORM)
     .build();
 
   scoped::Task task = pass.build_graph_task("graph_task")

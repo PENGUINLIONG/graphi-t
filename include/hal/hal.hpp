@@ -9,14 +9,13 @@
 
 // Don't use `#pragma once` here.
 #pragma once
-#include <cmath>
 #include <array>
 #include <memory>
 #include <vector>
 #include <string>
 #include <cstdint>
 #include "assert.hpp"
-#include "px-fmt.hpp"
+#include "fmt.hpp"
 
 #ifndef HAL_IMPL_NAMESPACE
 static_assert(false, "please specify the implementation namespace (e.g. `vk`)");
@@ -132,12 +131,12 @@ struct ImageConfig {
   // Human-readable label of the image.
   std::string label;
   MemoryAccess host_access;
-  // Number of rows, or height of the image.
+  // Height of the image, or zero if not 2D or 3D texture.
   uint32_t height;
-  // Number of columns, or width of the image.
+  // Width of the image.
   uint32_t width;
   // Pixel format of the image.
-  PixelFormat fmt;
+  fmt::Format fmt;
   // Usage of the image.
   ImageUsage usage;
 };
@@ -202,7 +201,7 @@ struct DepthImageConfig {
   // attachment size.
   uint32_t height;
   // Pixel format of depth image.
-  DepthFormat fmt;
+  fmt::DepthFormat fmt;
   // Usage of the depth image.
   DepthImageUsage usage;
 };
@@ -299,9 +298,9 @@ struct AttachmentConfig {
   AttachmentType attm_ty;
   union {
     // Color attachment format.
-    PixelFormat color_fmt;
+    fmt::Format color_fmt;
     // Depth attachment format.
-    DepthFormat depth_fmt;
+    fmt::DepthFormat depth_fmt;
   };
 };
 // TODO: (penguinliong) Multi-subpass rendering.
@@ -328,7 +327,7 @@ enum VertexInputRate {
   L_VERTEX_INPUT_RATE_INSTANCE,
 };
 struct VertexInput {
-  PixelFormat fmt;
+  fmt::Format fmt;
   VertexInputRate rate;
 };
 struct GraphicsTaskConfig {

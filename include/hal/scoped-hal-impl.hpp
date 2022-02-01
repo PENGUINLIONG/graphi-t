@@ -84,7 +84,7 @@ MappedImage::MappedImage(const ImageView& view, MemoryAccess map_access) :
   map_img_mem(view, map_access, mapped, row_pitch);
 
   const auto& img_cfg = view.img->img_cfg;
-  size_t fmt_size = img_cfg.fmt.get_fmt_size();
+  size_t fmt_size = fmt::get_fmt_size(img_cfg.fmt);
   size_t expected_pitch = fmt_size * img_cfg.width;
 
   bool need_stage_buf = false;
@@ -114,7 +114,7 @@ MappedImage::MappedImage(const ImageView& view, MemoryAccess map_access) :
 MappedImage::~MappedImage() {
   if (buf != nullptr) {
     const auto& img_cfg = view.img->img_cfg;
-    size_t fmt_size = img_cfg.fmt.get_fmt_size();
+    size_t fmt_size = fmt::get_fmt_size(img_cfg.fmt);
     size_t buf_row_pitch = view.width * fmt_size;
 
     _copy_img_tile(mapped, row_pitch, view.y_offset,

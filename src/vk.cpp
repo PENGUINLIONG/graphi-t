@@ -568,66 +568,14 @@ void unmap_buf_mem(
 
 
 
-VkFormat _make_img_fmt(PixelFormat fmt) {
-  if (fmt.is_half) {
-    panic("half-precision texture not supported");
-  } else if (fmt.is_single) {
-    switch (fmt.get_ncomp()) {
-    case 1: return VK_FORMAT_R32_SFLOAT;
-    case 2: return VK_FORMAT_R32G32_SFLOAT;
-    case 3: return VK_FORMAT_R32G32B32_SFLOAT;
-    case 4: return VK_FORMAT_R32G32B32A32_SFLOAT;
-    }
-  } else if (fmt.is_signed) {
-    switch (fmt.int_exp2) {
-    case 1:
-      switch (fmt.get_ncomp()) {
-      case 1: return VK_FORMAT_R8_SNORM;
-      case 2: return VK_FORMAT_R8G8_SNORM;
-      case 3: return VK_FORMAT_R8G8B8_SNORM;
-      case 4: return VK_FORMAT_R8G8B8A8_SNORM;
-      }
-    case 2:
-      switch (fmt.int_exp2) {
-      case 1: return VK_FORMAT_R16_SINT;
-      case 2: return VK_FORMAT_R16G16_SINT;
-      case 3: return VK_FORMAT_R16G16B16_SINT;
-      case 4: return VK_FORMAT_R16G16B16A16_SINT;
-      }
-    case 3:
-      switch (fmt.int_exp2) {
-      case 1: return VK_FORMAT_R32_SINT;
-      case 2: return VK_FORMAT_R32G32_SINT;
-      case 3: return VK_FORMAT_R32G32B32_SINT;
-      case 4: return VK_FORMAT_R32G32B32A32_SINT;
-      }
-    }
-  } else {
-    switch (fmt.int_exp2) {
-    case 1:
-      switch (fmt.get_ncomp()) {
-      case 1: return VK_FORMAT_R8_UNORM;
-      case 2: return VK_FORMAT_R8G8_UNORM;
-      case 3: return VK_FORMAT_R8G8B8_UNORM;
-      case 4: return VK_FORMAT_R8G8B8A8_UNORM;
-      }
-    case 2:
-      switch (fmt.int_exp2) {
-      case 1: return VK_FORMAT_R16_UINT;
-      case 2: return VK_FORMAT_R16G16_UINT;
-      case 3: return VK_FORMAT_R16G16B16_UINT;
-      case 4: return VK_FORMAT_R16G16B16A16_UINT;
-      }
-    case 3:
-      switch (fmt.int_exp2) {
-      case 1: return VK_FORMAT_R32_UINT;
-      case 2: return VK_FORMAT_R32G32_UINT;
-      case 3: return VK_FORMAT_R32G32B32_UINT;
-      case 4: return VK_FORMAT_R32G32B32A32_UINT;
-      }
-    }
+VkFormat _make_img_fmt(fmt::Format fmt) {
+  using namespace fmt;
+  switch (fmt) {
+  case L_FORMAT_R8G8B8A8_UNORM_PACK32: return VK_FORMAT_R8G8B8A8_UNORM;
+  case L_FORMAT_R16G16B16A16_SFLOAT: return VK_FORMAT_R16G16B16A16_SFLOAT;
+  case L_FORMAT_R32G32B32A32_SFLOAT: return VK_FORMAT_R32G32B32A32_SFLOAT;
+  default: panic("unrecognized pixel format");
   }
-  panic("unrecognized pixel format");
   return VK_FORMAT_UNDEFINED;
 }
 Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
@@ -661,8 +609,8 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   }
   // KEEP THIS AT THE END.
   if (img_cfg.usage & L_IMAGE_USAGE_STAGING_BIT) {
-    assert((img_cfg.usage & (~L_IMAGE_USAGE_STAGING_BIT)) == 0, "staging image "
-      "can only be used for transfer");
+    assert((img_cfg.usage & (~L_IMAGE_USAGE_STAGING_BIT)) == 0,
+      "staging image can only be used for transfer");
     usage |=
       VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
@@ -769,29 +717,13 @@ const ImageConfig& get_img_cfg(const Image& img) {
 
 
 
-VkFormat _make_depth_fmt(DepthFormat fmt) {
-  if (fmt.nbit_depth == 16 && fmt.nbit_stencil == 0) {
-    return VK_FORMAT_D16_UNORM;
+VkFormat _make_depth_fmt(fmt::DepthFormat fmt) {
+  using namespace fmt;
+  switch (fmt) {
+  case L_DEPTH_FORMAT_D16_UNORM: return VK_FORMAT_D16_UNORM;
+  case L_DEPTH_FORMAT_D32_SFLOAT: return VK_FORMAT_D32_SFLOAT;
+  default: panic("unsupported depth format");
   }
-  if (fmt.nbit_depth == 24 && fmt.nbit_stencil == 0) {
-    return VK_FORMAT_X8_D24_UNORM_PACK32;
-  }
-  if (fmt.nbit_depth == 32 && fmt.nbit_stencil == 0) {
-    return VK_FORMAT_D32_SFLOAT;
-  }
-  if (fmt.nbit_depth == 0 && fmt.nbit_stencil == 8) {
-    return VK_FORMAT_S8_UINT;
-  }
-  if (fmt.nbit_depth == 16 && fmt.nbit_stencil == 8) {
-    return VK_FORMAT_D16_UNORM_S8_UINT;
-  }
-  if (fmt.nbit_depth == 24 && fmt.nbit_stencil == 8) {
-    return VK_FORMAT_D24_UNORM_S8_UINT;
-  }
-  if (fmt.nbit_depth == 32 && fmt.nbit_stencil == 8) {
-    return VK_FORMAT_D32_SFLOAT_S8_UINT;
-  }
-  panic("unsupported depth format");
   return VK_FORMAT_UNDEFINED;
 }
 
@@ -863,8 +795,8 @@ DepthImage create_depth_img(
   ivci.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
   ivci.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
   ivci.subresourceRange.aspectMask =
-    (depth_img_cfg.fmt.nbit_depth > 0 ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) |
-    (depth_img_cfg.fmt.nbit_stencil > 0 ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
+    (fmt::get_fmt_depth_nbit(depth_img_cfg.fmt) > 0 ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) |
+    (fmt::get_fmt_stencil_nbit(depth_img_cfg.fmt) > 0 ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
   ivci.subresourceRange.baseArrayLayer = 0;
   ivci.subresourceRange.layerCount = 1;
   ivci.subresourceRange.baseMipLevel = 0;
@@ -1241,7 +1173,7 @@ Task create_graph_task(
   size_t base_offset = 0;
   for (auto i = 0; i < cfg.vert_inputs.size(); ++i) {
     auto& vert_input = cfg.vert_inputs[i];
-    size_t fmt_size = vert_input.fmt.get_fmt_size();
+    size_t fmt_size = fmt::get_fmt_size(vert_input.fmt);
 
     vibd.binding = 0;
     vibd.stride = 0; // Will be assigned later.
