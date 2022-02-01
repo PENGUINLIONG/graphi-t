@@ -455,6 +455,14 @@ struct RenderPassInvocationConfig {
   // Set `true` if the device-side execution time is wanted.
   bool is_timed;
 };
+struct CompositeInvocationConfig {
+  std::string label;
+  // Compute or render pass invocations within this composite invocation. Note
+  // that graphics invocations cannot be called outside of render passes.
+  std::vector<const struct Invocation*> invokes; // Lifetime bound.
+  // Set `true` if the device-side execution time is wanted.
+  bool is_timed;
+};
 L_IMPL_STRUCT struct Invocation;
 L_IMPL_FN Invocation create_comp_invoke(
   const Task& task,
@@ -468,8 +476,15 @@ L_IMPL_FN Invocation create_pass_invoke(
   const RenderPass& pass,
   const RenderPassInvocationConfig& cfg
 );
+L_IMPL_FN Invocation create_composite_invoke(
+  const Context& ctxt,
+  const CompositeInvocationConfig& cfg
+);
 L_IMPL_FN void destroy_invoke(Invocation& invoke);
 L_IMPL_FN double get_invoke_time_us(const Invocation& invoke);
+// Pre-encode the invocation commands to reduce host-side overhead on constant
+// device-side procedures.
+L_IMPL_FN void bake_invoke(Invocation& invoke);
 
 
 

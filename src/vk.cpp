@@ -1779,10 +1779,42 @@ Invocation create_pass_invoke(
   pass_detail.is_baked = false;
   pass_detail.subinvokes = cfg.invokes;
 
+  for (size_t i = 0; i < cfg.invokes.size(); ++i) {
+    const Invocation& invoke = *cfg.invokes[i];
+    assert(invoke.graph_detail != nullptr,
+      "render pass invocation constituent must be graphics task invocation");
+  }
+
   out.pass_detail =
     std::make_unique<InvocationRenderPassDetail>(std::move(pass_detail));
 
   log::debug("created render pass invocation");
+  return out;
+}
+Invocation create_composite_invoke(
+  const Context& ctxt,
+  const CompositeInvocationConfig& cfg
+) {
+  assert(cfg.invokes.size() > 0);
+
+  Invocation out {};
+  out.label = cfg.label;
+  out.ctxt = &ctxt;
+  out.submit_ty = cfg.invokes[0]->submit_ty;
+  out.query_pool = cfg.is_timed ?
+    _create_query_pool(ctxt, VK_QUERY_TYPE_TIMESTAMP, 2) : VK_NULL_HANDLE;
+
+  InvocationTransitionDetail transit_detail {};
+  _merge_subinvoke_transits(cfg.invokes, transit_detail);
+  out.transit_detail = std::move(transit_detail);
+
+  InvocationCompositeDetail composite_detail {};
+  composite_detail.subinvokes = cfg.invokes;
+
+  out.composite_detail =
+    std::make_unique<InvocationCompositeDetail>(std::move(composite_detail));
+
+  log::debug("created composition invocation");
   return out;
 }
 void destroy_invoke(Invocation& invoke) {
@@ -2411,9 +2443,7 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
     vkCmdWriteTimestamp(cmdbuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
       invoke.query_pool, 0);
 
-    if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-      log::debug("invocation '", invoke.label, "' will be timed");
-    }
+    log::debug("invocation '", invoke.label, "' will be timed");
   }
 
   // Transition all referenced resources.
@@ -2438,6 +2468,7 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
         0, 1, &comp_detail.desc_set, 0, nullptr);
     }
     vkCmdDispatch(cmdbuf, workgrp_count.x, workgrp_count.y, workgrp_count.z);
+    log::debug("applied compute invocation '", invoke.label, "'");
 
   } else if (invoke.graph_detail) {
     const InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
@@ -2459,6 +2490,7 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
     } else {
       vkCmdDraw(cmdbuf, graph_detail.nvert, graph_detail.ninst, 0, 0);
     }
+    log::debug("applied graphics invocation '", invoke.label, "'");
 
   } else if (invoke.pass_detail) {
     const InvocationRenderPassDetail& pass_detail = *invoke.pass_detail;
@@ -2468,33 +2500,46 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
       VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS :
       VK_SUBPASS_CONTENTS_INLINE;
 
+    VkRenderPassBeginInfo rpbi {};
+    rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    rpbi.renderPass = pass.pass;
+    rpbi.framebuffer = pass_detail.framebuf;
+    rpbi.renderArea.extent = pass.viewport.extent;
+    rpbi.clearValueCount = (uint32_t)pass.clear_values.size();
+    rpbi.pClearValues = pass.clear_values.data();
+    vkCmdBeginRenderPass(cmdbuf, &rpbi, sc);
+    log::debug("render pass invocation '", invoke.label, "' began");
+
     for (size_t i = 0; i < pass_detail.subinvokes.size(); ++i) {
-      if (i == 0) {
-        VkRenderPassBeginInfo rpbi {};
-        rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-        rpbi.renderPass = pass.pass;
-        rpbi.framebuffer = pass_detail.framebuf;
-        rpbi.renderArea.extent = pass.viewport.extent;
-        rpbi.clearValueCount = (uint32_t)pass.clear_values.size();
-        rpbi.pClearValues = pass.clear_values.data();
-        vkCmdBeginRenderPass(cmdbuf, &rpbi, sc);
-      } else {
+      if (i > 0) {
         vkCmdNextSubpass(cmdbuf, sc);
+        log::debug("render pass invocation '", invoke.label, "' switched to a "
+          "next subpass");
       }
 
       const Invocation* subinvoke = pass_detail.subinvokes[i];
-      if (subinvoke == nullptr) {
-        log::warn("null subinvocation in render pass invocation is ignored");
-        continue;
-      }
-      assert(subinvoke->graph_detail != nullptr,
-        "render pass constituent invocations must be graphics invocations");
+      assert(subinvoke != nullptr, "null subinvocation is not allowed");
       _record_cmd_invoke(transact, cmd_invoke(*subinvoke));
     }
-    if (pass_detail.subinvokes.size() > 0) {
-      vkCmdEndRenderPass(cmdbuf);
+    vkCmdEndRenderPass(cmdbuf);
+    log::debug("render pass invocation '", invoke.label, "' ended");
+
+  } else if (invoke.composite_detail) {
+    const InvocationCompositeDetail& composite_detail =
+      *invoke.composite_detail;
+
+    log::debug("composite invocation '", invoke.label, "' began");
+
+    for (size_t i = 0; i < composite_detail.subinvokes.size(); ++i) {
+      const Invocation* subinvoke = composite_detail.subinvokes[i];
+      assert(subinvoke != nullptr, "null subinvocation is not allowed");
+      _record_cmd_invoke(transact, cmd_invoke(*subinvoke));
     }
 
+    log::debug("composite invocation '", invoke.label, "' ended");
+
+  } else {
+    unreachable();
   }
 
   if (invoke.query_pool != VK_NULL_HANDLE) {
@@ -2502,9 +2547,7 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
       invoke.query_pool, 1);
   }
 
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled invocation '", invoke.label, "' for execution");
-  }
+  log::debug("scheduled invocation '", invoke.label, "' for execution");
 }
 
 // Returns whether the submit queue to submit has changed.

@@ -203,6 +203,9 @@ struct InvocationRenderPassDetail {
   bool is_baked;
   std::vector<const Invocation*> subinvokes;
 };
+struct InvocationCompositeDetail {
+  std::vector<const Invocation*> subinvokes;
+};
 struct Invocation {
   std::string label;
   const Context* ctxt;
@@ -210,6 +213,7 @@ struct Invocation {
   std::unique_ptr<InvocationComputeDetail> comp_detail;
   std::unique_ptr<InvocationGraphicsDetail> graph_detail;
   std::unique_ptr<InvocationRenderPassDetail> pass_detail;
+  std::unique_ptr<InvocationCompositeDetail> composite_detail;
   InvocationTransitionDetail transit_detail;
   VkQueryPool query_pool; // For device-side timing.
 };

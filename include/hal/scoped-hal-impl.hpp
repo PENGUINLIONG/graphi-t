@@ -37,6 +37,11 @@ ImageBuilder Context::build_img(const std::string& label) const {
 DepthImageBuilder Context::build_depth_img(const std::string& label) const {
   return DepthImageBuilder(*this, label);
 }
+CompositeInvocationBuilder Context::build_composite_invoke(
+  const std::string& label
+) const {
+  return CompositeInvocationBuilder(*this, label);
+}
 
 void _copy_img_tile(
   void* dst,
@@ -235,6 +240,9 @@ Invocation GraphicsInvocationBuilder::build() {
 }
 Invocation RenderPassInvocationBuilder::build() {
   return create_pass_invoke(parent, inner);
+}
+Invocation CompositeInvocationBuilder::build() {
+  return create_composite_invoke(parent, inner);
 }
 
 

@@ -248,7 +248,30 @@ struct RenderPassInvocationBuilder {
 
   Invocation build();
 };
+struct CompositeInvocationBuilder {
+  using Self = CompositeInvocationBuilder;
 
+  const Context& parent;
+  CompositeInvocationConfig inner;
+
+  inline CompositeInvocationBuilder(
+    const Context& ctxt,
+    const std::string& label = ""
+  ) : parent(ctxt), inner() {
+    inner.label = label;
+  }
+
+  inline Self& invoke(const Invocation& invoke) {
+    inner.invokes.emplace_back(&(const HAL_IMPL_NAMESPACE::Invocation&)invoke);
+    return *this;
+  }
+  inline Self& is_timed(bool is_timed = true) {
+    inner.is_timed = is_timed;
+    return *this;
+  }
+
+  Invocation build();
+};
 
 
 struct Task {
@@ -890,6 +913,9 @@ public:
   BufferBuilder build_buf(const std::string& label = "") const;
   ImageBuilder build_img(const std::string& label = "") const;
   DepthImageBuilder build_depth_img(const std::string& label = "") const;
+  CompositeInvocationBuilder build_composite_invoke(
+    const std::string& label = ""
+  ) const;
 
   Transaction create_transact(
     const std::string& label,
