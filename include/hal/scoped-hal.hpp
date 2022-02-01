@@ -113,6 +113,53 @@ struct Invocation {
     return get_invoke_time_us(*this);
   }
 };
+struct TransferInvocationBuilder {
+  using Self = TransferInvocationBuilder;
+
+  const Context& parent;
+  TransferInvocationConfig inner;
+
+  inline TransferInvocationBuilder(
+    const Context& ctxt,
+    const std::string& label = ""
+  ) : parent(ctxt), inner() {
+    inner.label = label;
+  }
+
+  inline Self& src(const ResourceView& rsc_view) {
+    inner.src_rsc_view = rsc_view;
+    return *this;
+  }
+  inline Self& dst(const ResourceView& rsc_view) {
+    inner.dst_rsc_view = rsc_view;
+    return *this;
+  }
+  inline Self& is_timed(bool is_timed = true) {
+    inner.is_timed = is_timed;
+    return *this;
+  }
+
+  inline Self& src(const BufferView& buf_view) {
+    return src(make_rsc_view(buf_view));
+  }
+  inline Self& src(const ImageView& img_view) {
+    return src(make_rsc_view(img_view));
+  }
+  inline Self& src(const DepthImageView& depth_img_view) {
+    return src(make_rsc_view(depth_img_view));
+  }
+  inline Self& dst(const BufferView& buf_view) {
+    return dst(make_rsc_view(buf_view));
+  }
+  inline Self& dst(const ImageView& img_view) {
+    return dst(make_rsc_view(img_view));
+  }
+  inline Self& dst(const DepthImageView& depth_img_view) {
+    return dst(make_rsc_view(depth_img_view));
+  }
+
+  Invocation build();
+};
 struct ComputeInvocationBuilder {
   using Self = ComputeInvocationBuilder;
 
@@ -145,16 +192,13 @@ struct ComputeInvocationBuilder {
   }
 
   inline Self& rsc(const BufferView& buf_view) {
-    inner.rsc_views.emplace_back(buf_view);
-    return *this;
+    return rsc(make_rsc_view(buf_view));
   }
   inline Self& rsc(const ImageView& img_view) {
-    inner.rsc_views.emplace_back(img_view);
-    return *this;
+    return rsc(make_rsc_view(img_view));
   }
   inline Self& rsc(const DepthImageView& depth_img_view) {
-    inner.rsc_views.emplace_back(depth_img_view);
-    return *this;
+    return rsc(make_rsc_view(depth_img_view));
   }
 
   Invocation build();
@@ -199,15 +243,15 @@ struct GraphicsInvocationBuilder {
   }
 
   inline Self& rsc(const BufferView& buf_view) {
-    inner.rsc_views.emplace_back(buf_view);
+    inner.rsc_views.emplace_back(make_rsc_view(buf_view));
     return *this;
   }
   inline Self& rsc(const ImageView& img_view) {
-    inner.rsc_views.emplace_back(img_view);
+    inner.rsc_views.emplace_back(make_rsc_view(img_view));
     return *this;
   }
   inline Self& rsc(const DepthImageView& depth_img_view) {
-    inner.rsc_views.emplace_back(depth_img_view);
+    inner.rsc_views.emplace_back(make_rsc_view(depth_img_view));
     return *this;
   }
 
@@ -239,11 +283,11 @@ struct RenderPassInvocationBuilder {
     return *this;
   }
 
-  inline Self& rsc(const ImageView& img_view) {
-    return rsc(img_view);
+  inline Self& attm(const ImageView& img_view) {
+    return attm(make_rsc_view(img_view));
   }
-  inline Self& rsc(const DepthImageView& depth_img_view) {
-    return rsc(depth_img_view);
+  inline Self& attm(const DepthImageView& depth_img_view) {
+    return attm(make_rsc_view(depth_img_view));
   }
 
   Invocation build();
@@ -913,6 +957,9 @@ public:
   BufferBuilder build_buf(const std::string& label = "") const;
   ImageBuilder build_img(const std::string& label = "") const;
   DepthImageBuilder build_depth_img(const std::string& label = "") const;
+  TransferInvocationBuilder build_trans_invoke(
+    const std::string& label = ""
+  ) const;
   CompositeInvocationBuilder build_composite_invoke(
     const std::string& label = ""
   ) const;

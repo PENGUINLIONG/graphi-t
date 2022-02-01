@@ -60,17 +60,6 @@ enum MemoryAccessBits {
 };
 typedef uint32_t MemoryAccess;
 
-// Calculate a minimal size of allocation that guarantees that we can sub-
-// allocate an address-aligned memory of `size`.
-constexpr size_t align_size(size_t size, size_t align) {
-  return (size + (align - 1));
-}
-// Align pointer address to the next aligned address. This funciton assumes that
-// `align` is a power-of-2.
-constexpr size_t align_addr(size_t size, size_t align) {
-  return (size + (align - 1)) & (~(align - 1));
-}
-
 enum BufferUsageBits {
   L_BUFFER_USAGE_NONE = 0,
   L_BUFFER_USAGE_STAGING_BIT = (1 << 0),
@@ -196,13 +185,6 @@ L_IMPL_FN void unmap_img_mem(
 );
 
 
-
-L_IMPL_STRUCT struct RenderPass;
-L_IMPL_FN RenderPass create_pass(
-  const Context& ctxt,
-  const Image& img
-);
-L_IMPL_FN void destroy_pass(RenderPass& pass);
 
 enum DepthImageUsageBits {
   L_DEPTH_IMAGE_USAGE_NONE = 0,
@@ -399,22 +381,33 @@ struct ResourceView {
   BufferView buf_view;
   ImageView img_view;
   DepthImageView depth_img_view;
-
-  inline ResourceView(BufferView buf_view) :
-    rsc_view_ty(L_RESOURCE_VIEW_TYPE_BUFFER),
-    buf_view(buf_view),
-    img_view(),
-    depth_img_view() {}
-  inline ResourceView(ImageView img_view) :
-    rsc_view_ty(L_RESOURCE_VIEW_TYPE_IMAGE),
-    buf_view(),
-    img_view(img_view),
-    depth_img_view() {}
-  inline ResourceView(DepthImageView depth_img_view) :
-    rsc_view_ty(L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE),
-    buf_view(),
-    img_view(),
-    depth_img_view(depth_img_view) {}
+};
+inline ResourceView make_rsc_view(const BufferView& buf_view) {
+  ResourceView rsc_view {};
+  rsc_view.rsc_view_ty = L_RESOURCE_VIEW_TYPE_BUFFER;
+  rsc_view.buf_view = buf_view;
+  return rsc_view;
+}
+inline ResourceView make_rsc_view(const ImageView& img_view) {
+  ResourceView rsc_view {};
+  rsc_view.rsc_view_ty = L_RESOURCE_VIEW_TYPE_IMAGE;
+  rsc_view.img_view = img_view;
+  return rsc_view;
+}
+inline ResourceView make_rsc_view(const DepthImageView& depth_img_view) {
+  ResourceView rsc_view {};
+  rsc_view.rsc_view_ty = L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE;
+  rsc_view.depth_img_view = depth_img_view;
+  return rsc_view;
+}
+struct TransferInvocationConfig {
+  std::string label;
+  // Data transfer source.
+  ResourceView src_rsc_view;
+  // Data transfer destination.
+  ResourceView dst_rsc_view;
+  // Set `true` if the device-side execution time is wanted.
+  bool is_timed;
 };
 // Instanced invocation of a compute task, a.k.a. a dispatch.
 struct ComputeInvocationConfig {
@@ -464,6 +457,10 @@ struct CompositeInvocationConfig {
   bool is_timed;
 };
 L_IMPL_STRUCT struct Invocation;
+L_IMPL_FN Invocation create_trans_invoke(
+  const Context& ctxt,
+  const TransferInvocationConfig& cfg
+);
 L_IMPL_FN Invocation create_comp_invoke(
   const Task& task,
   const ComputeInvocationConfig& cfg
@@ -481,10 +478,25 @@ L_IMPL_FN Invocation create_composite_invoke(
   const CompositeInvocationConfig& cfg
 );
 L_IMPL_FN void destroy_invoke(Invocation& invoke);
+// Get the execution time of the last WAITED invocation.
 L_IMPL_FN double get_invoke_time_us(const Invocation& invoke);
 // Pre-encode the invocation commands to reduce host-side overhead on constant
 // device-side procedures.
 L_IMPL_FN void bake_invoke(Invocation& invoke);
+
+/*
+struct TransactionConfig {
+  std::string label;
+  // Invocation to be realized on device.
+  const Invocation* invoke;
+};
+L_IMPL_STRUCT struct Transaction;
+// Submit the invocation to device for execution.
+L_IMPL_FN Transaction create_transact(const Context& ctxt);
+// Wait the invocation submitted to device for execution. Returns immediately if
+// the invocation is not submitted.
+L_IMPL_FN void wait_transact(Transaction& transact);
+*/
 
 
 
@@ -506,10 +518,6 @@ L_IMPL_FN void destroy_transact(Transaction& transact);
 enum CommandType {
   L_COMMAND_TYPE_SET_SUBMIT_TYPE,
   L_COMMAND_TYPE_INLINE_TRANSACTION,
-  L_COMMAND_TYPE_COPY_BUFFER_TO_IMAGE,
-  L_COMMAND_TYPE_COPY_IMAGE_TO_BUFFER,
-  L_COMMAND_TYPE_COPY_BUFFER,
-  L_COMMAND_TYPE_COPY_IMAGE,
   L_COMMAND_TYPE_INVOKE,
 };
 enum SubmitType {
@@ -527,22 +535,6 @@ struct Command {
       const Transaction* transact;
     } cmd_inline_transact;
     struct {
-      BufferView src;
-      ImageView dst;
-    } cmd_copy_buf2img;
-    struct {
-      ImageView src;
-      BufferView dst;
-    } cmd_copy_img2buf;
-    struct {
-      BufferView src;
-      BufferView dst;
-    } cmd_copy_buf;
-    struct {
-      ImageView src;
-      ImageView dst;
-    } cmd_copy_img;
-    struct {
       const Invocation* invoke;
     } cmd_invoke;
   };
@@ -552,39 +544,6 @@ inline Command cmd_inline_transact(const Transaction& transact) {
   Command cmd {};
   cmd.cmd_ty = L_COMMAND_TYPE_INLINE_TRANSACTION;
   cmd.cmd_inline_transact.transact = &transact;
-  return cmd;
-}
-
-// Copy data from a buffer to an image.
-inline Command cmd_copy_buf2img(const BufferView& src, const ImageView& dst) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_COPY_BUFFER_TO_IMAGE;
-  cmd.cmd_copy_buf2img.src = src;
-  cmd.cmd_copy_buf2img.dst = dst;
-  return cmd;
-}
-// Copy data from an image to a buffer.
-inline Command cmd_copy_img2buf(const ImageView& src, const BufferView& dst) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_COPY_IMAGE_TO_BUFFER;
-  cmd.cmd_copy_img2buf.src = src;
-  cmd.cmd_copy_img2buf.dst = dst;
-  return cmd;
-}
-// Copy data from a buffer to another buffer.
-inline Command cmd_copy_buf(const BufferView& src, const BufferView& dst) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_COPY_BUFFER;
-  cmd.cmd_copy_buf.src = src;
-  cmd.cmd_copy_buf.dst = dst;
-  return cmd;
-}
-// Copy data from an image to another image.
-inline Command cmd_copy_img(const ImageView& src, const ImageView& dst) {
-  Command cmd {};
-  cmd.cmd_ty = L_COMMAND_TYPE_COPY_IMAGE;
-  cmd.cmd_copy_img.src = src;
-  cmd.cmd_copy_img.dst = dst;
   return cmd;
 }
 

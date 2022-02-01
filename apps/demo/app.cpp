@@ -320,12 +320,20 @@ void guarded_main2() {
     .read_back()
     .build();
 
+  scoped::Invocation write_back = ctxt.build_trans_invoke("write_back")
+    .src(out_img.view())
+    .dst(out_buf.view())
+    .build();
+
+  scoped::Invocation proc = ctxt.build_composite_invoke("proc")
+    .invoke(main_pass)
+    .invoke(write_back)
+    .build();
 
 
   std::vector<Command> cmds {
     cmd_set_submit_ty(L_SUBMIT_TYPE_GRAPHICS),
-    cmd_invoke(main_pass),
-    cmd_copy_img2buf(out_img.view(), out_buf.view()),
+    cmd_invoke(proc),
   };
 
   scoped::CommandDrain cmd_drain = ctxt.create_cmd_drain();

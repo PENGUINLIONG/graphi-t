@@ -177,6 +177,26 @@ struct InvocationTransitionDetail {
         std::move(depth_img_view), std::move(usage)));
   }
 };
+struct InvocationCopyBufferToBufferDetail {
+  VkBufferCopy bc;
+  VkBuffer src;
+  VkBuffer dst;
+};
+struct InvocationCopyBufferToImageDetail {
+  VkBufferImageCopy bic;
+  VkBuffer src;
+  VkImage dst;
+};
+struct InvocationCopyImageToBufferDetail {
+  VkBufferImageCopy bic;
+  VkImage src;
+  VkBuffer dst;
+};
+struct InvocationCopyImageToImageDetail {
+  VkImageCopy ic;
+  VkImage src;
+  VkImage dst;
+};
 struct InvocationComputeDetail {
   const Task* task;
   VkPipelineBindPoint bind_pt;
@@ -210,6 +230,10 @@ struct Invocation {
   std::string label;
   const Context* ctxt;
   SubmitType submit_ty;
+  std::unique_ptr<InvocationCopyBufferToBufferDetail> b2b_detail;
+  std::unique_ptr<InvocationCopyBufferToImageDetail> b2i_detail;
+  std::unique_ptr<InvocationCopyImageToBufferDetail> i2b_detail;
+  std::unique_ptr<InvocationCopyImageToImageDetail> i2i_detail;
   std::unique_ptr<InvocationComputeDetail> comp_detail;
   std::unique_ptr<InvocationGraphicsDetail> graph_detail;
   std::unique_ptr<InvocationRenderPassDetail> pass_detail;

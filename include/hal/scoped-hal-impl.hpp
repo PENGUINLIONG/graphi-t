@@ -37,6 +37,11 @@ ImageBuilder Context::build_img(const std::string& label) const {
 DepthImageBuilder Context::build_depth_img(const std::string& label) const {
   return DepthImageBuilder(*this, label);
 }
+TransferInvocationBuilder Context::build_trans_invoke(
+  const std::string& label
+) const {
+  return TransferInvocationBuilder(*this, label);
+}
 CompositeInvocationBuilder Context::build_composite_invoke(
   const std::string& label
 ) const {
@@ -231,6 +236,9 @@ Invocation::~Invocation() {
   if (inner != nullptr) {
     destroy_invoke(*inner);
   }
+}
+Invocation TransferInvocationBuilder::build() {
+  return create_trans_invoke(parent, inner);
 }
 Invocation ComputeInvocationBuilder::build() {
   return create_comp_invoke(parent, inner);

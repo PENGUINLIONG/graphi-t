@@ -1647,6 +1647,166 @@ void _merge_subinvoke_transits(
   std::vector<const Invocation*> subinvokes { subinvoke };
   _merge_subinvoke_transits(subinvokes, transit_detail);
 }
+SubmitType _infer_submit_ty(const std::vector<const Invocation*>& subinvokes) {
+  for (size_t i = 0; i < subinvokes.size(); ++i) {
+    SubmitType submit_ty = subinvokes[i]->submit_ty;
+    if (submit_ty != L_SUBMIT_TYPE_ANY) { return submit_ty; }
+  }
+  return L_SUBMIT_TYPE_ANY;
+}
+VkBufferCopy _make_bc(const BufferView& src, const BufferView& dst) {
+  VkBufferCopy bc {};
+  bc.srcOffset = src.offset;
+  bc.dstOffset = dst.offset;
+  bc.size = dst.size;
+  return bc;
+}
+VkImageCopy _make_ic(const ImageView& src, const ImageView& dst) {
+  VkImageCopy ic {};
+  ic.srcOffset.x = src.x_offset;
+  ic.srcOffset.y = src.y_offset;
+  ic.dstOffset.x = dst.x_offset;
+  ic.dstOffset.y = dst.y_offset;
+  ic.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  ic.srcSubresource.baseArrayLayer = 0;
+  ic.srcSubresource.layerCount = 1;
+  ic.srcSubresource.mipLevel = 0;
+  ic.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  ic.dstSubresource.baseArrayLayer = 0;
+  ic.dstSubresource.layerCount = 1;
+  ic.dstSubresource.mipLevel = 0;
+  ic.extent.width = dst.width;
+  ic.extent.height = dst.height;
+  ic.extent.depth = 1;
+  return ic;
+}
+VkBufferImageCopy _make_bic(const BufferView& buf, const ImageView& img) {
+  VkBufferImageCopy bic {};
+  bic.bufferOffset = buf.offset;
+  bic.bufferRowLength = 0;
+  bic.bufferImageHeight = (uint32_t)img.img->img_cfg.height;
+  bic.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  bic.imageSubresource.mipLevel = 0;
+  bic.imageSubresource.baseArrayLayer = 0;
+  bic.imageSubresource.layerCount = 1;
+  bic.imageOffset.x = img.x_offset;
+  bic.imageOffset.y = img.y_offset;
+  bic.imageExtent.width = img.width;
+  bic.imageExtent.height = img.height;
+  bic.imageExtent.depth = 1;
+  return bic;
+}
+void _fill_transfer_b2b_invoke(
+  const BufferView& src,
+  const BufferView& dst,
+  Invocation& out
+) {
+  InvocationCopyBufferToBufferDetail b2b_detail {};
+  b2b_detail.bc = _make_bc(src, dst);
+  b2b_detail.src = src.buf->buf;
+  b2b_detail.dst = dst.buf->buf;
+
+  out.b2b_detail =
+    std::make_unique<InvocationCopyBufferToBufferDetail>(std::move(b2b_detail));
+
+  out.transit_detail.reg(src, L_BUFFER_USAGE_STAGING_BIT);
+  out.transit_detail.reg(dst, L_BUFFER_USAGE_STAGING_BIT);
+}
+void _fill_transfer_b2i_invoke(
+  const BufferView& src,
+  const ImageView& dst,
+  Invocation& out
+) {
+  InvocationCopyBufferToImageDetail b2i_detail {};
+  b2i_detail.bic = _make_bic(src, dst);
+  b2i_detail.src = src.buf->buf;
+  b2i_detail.dst = dst.img->img;
+
+  out.b2i_detail =
+    std::make_unique<InvocationCopyBufferToImageDetail>(std::move(b2i_detail));
+
+  out.transit_detail.reg(src, L_BUFFER_USAGE_STAGING_BIT);
+  out.transit_detail.reg(dst, L_IMAGE_USAGE_STAGING_BIT);
+}
+void _fill_transfer_i2b_invoke(
+  const ImageView& src,
+  const BufferView& dst,
+  Invocation& out
+) {
+  InvocationCopyImageToBufferDetail i2b_detail {};
+  i2b_detail.bic = _make_bic(dst, src);
+  i2b_detail.src = src.img->img;
+  i2b_detail.dst = dst.buf->buf;
+
+  out.i2b_detail =
+    std::make_unique<InvocationCopyImageToBufferDetail>(std::move(i2b_detail));
+
+  out.transit_detail.reg(src, L_IMAGE_USAGE_STAGING_BIT);
+  out.transit_detail.reg(dst, L_BUFFER_USAGE_STAGING_BIT);
+}
+void _fill_transfer_i2i_invoke(
+  const ImageView& src,
+  const ImageView& dst,
+  Invocation& out
+) {
+  InvocationCopyImageToImageDetail i2i_detail {};
+  i2i_detail.ic = _make_ic(src, dst);
+  i2i_detail.src = src.img->img;
+  i2i_detail.dst = dst.img->img;
+
+  out.i2i_detail =
+    std::make_unique<InvocationCopyImageToImageDetail>(std::move(i2i_detail));
+
+  out.transit_detail.reg(src, L_IMAGE_USAGE_STAGING_BIT);
+  out.transit_detail.reg(dst, L_IMAGE_USAGE_STAGING_BIT);
+}
+Invocation create_trans_invoke(
+  const Context& ctxt,
+  const TransferInvocationConfig& cfg
+) {
+  const ResourceView& src_rsc_view = cfg.src_rsc_view;
+  const ResourceView& dst_rsc_view = cfg.dst_rsc_view;
+  ResourceViewType src_rsc_view_ty = src_rsc_view.rsc_view_ty;
+  ResourceViewType dst_rsc_view_ty = dst_rsc_view.rsc_view_ty;
+
+  Invocation out {};
+  out.label = cfg.label;
+  out.ctxt = &ctxt;
+  out.submit_ty = L_SUBMIT_TYPE_ANY;
+  out.query_pool = cfg.is_timed ?
+    _create_query_pool(ctxt, VK_QUERY_TYPE_TIMESTAMP, 2) : VK_NULL_HANDLE;
+
+  if (
+    src_rsc_view_ty == L_RESOURCE_VIEW_TYPE_BUFFER &&
+    dst_rsc_view_ty == L_RESOURCE_VIEW_TYPE_BUFFER
+  ) {
+    _fill_transfer_b2b_invoke(
+      src_rsc_view.buf_view, dst_rsc_view.buf_view, out);
+  } else if (
+    src_rsc_view_ty == L_RESOURCE_VIEW_TYPE_BUFFER &&
+    dst_rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE
+  ) {
+    _fill_transfer_b2i_invoke(
+      src_rsc_view.buf_view, dst_rsc_view.img_view, out);
+  } else if (
+    src_rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE &&
+    dst_rsc_view_ty == L_RESOURCE_VIEW_TYPE_BUFFER
+  ) {
+    _fill_transfer_i2b_invoke(
+      src_rsc_view.img_view, dst_rsc_view.buf_view, out);
+  } else if (
+    src_rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE &&
+    dst_rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE
+  ) {
+    _fill_transfer_i2i_invoke(
+      src_rsc_view.img_view, dst_rsc_view.img_view, out);
+  } else {
+    panic("depth image cannot be transferred");
+  }
+
+  log::debug("created transfer invocation");
+  return out;
+}
 Invocation create_comp_invoke(
   const Task& task,
   const ComputeInvocationConfig& cfg
@@ -1800,7 +1960,7 @@ Invocation create_composite_invoke(
   Invocation out {};
   out.label = cfg.label;
   out.ctxt = &ctxt;
-  out.submit_ty = cfg.invokes[0]->submit_ty;
+  out.submit_ty = _infer_submit_ty(cfg.invokes);
   out.query_pool = cfg.is_timed ?
     _create_query_pool(ctxt, VK_QUERY_TYPE_TIMESTAMP, 2) : VK_NULL_HANDLE;
 
@@ -1834,9 +1994,11 @@ void destroy_invoke(Invocation& invoke) {
     vkDestroyFramebuffer(ctxt.dev, pass_detail.framebuf, nullptr);
     log::debug("destroyed render pass invocation");
   }
+
   if (invoke.query_pool != VK_NULL_HANDLE) {
     vkDestroyQueryPool(ctxt.dev, invoke.query_pool, nullptr);
   }
+
   invoke = {};
 }
 
@@ -2168,7 +2330,7 @@ const BufferView& _transit_rsc(
     0, nullptr);
 
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled buffer barrier");
+    log::debug("inserted buffer barrier");
   }
 
   dyn_detail.access = dst_access;
@@ -2227,7 +2389,7 @@ const ImageView& _transit_rsc(
     1, &imb);
 
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled image barrier");
+    log::debug("inserted image barrier");
   }
 
   dyn_detail.access = dst_access;
@@ -2287,7 +2449,7 @@ const DepthImageView& _transit_rsc(
     1, &imb);
 
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("schedule depth image barrier");
+    log::debug("inserted depth image barrier");
   }
 
   dyn_detail.access = dst_access;
@@ -2327,111 +2489,6 @@ void _record_cmd_inline_transact(
     cmd.cmd_inline_transact.transact->label, "'");
 }
 
-void _record_cmd_copy_buf2img(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_copy_buf2img;
-  const auto& src = _transit_rsc(transact, in.src, L_BUFFER_USAGE_STAGING_BIT);
-  const auto& dst = _transit_rsc(transact, in.dst, L_IMAGE_USAGE_STAGING_BIT);
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
-
-  VkBufferImageCopy bic {};
-  bic.bufferOffset = src.offset;
-  bic.bufferRowLength = 0;
-  bic.bufferImageHeight = (uint32_t)dst.img->img_cfg.height;
-  bic.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  bic.imageSubresource.mipLevel = 0;
-  bic.imageSubresource.baseArrayLayer = 0;
-  bic.imageSubresource.layerCount = 1;
-  bic.imageOffset.x = dst.x_offset;
-  bic.imageOffset.y = dst.y_offset;
-  bic.imageExtent.width = dst.width;
-  bic.imageExtent.height = dst.height;
-  bic.imageExtent.depth = 1;
-
-  vkCmdCopyBufferToImage(cmdbuf, src.buf->buf, dst.img->img,
-    VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &bic);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled copy from buffer '", src.buf->buf_cfg.label,
-      "' to image '", dst.img->img_cfg.label, "'");
-  }
-}
-void _record_cmd_copy_img2buf(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_copy_img2buf;
-  const auto& src = _transit_rsc(transact, in.src, L_BUFFER_USAGE_STAGING_BIT);
-  const auto& dst = _transit_rsc(transact, in.dst, L_IMAGE_USAGE_STAGING_BIT);
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
-
-  VkBufferImageCopy bic {};
-  bic.bufferOffset = dst.offset;
-  bic.bufferRowLength = 0;
-  bic.bufferImageHeight = static_cast<uint32_t>(src.img->img_cfg.height);
-  bic.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  bic.imageSubresource.mipLevel = 0;
-  bic.imageSubresource.baseArrayLayer = 0;
-  bic.imageSubresource.layerCount = 1;
-  bic.imageOffset.x = src.x_offset;
-  bic.imageOffset.y = src.y_offset;
-  bic.imageExtent.width = src.width;
-  bic.imageExtent.height = src.height;
-  bic.imageExtent.depth = 1;
-
-  vkCmdCopyImageToBuffer(cmdbuf, src.img->img,
-    VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, dst.buf->buf, 1, &bic);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled copy from image '", src.img->img_cfg.label,
-      "' to buffer '", dst.buf->buf_cfg.label, "'");
-  }
-}
-void _record_cmd_copy_buf(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_copy_buf;
-  const auto& src = _transit_rsc(transact, in.src, L_BUFFER_USAGE_STAGING_BIT);
-  const auto& dst = _transit_rsc(transact, in.dst, L_BUFFER_USAGE_STAGING_BIT);
-  assert(src.size == dst.size, "buffer copy size mismatched");
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
-
-  VkBufferCopy bc {};
-  bc.srcOffset = src.offset;
-  bc.dstOffset = dst.offset;
-  bc.size = dst.size;
-
-  vkCmdCopyBuffer(cmdbuf, src.buf->buf, dst.buf->buf, 1, &bc);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled copy from buffer '", src.buf->buf_cfg.label,
-      "' to buffer '", dst.buf->buf_cfg.label, "'");
-  }
-}
-void _record_cmd_copy_img(TransactionLike& transact, const Command& cmd) {
-  const auto& in = cmd.cmd_copy_img;
-  const auto& src = _transit_rsc(transact, in.src, L_IMAGE_USAGE_STAGING_BIT);
-  const auto& dst = _transit_rsc(transact, in.dst, L_IMAGE_USAGE_STAGING_BIT);
-  assert(src.width == dst.width && src.height == dst.height,
-    "image copy size mismatched");
-  auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
-
-  VkImageCopy ic {};
-  ic.srcOffset.x = src.x_offset;
-  ic.srcOffset.y = src.y_offset;
-  ic.dstOffset.x = dst.x_offset;
-  ic.dstOffset.y = dst.y_offset;
-  ic.srcSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  ic.srcSubresource.baseArrayLayer = 0;
-  ic.srcSubresource.layerCount = 1;
-  ic.srcSubresource.mipLevel = 0;
-  ic.dstSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-  ic.dstSubresource.baseArrayLayer = 0;
-  ic.dstSubresource.layerCount = 1;
-  ic.dstSubresource.mipLevel = 0;
-  ic.extent.width = dst.width;
-  ic.extent.height = dst.height;
-  ic.extent.depth = 1;
-
-  vkCmdCopyImage(cmdbuf, src.img->img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-    dst.img->img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &ic);
-  if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("scheduled copy from image '", src.img->img_cfg.label,
-      "' to image '", dst.img->img_cfg.label, "'");
-  }
-}
-
 void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
   const auto& in = cmd.cmd_invoke;
   const auto& invoke = *in.invoke;
@@ -2457,7 +2514,31 @@ void _record_cmd_invoke(TransactionLike& transact, const Command& cmd) {
     _transit_rsc(transact, pair.first, pair.second);
   }
 
-  if (invoke.comp_detail) {
+  if (invoke.b2b_detail) {
+    const InvocationCopyBufferToBufferDetail& b2b_detail =
+      *invoke.b2b_detail;
+    vkCmdCopyBuffer(cmdbuf, b2b_detail.src, b2b_detail.dst, 1, &b2b_detail.bc);
+    log::debug("applied transfer invocation '", invoke.label, "'");
+
+  } else if (invoke.b2i_detail) {
+    const InvocationCopyBufferToImageDetail& b2i_detail = *invoke.b2i_detail;
+    vkCmdCopyBufferToImage(cmdbuf, b2i_detail.src, b2i_detail.dst,
+      VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b2i_detail.bic);
+    log::debug("applied transfer invocation '", invoke.label, "'");
+
+  } else if (invoke.i2b_detail) {
+    const InvocationCopyImageToBufferDetail& i2b_detail = *invoke.i2b_detail;
+    vkCmdCopyImageToBuffer(cmdbuf, i2b_detail.src,
+      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, i2b_detail.dst, 1, &i2b_detail.bic);
+    log::debug("applied transfer invocation '", invoke.label, "'");
+
+  } else if (invoke.i2i_detail) {
+    const InvocationCopyImageToImageDetail& i2i_detail = *invoke.i2i_detail;
+    vkCmdCopyImage(cmdbuf, i2i_detail.src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+      i2i_detail.dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &i2i_detail.ic);
+    log::debug("applied transfer invocation '", invoke.label, "'");
+
+  } else if (invoke.comp_detail) {
     const InvocationComputeDetail& comp_detail = *invoke.comp_detail;
     const Task& task = *comp_detail.task;
     const DispatchSize& workgrp_count = comp_detail.workgrp_count;
@@ -2558,18 +2639,6 @@ void _record_cmd(TransactionLike& transact, const Command& cmd) {
     break;
   case L_COMMAND_TYPE_INLINE_TRANSACTION:
     _record_cmd_inline_transact(transact, cmd);
-    break;
-  case L_COMMAND_TYPE_COPY_BUFFER_TO_IMAGE:
-    _record_cmd_copy_buf2img(transact, cmd);
-    break;
-  case L_COMMAND_TYPE_COPY_IMAGE_TO_BUFFER:
-    _record_cmd_copy_img2buf(transact, cmd);
-    break;
-  case L_COMMAND_TYPE_COPY_BUFFER:
-    _record_cmd_copy_buf(transact, cmd);
-    break;
-  case L_COMMAND_TYPE_COPY_IMAGE:
-    _record_cmd_copy_img(transact, cmd);
     break;
   case L_COMMAND_TYPE_INVOKE:
     _record_cmd_invoke(transact, cmd);
