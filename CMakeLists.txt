@@ -59,8 +59,8 @@ add_executable(bin2c
 
 # The GraphiT library.
 include_directories(${INC_DIRS})
-file(GLOB SRCS "${PROJECT_SOURCE_DIR}/src/*")
-file(GLOB INCS "${PROJECT_SOURCE_DIR}/include/*")
+file(GLOB_RECURSE SRCS "${PROJECT_SOURCE_DIR}/src/*")
+file(GLOB_RECURSE INCS "${PROJECT_SOURCE_DIR}/include/*")
 add_library(GraphiT STATIC ${SRCS} ${INCS} )
 target_link_libraries(GraphiT glslang SPIRV ${LINK_LIBS})
 add_dependencies(GraphiT bin2c)

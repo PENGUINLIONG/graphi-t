@@ -2406,8 +2406,14 @@ void _transit_rscs(
 void _record_invoke(TransactionLike& transact, const Invocation& invoke) {
   VkCommandBuffer cmdbuf = _get_cmdbuf(transact, invoke.submit_ty);
 
+  // We want to transition resources based on their current state so we don't
+  // assume the barrier parameters in baked command buffers.
+  if (transact.level != VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
+    _transit_rscs(transact, invoke.transit_detail);
+  }
+
   // If the invocation has been baked, simply inline the baked secondary command
-  // buffer.
+  // buffer. Note that the timing commands are also baked.
   if (invoke.bake_detail) {
     vkCmdExecuteCommands(cmdbuf, 1, &invoke.bake_detail->cmdbuf);
     return;
@@ -2420,8 +2426,6 @@ void _record_invoke(TransactionLike& transact, const Invocation& invoke) {
 
     log::debug("invocation '", invoke.label, "' will be timed");
   }
-
-  _transit_rscs(transact, invoke.transit_detail);
 
   if (invoke.b2b_detail) {
     const InvocationCopyBufferToBufferDetail& b2b_detail =
