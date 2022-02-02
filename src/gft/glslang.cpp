@@ -11,10 +11,12 @@ namespace liong {
 
 namespace glslang {
 
-void initialize() {
+void _initialize(bool silent) {
   static bool is_initialized = false;
   if (is_initialized) {
-    log::warn("ignored redundant glslang module initialization");
+    if (!silent) {
+      log::warn("ignored redundant glslang module initialization");
+    }
     return;
   }
 
@@ -27,8 +29,16 @@ void initialize() {
   log::info("supported glsl version: ", glsl_ver_str);
 
   is_initialized = true;
+
+}
+void initialize() {
+  _initialize(false);
 }
 
+std::unique_ptr<::glslang::TProgram> _create_program() {
+  _initialize(true);
+  return std::make_unique<::glslang::TProgram>();
+}
 
 // See `third\glslang\StandAlone\ResourceLimits.cpp`.
 TBuiltInResource make_default_builtin_rsc() {
@@ -148,7 +158,7 @@ private:
 
 public:
   Glsl2Spv() :
-    program(std::make_unique<Program>()),
+    program(_create_program()),
     shaders() {}
 
   constexpr static EShMessages MSG_OPTS = (EShMessages)(
@@ -268,7 +278,7 @@ private:
 
 public:
   Hlsl2Spv() :
-    program(std::make_unique<Program>()),
+    program(_create_program()),
     shaders() {}
 
   constexpr static EShMessages MSG_OPTS = (EShMessages)(
