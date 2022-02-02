@@ -1365,6 +1365,9 @@ void _update_desc_set(
   std::vector<VkDescriptorBufferInfo> dbis;
   std::vector<VkDescriptorImageInfo> diis;
   std::vector<VkWriteDescriptorSet> wdss;
+  dbis.reserve(rsc_views.size());
+  diis.reserve(rsc_views.size());
+  wdss.reserve(rsc_views.size());
 
   auto push_dbi = [&](const BufferView& buf_view) {
     VkDescriptorBufferInfo dbi {};
@@ -1390,7 +1393,6 @@ void _update_desc_set(
     return &diis.back();
   };
 
-  wdss.reserve(rsc_views.size());
   for (uint32_t i = 0; i < rsc_views.size(); ++i) {
     const ResourceView& rsc_view = rsc_views[i];
 
