@@ -22,6 +22,12 @@ if (NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release" CACHE PATH "Build Type" FORCE)
 endif()
 
+set(LINK_LIBS
+)
+set(INC_DIRS
+    "${PROJECT_SOURCE_DIR}/include"
+)
+
 if(GFT_WITH_VULKAN)
     add_definitions(-DGFT_WITH_VULKAN=1)
     find_package(Vulkan)
@@ -31,23 +37,28 @@ if(GFT_WITH_VULKAN)
         message("")
     else()
         message("-- Vulkan context enabled")
+        list(APPEND INC_DIRS
+            ${Vulkan_INCLUDE_DIRS}
+        )
+        list(APPEND LINK_LIBS
+            ${Vulkan_LIBRARIES}
+        )
     endif()
 endif()
 
-set(LINK_LIBS
-    ${Vulkan_LIBRARIES}
-)
-set(INC_DIRS
-    "${PROJECT_SOURCE_DIR}/include"
-    "${PROJECT_SOURCE_DIR}/third"
-    ${Vulkan_INCLUDE_DIRS}
-)
 
 # Runtime shader compilation support.
 if(GFT_WITH_GLSLANG)
     add_definitions(-DGFT_WITH_GLSLANG=1)
     set(BUILD_EXTERNAL OFF CACHE BOOL "" FORCE)
     add_subdirectory(third/glslang)
+    list(APPEND INC_DIRS
+        "${PROJECT_SOURCE_DIR}/third"
+    )
+    list(APPEND LINK_LIBS
+        glslang
+        SPIRV
+    )
 endif()
 
 # Used to inline kernel/shaders.
@@ -63,7 +74,7 @@ include_directories(${INC_DIRS})
 file(GLOB_RECURSE SRCS "${PROJECT_SOURCE_DIR}/src/*")
 file(GLOB_RECURSE INCS "${PROJECT_SOURCE_DIR}/include/*")
 add_library(GraphiT STATIC ${SRCS} ${INCS} )
-target_link_libraries(GraphiT glslang SPIRV ${LINK_LIBS})
+target_link_libraries(GraphiT ${LINK_LIBS})
 add_dependencies(GraphiT bin2c)
 
 # GraphiT example apps.
