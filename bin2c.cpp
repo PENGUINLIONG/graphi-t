@@ -1,7 +1,7 @@
 // # bin2c
 // @PENGUINLIONG
-#include "assert.hpp"
-#include "util.hpp"
+#include "gft/assert.hpp"
+#include "gft/util.hpp"
 
 using namespace liong;
 

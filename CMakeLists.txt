@@ -53,9 +53,10 @@ endif()
 # Used to inline kernel/shaders.
 add_executable(bin2c
     "bin2c.cpp"
-    "include/assert.hpp"
-    "include/util.hpp"
-    "src/util.cpp" )
+    "include/gft/assert.hpp"
+    "include/gft/util.hpp"
+    "src/gft/util.cpp"
+)
 
 # The GraphiT library.
 include_directories(${INC_DIRS})

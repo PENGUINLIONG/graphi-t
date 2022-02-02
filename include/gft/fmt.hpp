@@ -2,8 +2,8 @@
 // @PENGUINLIONG
 #pragma once
 #include <cstdint>
-#include "assert.hpp"
-#include "vmath.hpp"
+#include "gft/assert.hpp"
+#include "gft/vmath.hpp"
 
 namespace liong {
 

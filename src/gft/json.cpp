@@ -1,8 +1,8 @@
 // JSON serialization/deserialization.
 // @PENGUINLIONG
 #include <sstream>
-#include "log.hpp"
-#include "json.hpp"
+#include "gft/log.hpp"
+#include "gft/json.hpp"
 
 namespace liong {
 namespace json {

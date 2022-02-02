@@ -4,7 +4,7 @@
 #include <cmath>
 #include <limits>
 #include <algorithm>
-#include "log.hpp"
+#include "gft/log.hpp"
 
 namespace liong {
 

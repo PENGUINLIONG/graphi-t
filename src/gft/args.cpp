@@ -1,8 +1,8 @@
 #include <map>
 #include <vector>
 #include <iostream>
-#include "args.hpp"
-#include "assert.hpp"
+#include "gft/args.hpp"
+#include "gft/assert.hpp"
 
 namespace liong {
 

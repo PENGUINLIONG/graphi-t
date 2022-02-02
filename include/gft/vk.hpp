@@ -10,7 +10,7 @@
 #include <chrono>
 #include <vulkan/vulkan.h>
 #define HAL_IMPL_NAMESPACE vk
-#include "hal/scoped-hal.hpp"
+#include "gft/hal/scoped-hal.hpp"
 
 namespace liong {
 

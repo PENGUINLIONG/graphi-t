@@ -1,8 +1,8 @@
 // # 3D Mesh utilities
 // @PENGUINLIONG
-#include "vmath.hpp"
-#include "mesh.hpp"
-#include "assert.hpp"
+#include "gft/vmath.hpp"
+#include "gft/mesh.hpp"
+#include "gft/assert.hpp"
 
 namespace liong {
 namespace mesh {

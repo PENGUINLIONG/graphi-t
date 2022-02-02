@@ -3,9 +3,9 @@
 #include "glslang/SPIRV/GlslangToSpv.h"
 #include "glslang/glslang/Public/ShaderLang.h"
 #include "glslang/glslang/Include/BaseTypes.h"
-#include "glslang.hpp"
-#include "assert.hpp"
-#include "log.hpp"
+#include "gft/glslang.hpp"
+#include "gft/assert.hpp"
+#include "gft/log.hpp"
 
 namespace liong {
 

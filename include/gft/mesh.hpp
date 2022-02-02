@@ -3,7 +3,7 @@
 #pragma once
 #include <vector>
 #include <string>
-#include "vmath.hpp"
+#include "gft/vmath.hpp"
 
 namespace liong {
 namespace mesh {
