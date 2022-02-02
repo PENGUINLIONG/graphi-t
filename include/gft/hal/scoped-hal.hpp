@@ -687,7 +687,7 @@ struct MappedBuffer {
     write(src.data(), src.size() * sizeof(T));
   }
   template<typename T>
-  inline void write(T& src) {
+  inline void write(const T& src) {
     write(&src, sizeof(T));
   }
 };
@@ -787,6 +787,15 @@ struct BufferBuilder {
   }
   inline Self& index() {
     return usage(L_BUFFER_USAGE_INDEX_BIT);
+  }
+
+  template<typename T>
+  inline Self& size_like(const std::vector<T>& data) {
+    return size(data.size() * sizeof(T));
+  }
+  template<typename T>
+  inline Self& size_like(const T& data) {
+    return size(sizeof(T));
   }
 
   Buffer build();
