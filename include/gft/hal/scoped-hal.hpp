@@ -332,9 +332,9 @@ struct ComputeTaskBuilder {
     return *this;
   }
 
-  template<typename TContainer>
-  inline Self& comp(const TContainer& buf) {
-    return comp(buf.data(), buf.size() * sizeof(TContainer::value_type));
+  template<typename T>
+  inline Self& comp(const std::vector<T>& buf) {
+    return comp(buf.data(), buf.size() * sizeof(T));
   }
 
   Task build();
@@ -386,13 +386,13 @@ struct GraphicsTaskBuilder {
     return *this;
   }
 
-  template<typename TContainer>
-  inline Self& vert(const TContainer& buf) {
-    return vert(buf.data(), buf.size() * sizeof(TContainer::value_type));
+  template<typename T>
+  inline Self& vert(const std::vector<T>& buf) {
+    return vert(buf.data(), buf.size() * sizeof(T));
   }
-  template<typename TContainer>
-  inline Self& frag(const TContainer& buf) {
-    return frag(buf.data(), buf.size() * sizeof(TContainer::value_type));
+  template<typename T>
+  inline Self& frag(const std::vector<T>& buf) {
+    return frag(buf.data(), buf.size() * sizeof(T));
   }
 
   inline Self& per_vert_input(fmt::Format fmt) {
