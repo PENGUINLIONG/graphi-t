@@ -152,11 +152,6 @@ struct RenderPass {
 
 
 
-struct WorkgroupSizeSpecializationDetail {
-  uint32_t x_spec_id;
-  uint32_t y_spec_id;
-  uint32_t z_spec_id;
-};
 struct Task {
   std::string label;
   SubmitType submit_ty;
@@ -168,7 +163,7 @@ struct Task {
   std::vector<ResourceType> rsc_tys;
   std::vector<VkShaderModule> shader_mods;
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
-  WorkgroupSizeSpecializationDetail workgrp_spec_detail;
+  DispatchSize workgrp_size;
 };
 
 
