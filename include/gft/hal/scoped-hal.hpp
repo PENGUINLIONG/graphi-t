@@ -683,7 +683,7 @@ struct MappedBuffer {
     std::memcpy(data(), src, size);
   }
   template<typename T>
-  inline void write(std::vector<T>& src) {
+  inline void write(const std::vector<T>& src) {
     write(src.data(), src.size() * sizeof(T));
   }
   template<typename T>
