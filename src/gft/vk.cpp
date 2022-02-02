@@ -1376,7 +1376,7 @@ void _update_desc_set(
     log::debug("bound pool resource #", wdss.size(), " to buffer '",
       buf_view.buf->buf_cfg.label, "'");
 
-    return dbis.back();
+    return &dbis.back();
   };
   auto push_dii = [&](const ImageView& img_view, VkImageLayout layout) {
     VkDescriptorImageInfo dii {};
@@ -1387,7 +1387,7 @@ void _update_desc_set(
     log::debug("bound pool resource #", wdss.size(), " to image '",
       img_view.img->img_cfg.label, "'");
 
-    return diis.back();
+    return &diis.back();
   };
 
   wdss.reserve(rsc_views.size());
@@ -1402,20 +1402,20 @@ void _update_desc_set(
     wds.descriptorCount = 1;
     switch (rsc_tys[i]) {
     case L_RESOURCE_TYPE_UNIFORM_BUFFER:
-      wds.pBufferInfo = &push_dbi(rsc_view.buf_view);
+      wds.pBufferInfo = push_dbi(rsc_view.buf_view);
       wds.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
       break;
     case L_RESOURCE_TYPE_STORAGE_BUFFER:
-      wds.pBufferInfo = &push_dbi(rsc_view.buf_view);
+      wds.pBufferInfo = push_dbi(rsc_view.buf_view);
       wds.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
       break;
     case L_RESOURCE_TYPE_SAMPLED_IMAGE:
-      wds.pImageInfo = &push_dii(rsc_view.img_view,
+      wds.pImageInfo = push_dii(rsc_view.img_view,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
       wds.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
       break;
     case L_RESOURCE_TYPE_STORAGE_IMAGE:
-      wds.pImageInfo = &push_dii(rsc_view.img_view,
+      wds.pImageInfo = push_dii(rsc_view.img_view,
         VK_IMAGE_LAYOUT_GENERAL);
       wds.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
       break;
