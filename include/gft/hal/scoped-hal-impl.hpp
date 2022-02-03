@@ -9,18 +9,144 @@ namespace liong {
 namespace HAL_IMPL_NAMESPACE {
 namespace scoped {
 
-Context::Context(const ContextConfig& cfg) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Context>(create_ctxt(cfg))) {}
+enum GcObjectType {
+  L_GC_OBJECT_TYPE_CONTEXT,
+  L_GC_OBJECT_TYPE_BUFFER,
+  L_GC_OBJECT_TYPE_IMAGE,
+  L_GC_OBJECT_TYPE_DEPTH_IMAGE,
+  L_GC_OBJECT_TYPE_RENDER_PASS,
+  L_GC_OBJECT_TYPE_TASK,
+  L_GC_OBJECT_TYPE_INVOCATION,
+  L_GC_OBJECT_TYPE_TRANSACTION,
+};
+struct GcEntry {
+  GcObjectType obj_ty;
+  void* obj;
+};
+struct GcFrame {
+  bool is_extern;
+  // Use lists to ensure stable address.
+  std::vector<GcEntry> entries;
+
+  GcFrame(bool is_extern = false) : is_extern(is_extern) {
+    if (!is_extern) {
+      log::debug("entered gc frame");
+    }
+  }
+  GcFrame(const GcFrame&) = delete;
+  GcFrame(GcFrame&&) = default;
+  ~GcFrame() {
+    for (auto it = entries.rbegin(); it != entries.rend(); ++it) {
+      auto& entry = *it;
+      switch (entry.obj_ty) {
+      case L_GC_OBJECT_TYPE_CONTEXT:
+        destroy_ctxt(*(HAL_IMPL_NAMESPACE::Context*)entry.obj);
+        if (!is_extern) { delete (HAL_IMPL_NAMESPACE::Context*)entry.obj; }
+        break;
+      case L_GC_OBJECT_TYPE_BUFFER:
+        destroy_buf(*(HAL_IMPL_NAMESPACE::Buffer*)entry.obj);
+        if (!is_extern) { delete (HAL_IMPL_NAMESPACE::Buffer*)entry.obj; }
+        break;
+      case L_GC_OBJECT_TYPE_IMAGE:
+        destroy_img(*(HAL_IMPL_NAMESPACE::Image*)entry.obj);
+        if (!is_extern) { delete (HAL_IMPL_NAMESPACE::Image*)entry.obj; }
+        break;
+      case L_GC_OBJECT_TYPE_DEPTH_IMAGE:
+        destroy_depth_img(*(HAL_IMPL_NAMESPACE::DepthImage*)entry.obj);
+        if (!is_extern) { delete (HAL_IMPL_NAMESPACE::DepthImage*)entry.obj; }
+        break;
+      case L_GC_OBJECT_TYPE_RENDER_PASS:
+        destroy_pass(*(HAL_IMPL_NAMESPACE::RenderPass*)entry.obj);
+        if (!is_extern) { delete (HAL_IMPL_NAMESPACE::RenderPass*)entry.obj; }
+        break;
+      case L_GC_OBJECT_TYPE_TASK:
+        destroy_task(*(HAL_IMPL_NAMESPACE::Task*)entry.obj);
+        if (!is_extern) { delete (HAL_IMPL_NAMESPACE::Task*)entry.obj; }
+        break;
+      case L_GC_OBJECT_TYPE_INVOCATION:
+        destroy_invoke(*(HAL_IMPL_NAMESPACE::Invocation*)entry.obj);
+        if (!is_extern) { delete (HAL_IMPL_NAMESPACE::Invocation*)entry.obj; }
+        break;
+      case L_GC_OBJECT_TYPE_TRANSACTION:
+        destroy_transact(*(HAL_IMPL_NAMESPACE::Transaction*)entry.obj);
+        if (!is_extern) { delete (HAL_IMPL_NAMESPACE::Transaction*)entry.obj; }
+        break;
+      default: unreachable();
+      }
+    }
+    entries.clear();
+    if (!is_extern) {
+      log::debug("exited gc frame");
+    }
+  }
+
+};
+// External resources, things here won't be released by GC.
+
+std::vector<GcFrame> _init_gc_stack() {
+  std::vector<GcFrame> out {};
+  out.reserve(5);
+  out.emplace_back(); // Global GC frame.
+  return out;
+}
+static std::vector<GcFrame> GC_STACK = _init_gc_stack();
+static GcFrame GC_EXTERN(true);
+
+void push_gc_frame() {
+  GC_STACK.emplace_back(false);
+}
+void pop_gc_frame(bool flatten) {
+  assert(GC_STACK.size() > 1);
+  if (flatten) {
+    for (auto entry : GC_STACK.back().entries) {
+      GC_STACK[GC_STACK.size() - 1].entries.emplace_back(entry);
+    }
+    GC_STACK.back().entries.clear();
+  }
+  GC_STACK.pop_back();
+}
+
+
+
+#define L_DEF_REG_GC(ty, ty_enum) \
+  HAL_IMPL_NAMESPACE::ty* reg_gc_rsc(HAL_IMPL_NAMESPACE::ty&& x) { \
+    GcEntry entry {}; \
+    entry.obj_ty = ty_enum; \
+    entry.obj = new HAL_IMPL_NAMESPACE::ty( \
+        std::forward<HAL_IMPL_NAMESPACE::ty>(x)); \
+    GC_STACK.back().entries.emplace_back(std::move(entry)); \
+    return (HAL_IMPL_NAMESPACE::ty*)GC_STACK.back().entries.back().obj; \
+  } \
+  HAL_IMPL_NAMESPACE::ty* reg_extern_rsc(HAL_IMPL_NAMESPACE::ty&& x) { \
+    GcEntry entry {}; \
+    entry.obj_ty = ty_enum; \
+    entry.obj = new HAL_IMPL_NAMESPACE::ty( \
+        std::forward<HAL_IMPL_NAMESPACE::ty>(x)); \
+    GC_EXTERN.entries.emplace_back(std::move(entry)); \
+    return (HAL_IMPL_NAMESPACE::ty*)GC_EXTERN.entries.back().obj; \
+  }
+
+L_DEF_REG_GC(Context, L_GC_OBJECT_TYPE_CONTEXT);
+L_DEF_REG_GC(Buffer, L_GC_OBJECT_TYPE_BUFFER);
+L_DEF_REG_GC(Image, L_GC_OBJECT_TYPE_IMAGE);
+L_DEF_REG_GC(DepthImage, L_GC_OBJECT_TYPE_DEPTH_IMAGE);
+L_DEF_REG_GC(RenderPass, L_GC_OBJECT_TYPE_RENDER_PASS);
+L_DEF_REG_GC(Task, L_GC_OBJECT_TYPE_TASK);
+L_DEF_REG_GC(Invocation, L_GC_OBJECT_TYPE_INVOCATION);
+L_DEF_REG_GC(Transaction, L_GC_OBJECT_TYPE_TRANSACTION);
+
+#undef L_DEF_REG_GC
+
+
+
 Context::Context(HAL_IMPL_NAMESPACE::Context&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Context>(
-    std::forward<HAL_IMPL_NAMESPACE::Context>(inner))) {}
+  inner(reg_gc_rsc(std::forward<HAL_IMPL_NAMESPACE::Context>(inner))) {}
+Context::Context(const ContextConfig& cfg) :
+  Context(create_ctxt(cfg)) {}
 Context::Context(const std::string& label, uint32_t dev_idx) :
   Context(ContextConfig { label, dev_idx }) {}
-Context::~Context() {
-  if (inner != nullptr) {
-    HAL_IMPL_NAMESPACE::destroy_ctxt(*inner);
-  }
-}
+
+
 
 ComputeTaskBuilder Context::build_comp_task(const std::string& label) const {
   return ComputeTaskBuilder(*this, label);
@@ -74,6 +200,9 @@ void _copy_img_tile(
       row_size);
   }
 }
+
+
+
 MappedImage::MappedImage(const ImageView& view, MemoryAccess map_access) :
   mapped(nullptr),
   row_pitch(0),
@@ -130,14 +259,7 @@ MappedImage::~MappedImage() {
 
 
 Buffer::Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Buffer>(
-    std::forward<HAL_IMPL_NAMESPACE::Buffer>(inner))),
-  dont_destroy(false) {}
-Buffer::~Buffer() {
-  if (!dont_destroy && inner != nullptr) {
-    HAL_IMPL_NAMESPACE::destroy_buf(*inner);
-  }
-}
+  inner(reg_gc_rsc(std::forward<HAL_IMPL_NAMESPACE::Buffer>(inner))) {}
 Buffer BufferBuilder::build() {
   return create_buf(parent, inner);
 }
@@ -145,14 +267,7 @@ Buffer BufferBuilder::build() {
 
 
 Image::Image(HAL_IMPL_NAMESPACE::Image&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Image>(
-    std::forward<HAL_IMPL_NAMESPACE::Image>(inner))),
-  dont_destroy(false) {}
-Image::~Image() {
-  if (!dont_destroy && inner != nullptr) {
-    HAL_IMPL_NAMESPACE::destroy_img(*inner);
-  }
-}
+  inner(reg_gc_rsc(std::forward<HAL_IMPL_NAMESPACE::Image>(inner))) {}
 Image ImageBuilder::build() {
   return create_img(parent, inner);
 }
@@ -160,9 +275,7 @@ Image ImageBuilder::build() {
 
 
 DepthImage::DepthImage(HAL_IMPL_NAMESPACE::DepthImage&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::DepthImage>(
-    std::forward<HAL_IMPL_NAMESPACE::DepthImage>(inner))) {}
-DepthImage::~DepthImage() { HAL_IMPL_NAMESPACE::destroy_depth_img(*inner); }
+  inner(reg_gc_rsc(std::forward<HAL_IMPL_NAMESPACE::DepthImage>(inner))) {}
 DepthImage DepthImageBuilder::build() {
   return create_depth_img(parent, inner);
 }
@@ -170,9 +283,7 @@ DepthImage DepthImageBuilder::build() {
 
 
 RenderPass::RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::RenderPass>(
-    std::forward<HAL_IMPL_NAMESPACE::RenderPass>(inner))) {}
-RenderPass::~RenderPass() { HAL_IMPL_NAMESPACE::destroy_pass(*inner); }
+  inner(reg_gc_rsc(std::forward<HAL_IMPL_NAMESPACE::RenderPass>(inner))) {}
 RenderPass RenderPassBuilder::build() {
   return create_pass(parent, inner);
 }
@@ -191,13 +302,7 @@ RenderPassInvocationBuilder RenderPass::build_pass_invoke(
 
 
 Task::Task(HAL_IMPL_NAMESPACE::Task&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Task>(
-    std::forward<HAL_IMPL_NAMESPACE::Task>(inner))) {}
-Task::~Task() {
-  if (inner != nullptr) {
-    destroy_task(*inner);
-  }
-}
+  inner(reg_gc_rsc(std::forward<HAL_IMPL_NAMESPACE::Task>(inner))) {}
 Task ComputeTaskBuilder::build() {
   return create_comp_task(parent, inner);
 }
@@ -219,13 +324,7 @@ GraphicsInvocationBuilder Task::build_graph_invoke(
 
 
 Invocation::Invocation(HAL_IMPL_NAMESPACE::Invocation&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Invocation>(
-    std::forward<HAL_IMPL_NAMESPACE::Invocation>(inner))) {}
-Invocation::~Invocation() {
-  if (inner != nullptr) {
-    destroy_invoke(*inner);
-  }
-}
+  inner(reg_gc_rsc(std::forward<HAL_IMPL_NAMESPACE::Invocation>(inner))) {}
 Invocation TransferInvocationBuilder::build() {
   return create_trans_invoke(parent, inner);
 }
@@ -246,14 +345,9 @@ Transaction Invocation::submit() {
 }
 
 
+
 Transaction::Transaction(HAL_IMPL_NAMESPACE::Transaction&& inner) :
-  inner(std::make_unique<HAL_IMPL_NAMESPACE::Transaction>(
-    std::forward<HAL_IMPL_NAMESPACE::Transaction>(inner))) {}
-Transaction::~Transaction() {
-  if (inner != nullptr) {
-    destroy_transact(*inner);
-  }
-}
+  inner(reg_gc_rsc(std::forward<HAL_IMPL_NAMESPACE::Transaction>(inner))) {}
 
 } // namespace scoped
 } // namespace HAL_IMPL_NAMESPACE

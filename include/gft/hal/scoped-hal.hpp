@@ -13,13 +13,28 @@ namespace scoped {
 
 
 
+// Enter a scope of garbage collection so the resources created after this call
+// will be released during a next call to `pop_gc_frame`.
+extern void push_gc_frame();
+// Release all scoped objects created after a last call to `push_gc_frame`. Mark
+// `flatten` true if you want the scoped objects created in this frame to be
+// released at the end of the parent frame.
+extern void pop_gc_frame(bool flatten);
+
+// RAII helper to manage GC frame scopes.
+struct GcScope {
+  bool flatten;
+  inline GcScope(bool flatten = false) : flatten(flatten) { push_gc_frame(); }
+  inline ~GcScope() { pop_gc_frame(flatten); }
+};
+
+
 struct Transaction {
-  std::unique_ptr<HAL_IMPL_NAMESPACE::Transaction> inner;
+  HAL_IMPL_NAMESPACE::Transaction* inner;
 
   Transaction() = default;
   Transaction(HAL_IMPL_NAMESPACE::Transaction&& inner);
   Transaction(Transaction&&) = default;
-  ~Transaction();
 
   Transaction& operator=(Transaction&&) = default;
 
@@ -41,12 +56,11 @@ struct Transaction {
 
 
 struct Invocation {
-  std::unique_ptr<HAL_IMPL_NAMESPACE::Invocation> inner;
+  HAL_IMPL_NAMESPACE::Invocation* inner;
 
   Invocation() = default;
   Invocation(HAL_IMPL_NAMESPACE::Invocation&& inner);
   Invocation(Invocation&&) = default;
-  ~Invocation();
 
   Invocation& operator=(Invocation&&) = default;
 
@@ -272,12 +286,11 @@ struct CompositeInvocationBuilder {
 
 
 struct Task {
-  std::unique_ptr<HAL_IMPL_NAMESPACE::Task> inner;
+  HAL_IMPL_NAMESPACE::Task* inner;
 
   Task() = default;
   Task(HAL_IMPL_NAMESPACE::Task&& inner);
   Task(Task&&) = default;
-  ~Task();
 
   Task& operator=(Task&&) = default;
 
@@ -451,13 +464,11 @@ struct MappedImage {
 };
 
 struct Image {
-  std::unique_ptr<HAL_IMPL_NAMESPACE::Image> inner;
-  bool dont_destroy;
+  HAL_IMPL_NAMESPACE::Image* inner;
 
   Image() = default;
   Image(HAL_IMPL_NAMESPACE::Image&& inner);
   Image(Image&&) = default;
-  ~Image();
 
   Image& operator=(Image&&) = default;
 
@@ -566,11 +577,10 @@ struct ImageBuilder {
 
 
 struct DepthImage {
-  std::unique_ptr<HAL_IMPL_NAMESPACE::DepthImage> inner;
+  HAL_IMPL_NAMESPACE::DepthImage* inner;
 
   DepthImage(HAL_IMPL_NAMESPACE::DepthImage&& inner);
   DepthImage(DepthImage&&) = default;
-  ~DepthImage();
 
   inline operator HAL_IMPL_NAMESPACE::DepthImage& () {
     return *inner;
@@ -692,13 +702,11 @@ struct MappedBuffer {
   }
 };
 struct Buffer {
-  std::unique_ptr<HAL_IMPL_NAMESPACE::Buffer> inner;
-  bool dont_destroy;
+  HAL_IMPL_NAMESPACE::Buffer* inner;
 
   Buffer() = default;
   Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner);
   Buffer(Buffer&&) = default;
-  ~Buffer();
 
   Buffer& operator=(Buffer&&) = default;
 
@@ -805,11 +813,10 @@ struct BufferBuilder {
 
 struct RenderPass {
 public:
-  std::unique_ptr<HAL_IMPL_NAMESPACE::RenderPass> inner;
+  HAL_IMPL_NAMESPACE::RenderPass* inner;
 
   RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner);
   RenderPass(RenderPass&&) = default;
-  ~RenderPass();
 
   inline operator HAL_IMPL_NAMESPACE::RenderPass& () {
     return *inner;
@@ -890,16 +897,16 @@ struct RenderPassBuilder {
 };
 
 
+
 struct Context {
 public:
-  std::unique_ptr<HAL_IMPL_NAMESPACE::Context> inner;
+  HAL_IMPL_NAMESPACE::Context* inner;
 
   Context() = default;
   Context(const ContextConfig& cfg);
   Context(const std::string& label, uint32_t dev_idx);
   Context(HAL_IMPL_NAMESPACE::Context&& inner);
   Context(Context&&) = default;
-  ~Context();
 
   Context& operator=(Context&&) = default;
 
