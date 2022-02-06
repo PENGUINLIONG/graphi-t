@@ -123,7 +123,8 @@ enum ImageUsageBits {
   L_IMAGE_USAGE_STORAGE_BIT = (1 << 2),
   L_IMAGE_USAGE_ATTACHMENT_BIT = (1 << 3),
   L_IMAGE_USAGE_SUBPASS_DATA_BIT = (1 << 4),
-  L_IMAGE_USAGE_PRESENT_BIT = (1 << 5),
+  L_IMAGE_USAGE_TILE_MEMORY_BIT = (1 << 5),
+  L_IMAGE_USAGE_PRESENT_BIT = (1 << 6),
 };
 typedef uint32_t ImageUsage;
 // Describe a row-major 2D image.
@@ -194,6 +195,7 @@ enum DepthImageUsageBits {
   L_DEPTH_IMAGE_USAGE_SAMPLED_BIT = (1 << 0),
   L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT = (1 << 1),
   L_DEPTH_IMAGE_USAGE_SUBPASS_DATA_BIT = (1 << 2),
+  L_DEPTH_IMAGE_USAGE_TILE_MEMORY_BIT = (1 << 3),
 };
 typedef uint32_t DepthImageUsage;
 struct DepthImageConfig {

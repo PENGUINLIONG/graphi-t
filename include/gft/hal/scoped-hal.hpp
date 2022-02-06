@@ -580,6 +580,12 @@ struct ImageBuilder {
   inline Self& attachment() {
     return usage(L_IMAGE_USAGE_ATTACHMENT_BIT);
   }
+  inline Self& subpass_data() {
+    return usage(L_IMAGE_USAGE_SUBPASS_DATA_BIT);
+  }
+  inline Self& tile_memory() {
+    return usage(L_IMAGE_USAGE_TILE_MEMORY_BIT);
+  }
   inline Self& present() {
     return usage(L_IMAGE_USAGE_PRESENT_BIT);
   }
@@ -666,10 +672,16 @@ struct DepthImageBuilder {
   }
 
   inline Self& sampled() {
-    return usage(L_IMAGE_USAGE_SAMPLED_BIT);
+    return usage(L_DEPTH_IMAGE_USAGE_SAMPLED_BIT);
   }
   inline Self& attachment() {
-    return usage(L_IMAGE_USAGE_ATTACHMENT_BIT);
+    return usage(L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT);
+  }
+  inline Self& subpass_data() {
+    return usage(L_DEPTH_IMAGE_USAGE_SUBPASS_DATA_BIT);
+  }
+  inline Self& tile_memory() {
+    return usage(L_DEPTH_IMAGE_USAGE_TILE_MEMORY_BIT);
   }
 
   DepthImage build();

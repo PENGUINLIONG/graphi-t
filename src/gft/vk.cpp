@@ -3,6 +3,7 @@
 #include <map>
 #include <set>
 #include <algorithm>
+#define VMA_IMPLEMENTATION
 #include "gft/vk.hpp" // Defines `HAL_IMPL_NAMESPACE`.
 #include "gft/assert.hpp"
 #include "gft/util.hpp"
@@ -128,97 +129,7 @@ std::string desc_dev(uint32_t idx) {
 }
 
 
-// Get memory type priority based on the host access pattern. Higher the better.
-uint32_t _get_mem_prior(
-  MemoryAccess host_access,
-  VkMemoryPropertyFlags mem_prop
-) {
-  if (host_access == 0) {
-    if (mem_prop & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
-      return 1;
-    } else {
-      return 0;
-    }
-  } else if (host_access == L_MEMORY_ACCESS_READ_BIT) {
-    static const std::vector<VkMemoryPropertyFlags> PRIORITY_LUT {
-      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_CACHED_BIT |
-        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_CACHED_BIT |
-        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-    };
-    for (int i = 0; i < PRIORITY_LUT.size(); ++i) {
-      if (mem_prop == PRIORITY_LUT[i]) {
-        return (uint32_t)PRIORITY_LUT.size() - i;
-      }
-    }
-    return 0;
-  } else if (host_access == L_MEMORY_ACCESS_WRITE_BIT) {
-    static const std::vector<VkMemoryPropertyFlags> PRIORITY_LUT {
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_CACHED_BIT |
-        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_CACHED_BIT |
-        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-    };
-    for (int i = 0; i < PRIORITY_LUT.size(); ++i) {
-      if (mem_prop == PRIORITY_LUT[i]) {
-        return (uint32_t)PRIORITY_LUT.size() - i;
-      }
-    }
-    return 0;
-  } else {
-    static const std::vector<VkMemoryPropertyFlags> PRIORITY_LUT {
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_CACHED_BIT |
-        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-      VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT |
-        VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_CACHED_BIT |
-        VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-      VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
-        VK_MEMORY_PROPERTY_HOST_CACHED_BIT,
-    };
-    for (int i = 0; i < PRIORITY_LUT.size(); ++i) {
-      if (mem_prop == PRIORITY_LUT[i]) {
-        return (uint32_t)PRIORITY_LUT.size() - i;
-      }
-    }
-    return 0;
-  }
-}
+
 VkSampler _create_sampler(
   VkDevice dev,
   VkFilter filter,
@@ -408,8 +319,7 @@ Context create_ctxt(const ContextConfig& cfg) {
   for (const auto& dev_ext : dev_exts) {
     dev_ext_names.emplace_back(dev_ext.extensionName);
   }
-  log::debug("enabled device extensions: ",
-    util::join(", ", dev_ext_names));
+  log::debug("enabled device extensions: ", util::join(", ", dev_ext_names));
 
   VkDeviceCreateInfo dci {};
   dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
@@ -433,26 +343,44 @@ Context create_ctxt(const ContextConfig& cfg) {
 
   VkPhysicalDeviceMemoryProperties mem_prop;
   vkGetPhysicalDeviceMemoryProperties(physdev, &mem_prop);
-
-  // Priority -> memory type.
-  std::array<std::vector<uint32_t>, 4> mem_ty_idxs_by_host_access {
-    util::arrange(mem_prop.memoryTypeCount),
-    util::arrange(mem_prop.memoryTypeCount),
-    util::arrange(mem_prop.memoryTypeCount),
-    util::arrange(mem_prop.memoryTypeCount),
-  };
-  for (int host_access = 0; host_access < 4; ++host_access) {
-    auto& mem_ty_idxs = mem_ty_idxs_by_host_access[host_access];
-    std::vector<uint32_t> priors = util::map<uint32_t, uint32_t>(
-      mem_ty_idxs,
-      [&](const uint32_t& i) -> uint32_t {
-        const auto& mem_ty = mem_prop.memoryTypes[i];
-        return _get_mem_prior(host_access, mem_ty.propertyFlags);
-      });
-    std::sort(mem_ty_idxs.begin(), mem_ty_idxs.end(),
-      [&](uint32_t ilhs, uint32_t irhs) {
-        return priors[ilhs] > priors[irhs];
-      });
+  for (size_t i = 0; i < mem_prop.memoryHeapCount; ++i) {
+    const VkMemoryHeap& heap = mem_prop.memoryHeaps[i];
+    static const std::array<const char*, 1> flag_lits {
+      "DEVICE_LOCAL",
+    };
+    std::vector<std::string> flags {};
+    for (uint32_t j = 0; j < sizeof(heap.flags) * 8; ++j) {
+      if (((heap.flags >> j) & 1) == 0) { continue; }
+      if (j < flag_lits.size()) {
+        flags.emplace_back(flag_lits[j]);
+      } else {
+        flags.emplace_back(util::format("(1 << ", j, ")"));
+      }
+    }
+    std::string all_flags = flags.empty() ? "0" : util::join(" | ", flags);
+    log::debug("memory heap #", i, ": ", all_flags);
+  }
+  for (size_t i = 0; i < mem_prop.memoryTypeCount; ++i) {
+    const VkMemoryType& ty = mem_prop.memoryTypes[i];
+    static const std::array<const char*, 6> flag_lits {
+      "DEVICE_LOCAL",
+      "HOST_VISIBLE",
+      "HOST_COHERENT",
+      "HOST_CACHED",
+      "LAZILY_ALLOCATED",
+      "PROTECTED",
+    };
+    std::vector<std::string> flags {};
+    for (uint32_t j = 0; j < sizeof(ty.propertyFlags) * 8; ++j) {
+      if (((ty.propertyFlags >> j) & 1) == 0) { continue; }
+      if (j < flag_lits.size()) {
+        flags.emplace_back(flag_lits[j]);
+      } else {
+        flags.emplace_back(util::format("(1 << ", j, ")"));
+      }
+    }
+    std::string all_flags = flags.empty() ? "0" : util::join(" | ", flags);
+    log::debug("memory type #", i, " on heap #", ty.heapIndex, ": ", all_flags);
   }
 
   std::map<ImageSampler, VkSampler> img_samplers {};
@@ -471,12 +399,20 @@ Context create_ctxt(const ContextConfig& cfg) {
   depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_ANISOTROPY_4] = _create_sampler(dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 4.0f, VK_COMPARE_OP_LESS);
 
+  VmaAllocatorCreateInfo allocatorInfo = {};
+  allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_2;
+  allocatorInfo.physicalDevice = physdev;
+  allocatorInfo.device = dev;
+  allocatorInfo.instance = inst;
+
+  VmaAllocator allocator;
+  VK_ASSERT << vmaCreateAllocator(&allocatorInfo, &allocator);
+
   log::debug("created vulkan context '", cfg.label, "' on device #",
     cfg.dev_idx, ": ", physdev_descs[cfg.dev_idx]);
   return Context {
     dev, physdev, std::move(physdev_prop), std::move(submit_details),
-    std::move(queue_allocs), std::move(mem_ty_idxs_by_host_access),
-    img_samplers, depth_img_samplers, cfg
+    std::move(queue_allocs), img_samplers, depth_img_samplers, allocator, cfg
   };
 }
 void destroy_ctxt(Context& ctxt) {
@@ -487,6 +423,7 @@ void destroy_ctxt(Context& ctxt) {
     for (const auto& samp : ctxt.depth_img_samplers) {
       vkDestroySampler(ctxt.dev, samp.second, nullptr);
     }
+    vmaDestroyAllocator(ctxt.allocator);
     vkDestroyDevice(ctxt.dev, nullptr);
     log::debug("destroyed vulkan context '", ctxt.ctxt_cfg.label, "'");
   }
@@ -497,7 +434,30 @@ const ContextConfig& get_ctxt_cfg(const Context& ctxt) {
 }
 
 
+constexpr VmaMemoryUsage host_access2vma_usage(MemoryAccess host_access) {
+  if (host_access == 0) {
+    return VMA_MEMORY_USAGE_GPU_ONLY;
+  } else if (host_access == L_MEMORY_ACCESS_READ_BIT) {
+    return VMA_MEMORY_USAGE_GPU_TO_CPU;
+  } else if (host_access == L_MEMORY_ACCESS_WRITE_BIT) {
+    return VMA_MEMORY_USAGE_CPU_TO_GPU;
+  } else {
+    return VMA_MEMORY_USAGE_CPU_ONLY;
+  }
+}
+void _alloc_buf(
+  const Context& ctxt,
+  const VkBufferCreateInfo& bci,
+  VmaMemoryUsage vma_usage,
+  VkBuffer& buf,
+  VmaAllocation& alloc
+) {
+  VmaAllocationCreateInfo aci {};
+  aci.usage = vma_usage;
 
+  VK_ASSERT <<
+    vmaCreateBuffer(ctxt.allocator, &bci, &aci, &buf, &alloc, nullptr);
+}
 Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg) {
   VkBufferCreateInfo bci {};
   bci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -531,41 +491,19 @@ Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg) {
   bci.size = buf_cfg.size;
 
   VkBuffer buf;
-  VK_ASSERT << vkCreateBuffer(ctxt.dev, &bci, nullptr, &buf);
-
-  VkMemoryRequirements mr {};
-  vkGetBufferMemoryRequirements(ctxt.dev, buf, &mr);
-
-  VkMemoryAllocateInfo mai {};
-  mai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  mai.allocationSize = mr.size;
-  mai.memoryTypeIndex = 0xFF;
-  for (auto mem_ty_idx : ctxt.mem_ty_idxs_by_host_access[buf_cfg.host_access]) {
-    if (((1 << mem_ty_idx) & mr.memoryTypeBits) != 0) {
-      mai.memoryTypeIndex = mem_ty_idx;
-      break;
-    }
-  }
-  if (mai.memoryTypeIndex == 0xFF) {
-    panic("host access pattern cannot be satisfied");
-  }
-
-  VkDeviceMemory devmem;
-  VK_ASSERT << vkAllocateMemory(ctxt.dev, &mai, nullptr, &devmem);
-
-  VK_ASSERT << vkBindBufferMemory(ctxt.dev, buf, devmem, 0);
+  VmaAllocation alloc;
+  _alloc_buf(ctxt, bci, host_access2vma_usage(buf_cfg.host_access), buf, alloc);
 
   BufferDynamicDetail dyn_detail {};
   dyn_detail.access = 0;
   dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
 
   log::debug("created buffer '", buf_cfg.label, "'");
-  return Buffer { &ctxt, devmem, buf, buf_cfg, std::move(dyn_detail) };
+  return Buffer { &ctxt, alloc, buf, buf_cfg, std::move(dyn_detail) };
 }
 void destroy_buf(Buffer& buf) {
   if (buf.buf != VK_NULL_HANDLE) {
-    vkDestroyBuffer(buf.ctxt->dev, buf.buf, nullptr);
-    vkFreeMemory(buf.ctxt->dev, buf.devmem, nullptr);
+    vmaDestroyBuffer(buf.ctxt->allocator, buf.buf, buf.alloc);
     log::debug("destroyed buffer '", buf.buf_cfg.label, "'");
     buf = {};
   }
@@ -583,8 +521,7 @@ void map_buf_mem(
 ) {
   assert(map_access != 0, "memory map access must be read, write or both");
 
-  VK_ASSERT << vkMapMemory(buf.buf->ctxt->dev, buf.buf->devmem, buf.offset,
-    buf.size, 0, &mapped);
+  VK_ASSERT << vmaMapMemory(buf.buf->ctxt->allocator, buf.buf->alloc, &mapped);
 
   auto& dyn_detail = (BufferDynamicDetail&)buf.buf->dyn_detail;
   dyn_detail.access = map_access == L_MEMORY_ACCESS_READ_BIT ?
@@ -598,7 +535,7 @@ void unmap_buf_mem(
   const BufferView& buf,
   void* mapped
 ) {
-  vkUnmapMemory(buf.buf->ctxt->dev, buf.buf->devmem);
+  vmaUnmapMemory(buf.buf->ctxt->allocator, buf.buf->alloc);
   log::debug("unmapped buffer '", buf.buf->buf_cfg.label, "'");
 }
 
@@ -613,6 +550,29 @@ VkFormat _make_img_fmt(fmt::Format fmt) {
   default: panic("unrecognized pixel format");
   }
   return VK_FORMAT_UNDEFINED;
+}
+void _alloc_img(
+  const Context& ctxt,
+  const VkImageCreateInfo& ici,
+  bool is_tile_mem,
+  VmaMemoryUsage vma_usage,
+  VkImage& img,
+  VmaAllocation& alloc
+) {
+  VmaAllocationCreateInfo aci {};
+  VkResult res = VK_ERROR_OUT_OF_DEVICE_MEMORY;
+  if (is_tile_mem) {
+    aci.usage = VMA_MEMORY_USAGE_GPU_LAZILY_ALLOCATED;
+    res = vmaCreateImage(ctxt.allocator, &ici, &aci, &img, &alloc, nullptr);
+  }
+  if (res != VK_SUCCESS) {
+    if (is_tile_mem) {
+      log::warn("tile-memory is unsupported, fall back to regular memory");
+    }
+    aci.usage = vma_usage;
+    VK_ASSERT <<
+      vmaCreateImage(ctxt.allocator, &ici, &aci, &img, &alloc, nullptr);
+  }
 }
 Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   VkFormat fmt = _make_img_fmt(img_cfg.fmt);
@@ -633,14 +593,16 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
       VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     init_submit_ty = L_SUBMIT_TYPE_ANY;
   }
-  // KEEP THIS AFTER DESCRIPTOR RESOURCE USAGES.
+  // KEEP THIS AFTER ANY SUBMIT TYPES.
   if (img_cfg.usage & L_IMAGE_USAGE_ATTACHMENT_BIT) {
     usage |=
       VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-      VK_IMAGE_USAGE_TRANSFER_DST_BIT |
-      VK_IMAGE_USAGE_SAMPLED_BIT |
       VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
       VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+    init_submit_ty = L_SUBMIT_TYPE_GRAPHICS;
+  }
+  if (img_cfg.usage & L_IMAGE_USAGE_SUBPASS_DATA_BIT) {
+    usage |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
     init_submit_ty = L_SUBMIT_TYPE_GRAPHICS;
   }
   // KEEP THIS AT THE END.
@@ -680,30 +642,11 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   ici.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
   ici.initialLayout = layout;
 
+  bool is_tile_mem = img_cfg.usage & L_IMAGE_USAGE_TILE_MEMORY_BIT;
+  VmaMemoryUsage vma_usage = host_access2vma_usage(img_cfg.host_access);
   VkImage img;
-  VK_ASSERT << vkCreateImage(ctxt.dev, &ici, nullptr, &img);
-
-  VkMemoryRequirements mr {};
-  vkGetImageMemoryRequirements(ctxt.dev, img, &mr);
-
-  VkMemoryAllocateInfo mai {};
-  mai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  mai.allocationSize = mr.size;
-  mai.memoryTypeIndex = 0xFF;
-  for (auto mem_ty_idx : ctxt.mem_ty_idxs_by_host_access[img_cfg.host_access]) {
-    if (((1 << mem_ty_idx) & mr.memoryTypeBits) != 0) {
-      mai.memoryTypeIndex = mem_ty_idx;
-      break;
-    }
-  }
-  if (mai.memoryTypeIndex == 0xFF) {
-    panic("host access pattern cannot be satisfied");
-  }
-
-  VkDeviceMemory devmem;
-  VK_ASSERT << vkAllocateMemory(ctxt.dev, &mai, nullptr, &devmem);
-
-  VK_ASSERT << vkBindImageMemory(ctxt.dev, img, devmem, 0);
+  VmaAllocation alloc;
+  _alloc_img(ctxt, ici, is_tile_mem, vma_usage, img, alloc);
 
   VkImageView img_view = VK_NULL_HANDLE;
   if (!is_staging_img) {
@@ -733,15 +676,13 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   log::debug("created image '", img_cfg.label, "'");
   uint32_t qfam_idx = ctxt.get_submit_ty_qfam_idx(init_submit_ty);
   return Image {
-    &ctxt, devmem, img, img_view, img_cfg, is_staging_img,
-    std::move(dyn_detail)
+    &ctxt, alloc, img, img_view, img_cfg, is_staging_img, std::move(dyn_detail)
   };
 }
 void destroy_img(Image& img) {
   if (img.img != VK_NULL_HANDLE) {
     vkDestroyImageView(img.ctxt->dev, img.img_view, nullptr);
-    vkDestroyImage(img.ctxt->dev, img.img, nullptr);
-    vkFreeMemory(img.ctxt->dev, img.devmem, nullptr);
+    vmaDestroyImage(img.ctxt->allocator, img.img, img.alloc);
 
     log::debug("destroyed image '", img.img_cfg.label, "'");
     img = {};
@@ -767,9 +708,26 @@ DepthImage create_depth_img(
   const DepthImageConfig& depth_img_cfg
 ) {
   VkFormat fmt = _make_depth_fmt(depth_img_cfg.fmt);
-  VkImageUsageFlags usage =
-    VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT |
-    VK_IMAGE_USAGE_SAMPLED_BIT;
+  VkImageUsageFlags usage = 0;
+  SubmitType init_submit_ty = L_SUBMIT_TYPE_ANY;
+
+  if (depth_img_cfg.usage & L_DEPTH_IMAGE_USAGE_SAMPLED_BIT) {
+    usage |=
+      VK_IMAGE_USAGE_SAMPLED_BIT |
+      VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    init_submit_ty = L_SUBMIT_TYPE_ANY;
+  }
+  if (depth_img_cfg.usage & L_DEPTH_IMAGE_USAGE_ATTACHMENT_BIT) {
+    usage |=
+      VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+      VK_IMAGE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT;
+    init_submit_ty = L_SUBMIT_TYPE_GRAPHICS;
+  }
+  // KEEP THIS AFTER ANY SUBMIT TYPES.
+  if (depth_img_cfg.usage & L_DEPTH_IMAGE_USAGE_SUBPASS_DATA_BIT) {
+    usage |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+    init_submit_ty = L_SUBMIT_TYPE_GRAPHICS;
+  }
 
   // Check whether the device support our use case.
   VkImageFormatProperties ifp;
@@ -794,31 +752,10 @@ DepthImage create_depth_img(
   ici.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
   ici.initialLayout = layout;
 
+  bool is_tile_mem = depth_img_cfg.usage & L_DEPTH_IMAGE_USAGE_TILE_MEMORY_BIT;
   VkImage img;
-  VK_ASSERT << vkCreateImage(ctxt.dev, &ici, nullptr, &img);
-
-  VkMemoryRequirements mr {};
-  vkGetImageMemoryRequirements(ctxt.dev, img, &mr);
-
-  VkMemoryAllocateInfo mai {};
-  mai.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-  mai.allocationSize = mr.size;
-  mai.memoryTypeIndex = 0xFF;
-  auto host_access = 0;
-  for (auto mem_ty_idx : ctxt.mem_ty_idxs_by_host_access[host_access]) {
-    if (((1 << mem_ty_idx) & mr.memoryTypeBits) != 0) {
-      mai.memoryTypeIndex = mem_ty_idx;
-      break;
-    }
-  }
-  if (mai.memoryTypeIndex == 0xFF) {
-    panic("depth image has no host access but it cannot be satisfied");
-  }
-
-  VkDeviceMemory devmem;
-  VK_ASSERT << vkAllocateMemory(ctxt.dev, &mai, nullptr, &devmem);
-
-  VK_ASSERT << vkBindImageMemory(ctxt.dev, img, devmem, 0);
+  VmaAllocation alloc;
+  _alloc_img(ctxt, ici, is_tile_mem, VMA_MEMORY_USAGE_GPU_ONLY, img, alloc);
 
   VkImageViewCreateInfo ivci {};
   ivci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
@@ -847,15 +784,13 @@ DepthImage create_depth_img(
 
   log::debug("created depth image '", depth_img_cfg.label, "'");
   return DepthImage {
-    &ctxt, devmem, (size_t)mr.size, img, img_view, depth_img_cfg,
-    std::move(dyn_detail)
+    &ctxt, alloc, img, img_view, depth_img_cfg, std::move(dyn_detail)
   };
 }
 void destroy_depth_img(DepthImage& depth_img) {
   if (depth_img.img) {
     vkDestroyImageView(depth_img.ctxt->dev, depth_img.img_view, nullptr);
-    vkDestroyImage(depth_img.ctxt->dev, depth_img.img, nullptr);
-    vkFreeMemory(depth_img.ctxt->dev, depth_img.devmem, nullptr);
+    vmaDestroyImage(depth_img.ctxt->allocator, depth_img.img, depth_img.alloc);
 
     log::debug("destroyed depth image '", depth_img.depth_img_cfg.label, "'");
     depth_img = {};
@@ -885,8 +820,7 @@ void map_img_mem(
   size_t offset = sl.offset;
   size_t size = sl.size;
 
-  VK_ASSERT << vkMapMemory(img.img->ctxt->dev, img.img->devmem, sl.offset,
-    sl.size, 0, &mapped);
+  VK_ASSERT << vmaMapMemory(img.img->ctxt->allocator, img.img->alloc, &mapped);
   row_pitch = sl.rowPitch;
 
   auto& dyn_detail = (ImageDynamicDetail&)(img.img->dyn_detail);
@@ -904,7 +838,7 @@ void unmap_img_mem(
   const ImageView& img,
   void* mapped
 ) {
-  vkUnmapMemory(img.img->ctxt->dev, img.img->devmem);
+  vmaUnmapMemory(img.img->ctxt->allocator, img.img->alloc);
   log::debug("unmapped image '", img.img->img_cfg.label, "'");
 }
 

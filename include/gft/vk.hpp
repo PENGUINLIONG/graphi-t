@@ -9,6 +9,7 @@
 #include <memory>
 #include <chrono>
 #include <vulkan/vulkan.h>
+#include "vk_mem_alloc.h"
 #define HAL_IMPL_NAMESPACE vk
 #include "gft/hal/scoped-hal.hpp"
 
@@ -58,10 +59,10 @@ struct Context {
   VkPhysicalDeviceProperties physdev_prop;
   std::vector<ContextSubmitDetail> submit_details;
   std::map<uint32_t, uint32_t> submit_detail_idx_by_submit_ty;
-  std::array<std::vector<uint32_t>, 4> mem_ty_idxs_by_host_access;
   // Costless sampler to utilize L1 cache on old mobile platform.
   std::map<ImageSampler, VkSampler> img_samplers;
   std::map<DepthImageSampler, VkSampler> depth_img_samplers;
+  VmaAllocator allocator;
   ContextConfig ctxt_cfg;
 
   inline size_t get_queue_rsc_idx(SubmitType submit_ty) const {
@@ -101,7 +102,7 @@ struct BufferDynamicDetail {
 };
 struct Buffer {
   const Context* ctxt; // Lifetime bound.
-  VkDeviceMemory devmem;
+  VmaAllocation alloc;
   VkBuffer buf;
   BufferConfig buf_cfg;
   BufferDynamicDetail dyn_detail;
@@ -116,7 +117,7 @@ struct ImageDynamicDetail {
 };
 struct Image {
   const Context* ctxt; // Lifetime bound.
-  VkDeviceMemory devmem;
+  VmaAllocation alloc;
   VkImage img;
   VkImageView img_view;
   ImageConfig img_cfg;
@@ -133,8 +134,7 @@ struct DepthImageDynamicDetail {
 };
 struct DepthImage {
   const Context* ctxt; // Lifetime bound.
-  VkDeviceMemory devmem;
-  size_t devmem_size;
+  VmaAllocation alloc;
   VkImage img;
   VkImageView img_view;
   DepthImageConfig depth_img_cfg;

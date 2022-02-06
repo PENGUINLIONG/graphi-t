@@ -31,6 +31,7 @@ set(INC_DIRS
 if(GFT_WITH_VULKAN)
     add_definitions(-DGFT_WITH_VULKAN=1)
     find_package(Vulkan)
+    add_subdirectory(third/VulkanMemoryAllocator)
     if(NOT Vulkan_FOUND)
         message("")
         message("-- Vulkan not found! Vulkan context is disabled")
@@ -39,9 +40,11 @@ if(GFT_WITH_VULKAN)
         message("-- Vulkan context enabled")
         list(APPEND INC_DIRS
             ${Vulkan_INCLUDE_DIRS}
+            third/VulkanMemoryAllocator/include
         )
         list(APPEND LINK_LIBS
             ${Vulkan_LIBRARIES}
+            VulkanMemoryAllocator
         )
     endif()
 endif()
