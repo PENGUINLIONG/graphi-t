@@ -145,19 +145,26 @@ L_IMPL_FN Image create_img(const Context& ctxt, const ImageConfig& img_cfg);
 L_IMPL_FN void destroy_img(Image& img);
 L_IMPL_FN const ImageConfig& get_img_cfg(const Image& img);
 
+enum ImageSampler {
+  L_IMAGE_SAMPLER_LINEAR,
+  L_IMAGE_SAMPLER_NEAREST,
+  L_IMAGE_SAMPLER_ANISOTROPY_4,
+};
 struct ImageView {
   const Image* img; // Lifetime bound.
   uint32_t x_offset;
   uint32_t y_offset;
   uint32_t width;
   uint32_t height;
+  ImageSampler sampler;
 };
 inline ImageView make_img_view(
   const Image& img,
   uint32_t x_offset,
   uint32_t y_offset,
   uint32_t width,
-  uint32_t height
+  uint32_t height,
+  ImageSampler sampler
 ) {
   ImageView out {};
   out.img = &img;
@@ -165,11 +172,8 @@ inline ImageView make_img_view(
   out.y_offset = y_offset;
   out.width = width;
   out.height = height;
+  out.sampler = sampler;
   return out;
-}
-inline ImageView make_img_view(const Image& img) {
-  const ImageConfig& img_cfg = get_img_cfg(img);
-  return make_img_view(img, 0, 0, img_cfg.width, img_cfg.height);
 }
 
 L_IMPL_FN void map_img_mem(
@@ -213,19 +217,26 @@ L_IMPL_FN DepthImage create_depth_img(
 L_IMPL_FN void destroy_depth_img(DepthImage& depth_img);
 L_IMPL_FN const DepthImageConfig& get_depth_img_cfg(const DepthImage& depth_img);
 
+enum DepthImageSampler {
+  L_DEPTH_IMAGE_SAMPLER_LINEAR,
+  L_DEPTH_IMAGE_SAMPLER_NEAREST,
+  L_DEPTH_IMAGE_SAMPLER_ANISOTROPY_4,
+};
 struct DepthImageView {
   const DepthImage* depth_img; // Lifetime bound.
   uint32_t x_offset;
   uint32_t y_offset;
   uint32_t width;
   uint32_t height;
+  DepthImageSampler sampler;
 };
 inline DepthImageView make_depth_img_view(
   const DepthImage& depth_img,
   uint32_t x_offset,
   uint32_t y_offset,
   uint32_t width,
-  uint32_t height
+  uint32_t height,
+  DepthImageSampler sampler
 ) {
   DepthImageView out {};
   out.depth_img = &depth_img;
@@ -233,12 +244,8 @@ inline DepthImageView make_depth_img_view(
   out.y_offset = y_offset;
   out.width = width;
   out.height = height;
+  out.sampler = sampler;
   return out;
-}
-inline DepthImageView make_depth_img_view(const DepthImage& depth_img) {
-  const DepthImageConfig& depth_img_cfg = get_depth_img_cfg(depth_img);
-  return make_depth_img_view(depth_img, 0, 0, depth_img_cfg.width,
-    depth_img_cfg.height);
 }
 
 

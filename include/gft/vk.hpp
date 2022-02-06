@@ -60,7 +60,8 @@ struct Context {
   std::map<uint32_t, uint32_t> submit_detail_idx_by_submit_ty;
   std::array<std::vector<uint32_t>, 4> mem_ty_idxs_by_host_access;
   // Costless sampler to utilize L1 cache on old mobile platform.
-  VkSampler fast_samp;
+  std::map<ImageSampler, VkSampler> img_samplers;
+  std::map<DepthImageSampler, VkSampler> depth_img_samplers;
   ContextConfig ctxt_cfg;
 
   inline size_t get_queue_rsc_idx(SubmitType submit_ty) const {
