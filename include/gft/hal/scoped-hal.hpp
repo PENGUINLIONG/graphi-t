@@ -487,12 +487,25 @@ struct Image {
     uint32_t x_offset,
     uint32_t y_offset,
     uint32_t width,
+    uint32_t height,
+    ImageSampler sampler
+  ) const {
+    return make_img_view(*inner, x_offset, y_offset, width, height, sampler);
+  }
+  inline ImageView view(
+    uint32_t x_offset,
+    uint32_t y_offset,
+    uint32_t width,
     uint32_t height
-    ) const {
-    return make_img_view(*inner, x_offset, y_offset, width, height);
+  ) const {
+    return view(x_offset, y_offset, width, height, L_IMAGE_SAMPLER_LINEAR);
+  }
+  inline ImageView view(ImageSampler sampler) const {
+    const ImageConfig& cfg = get_img_cfg(*inner);
+    return view(0, 0, cfg.width, cfg.height, sampler);
   }
   inline ImageView view() const {
-    return make_img_view(*inner);
+    return view(L_IMAGE_SAMPLER_LINEAR);
   }
 
   inline MappedImage map(
@@ -597,12 +610,27 @@ struct DepthImage {
     uint32_t x_offset,
     uint32_t y_offset,
     uint32_t width,
+    uint32_t height,
+    DepthImageSampler sampler
+  ) const {
+    return make_depth_img_view(*inner, x_offset, y_offset, width, height,
+      sampler);
+  }
+  inline DepthImageView view(
+    uint32_t x_offset,
+    uint32_t y_offset,
+    uint32_t width,
     uint32_t height
   ) const {
-    return make_depth_img_view(*inner, x_offset, y_offset, width, height);
+    return view(x_offset, y_offset, width, height,
+      L_DEPTH_IMAGE_SAMPLER_LINEAR);
+  }
+  inline DepthImageView view(DepthImageSampler sampler) const {
+    const DepthImageConfig& cfg = get_depth_img_cfg(*inner);
+    return view(0, 0, cfg.width, cfg.height, sampler);
   }
   inline DepthImageView view() const {
-    return make_depth_img_view(*inner);
+    return view(L_DEPTH_IMAGE_SAMPLER_LINEAR);
   }
 };
 struct DepthImageBuilder {

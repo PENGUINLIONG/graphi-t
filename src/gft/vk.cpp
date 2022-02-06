@@ -219,6 +219,34 @@ uint32_t _get_mem_prior(
     return 0;
   }
 }
+VkSampler _create_sampler(
+  VkDevice dev,
+  VkFilter filter,
+  VkSamplerMipmapMode mip_mode,
+  float max_aniso,
+  VkCompareOp cmp_op
+) {
+  VkSamplerCreateInfo sci {};
+  sci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+  sci.magFilter = filter;
+  sci.minFilter = filter;
+  sci.mipmapMode = mip_mode;
+  sci.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+  sci.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+  sci.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+  if (max_aniso > 1.0f) {
+    sci.anisotropyEnable = VK_TRUE;
+    sci.maxAnisotropy = max_aniso;
+  }
+  if (cmp_op != VK_COMPARE_OP_NEVER) {
+    sci.compareEnable = VK_TRUE;
+    sci.compareOp = cmp_op;
+  }
+
+  VkSampler sampler;
+  VK_ASSERT << vkCreateSampler(dev, &sci, nullptr, &sampler);
+  return sampler;
+}
 Context create_ctxt(const ContextConfig& cfg) {
   if (inst == VK_NULL_HANDLE) {
     initialize();
@@ -427,30 +455,38 @@ Context create_ctxt(const ContextConfig& cfg) {
       });
   }
 
-  VkSamplerCreateInfo sci {};
-  sci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-  sci.magFilter = VK_FILTER_LINEAR;
-  sci.minFilter = VK_FILTER_LINEAR;
-  sci.mipmapMode = VK_SAMPLER_MIPMAP_MODE_LINEAR;
-  sci.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  sci.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  sci.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  sci.unnormalizedCoordinates = VK_FALSE;
+  std::map<ImageSampler, VkSampler> img_samplers {};
+  img_samplers[L_IMAGE_SAMPLER_LINEAR] = _create_sampler(dev,
+    VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, VK_COMPARE_OP_NEVER);
+  img_samplers[L_IMAGE_SAMPLER_NEAREST] = _create_sampler(dev,
+    VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, 0.0f, VK_COMPARE_OP_NEVER);
+  img_samplers[L_IMAGE_SAMPLER_ANISOTROPY_4] = _create_sampler(dev,
+    VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 4.0f, VK_COMPARE_OP_NEVER);
 
-  VkSampler fast_samp;
-  VK_ASSERT << vkCreateSampler(dev, &sci, nullptr, &fast_samp);
+  std::map<DepthImageSampler, VkSampler> depth_img_samplers {};
+  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_LINEAR] = _create_sampler(dev,
+    VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, VK_COMPARE_OP_LESS);
+  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_NEAREST] = _create_sampler(dev,
+    VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, 0.0f, VK_COMPARE_OP_LESS);
+  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_ANISOTROPY_4] = _create_sampler(dev,
+    VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 4.0f, VK_COMPARE_OP_LESS);
 
   log::debug("created vulkan context '", cfg.label, "' on device #",
     cfg.dev_idx, ": ", physdev_descs[cfg.dev_idx]);
   return Context {
     dev, physdev, std::move(physdev_prop), std::move(submit_details),
     std::move(queue_allocs), std::move(mem_ty_idxs_by_host_access),
-    fast_samp, cfg
+    img_samplers, depth_img_samplers, cfg
   };
 }
 void destroy_ctxt(Context& ctxt) {
   if (ctxt.dev != VK_NULL_HANDLE) {
-    vkDestroySampler(ctxt.dev, ctxt.fast_samp, nullptr);
+    for (const auto& samp : ctxt.img_samplers) {
+      vkDestroySampler(ctxt.dev, samp.second, nullptr);
+    }
+    for (const auto& samp : ctxt.depth_img_samplers) {
+      vkDestroySampler(ctxt.dev, samp.second, nullptr);
+    }
     vkDestroyDevice(ctxt.dev, nullptr);
     log::debug("destroyed vulkan context '", ctxt.ctxt_cfg.label, "'");
   }
@@ -898,7 +934,6 @@ VkDescriptorSetLayout _create_desc_set_layout(
       break;
     case L_RESOURCE_TYPE_SAMPLED_IMAGE:
       dslb.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-      dslb.pImmutableSamplers = &ctxt.fast_samp;
       break;
     case L_RESOURCE_TYPE_STORAGE_IMAGE:
       dslb.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
@@ -1371,7 +1406,10 @@ void _update_desc_set(
   diis.reserve(rsc_views.size());
   wdss.reserve(rsc_views.size());
 
-  auto push_dbi = [&](const BufferView& buf_view) {
+  auto push_dbi = [&](const ResourceView& rsc_view) {
+    assert(rsc_view.rsc_view_ty == L_RESOURCE_VIEW_TYPE_BUFFER);
+    const BufferView& buf_view = rsc_view.buf_view;
+
     VkDescriptorBufferInfo dbi {};
     dbi.buffer = buf_view.buf->buf;
     dbi.offset = buf_view.offset;
@@ -1383,14 +1421,30 @@ void _update_desc_set(
 
     return &dbis.back();
   };
-  auto push_dii = [&](const ImageView& img_view, VkImageLayout layout) {
+  auto push_dii = [&](const ResourceView& rsc_view, VkImageLayout layout) {
     VkDescriptorImageInfo dii {};
-    dii.imageView = img_view.img->img_view;
-    dii.imageLayout = layout;
-    diis.emplace_back(std::move(dii));
+    if (rsc_view.rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE) {
+      const ImageView& img_view = rsc_view.img_view;
+      dii.sampler = ctxt.img_samplers.at(img_view.sampler);
+      dii.imageView = img_view.img->img_view;
+      dii.imageLayout = layout;
+      diis.emplace_back(std::move(dii));
 
-    log::debug("bound pool resource #", wdss.size(), " to image '",
-      img_view.img->img_cfg.label, "'");
+      log::debug("bound pool resource #", wdss.size(), " to image '",
+        img_view.img->img_cfg.label, "'");
+    } else if (rsc_view.rsc_view_ty == L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE) {
+      const DepthImageView& depth_img_view = rsc_view.depth_img_view;
+
+      dii.sampler = ctxt.depth_img_samplers.at(depth_img_view.sampler);
+      dii.imageView = depth_img_view.depth_img->img_view;
+      dii.imageLayout = layout;
+      diis.emplace_back(std::move(dii));
+
+      log::debug("bound pool resource #", wdss.size(), " to depth image '",
+        depth_img_view.depth_img->depth_img_cfg.label, "'");
+    } else {
+      panic();
+    }
 
     return &diis.back();
   };
@@ -1406,20 +1460,20 @@ void _update_desc_set(
     wds.descriptorCount = 1;
     switch (rsc_tys[i]) {
     case L_RESOURCE_TYPE_UNIFORM_BUFFER:
-      wds.pBufferInfo = push_dbi(rsc_view.buf_view);
+      wds.pBufferInfo = push_dbi(rsc_view);
       wds.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
       break;
     case L_RESOURCE_TYPE_STORAGE_BUFFER:
-      wds.pBufferInfo = push_dbi(rsc_view.buf_view);
+      wds.pBufferInfo = push_dbi(rsc_view);
       wds.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
       break;
     case L_RESOURCE_TYPE_SAMPLED_IMAGE:
-      wds.pImageInfo = push_dii(rsc_view.img_view,
+      wds.pImageInfo = push_dii(rsc_view,
         VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
       wds.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
       break;
     case L_RESOURCE_TYPE_STORAGE_IMAGE:
-      wds.pImageInfo = push_dii(rsc_view.img_view,
+      wds.pImageInfo = push_dii(rsc_view,
         VK_IMAGE_LAYOUT_GENERAL);
       wds.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
       break;
