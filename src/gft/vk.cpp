@@ -440,7 +440,7 @@ const ContextConfig& get_ctxt_cfg(const Context& ctxt) {
 }
 
 
-constexpr VmaMemoryUsage host_access2vma_usage(MemoryAccess host_access) {
+constexpr VmaMemoryUsage _host_access2vma_usage(MemoryAccess host_access) {
   if (host_access == 0) {
     return VMA_MEMORY_USAGE_GPU_ONLY;
   } else if (host_access == L_MEMORY_ACCESS_READ_BIT) {
@@ -496,9 +496,10 @@ Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg) {
   }
   bci.size = buf_cfg.size;
 
+  VmaMemoryUsage vma_usage = _host_access2vma_usage(buf_cfg.host_access);
   VkBuffer buf;
   VmaAllocation alloc;
-  _alloc_buf(ctxt, bci, host_access2vma_usage(buf_cfg.host_access), buf, alloc);
+  _alloc_buf(ctxt, bci, vma_usage, buf, alloc);
 
   BufferDynamicDetail dyn_detail {};
   dyn_detail.access = 0;
@@ -649,7 +650,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   ici.initialLayout = layout;
 
   bool is_tile_mem = img_cfg.usage & L_IMAGE_USAGE_TILE_MEMORY_BIT;
-  VmaMemoryUsage vma_usage = host_access2vma_usage(img_cfg.host_access);
+  VmaMemoryUsage vma_usage = _host_access2vma_usage(img_cfg.host_access);
   VkImage img;
   VmaAllocation alloc;
   _alloc_img(ctxt, ici, is_tile_mem, vma_usage, img, alloc);
