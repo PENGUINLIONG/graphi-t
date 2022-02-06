@@ -264,6 +264,7 @@ void guarded_main2() {
     .height(4)
     .fmt(L_DEPTH_FORMAT_D16_UNORM)
     .attachment()
+    .tile_memory()
     .build();
   scoped::Image out_img = ctxt.build_img("attm")
     .width(4)
