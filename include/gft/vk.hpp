@@ -45,9 +45,10 @@ extern std::vector<std::string> physdev_descs;
 
 
 enum SubmitType {
+  L_SUBMIT_TYPE_ANY,
   L_SUBMIT_TYPE_COMPUTE,
   L_SUBMIT_TYPE_GRAPHICS,
-  L_SUBMIT_TYPE_ANY = ~((uint32_t)0),
+  L_SUBMIT_TYPE_TRANSFER,
 };
 struct ContextSubmitDetail {
   uint32_t qfam_idx;
@@ -57,41 +58,11 @@ struct Context {
   VkDevice dev;
   VkPhysicalDevice physdev;
   VkPhysicalDeviceProperties physdev_prop;
-  std::vector<ContextSubmitDetail> submit_details;
-  std::map<uint32_t, uint32_t> submit_detail_idx_by_submit_ty;
-  // Costless sampler to utilize L1 cache on old mobile platform.
+  std::map<SubmitType, ContextSubmitDetail> submit_details;
   std::map<ImageSampler, VkSampler> img_samplers;
   std::map<DepthImageSampler, VkSampler> depth_img_samplers;
   VmaAllocator allocator;
   ContextConfig ctxt_cfg;
-
-  inline size_t get_queue_rsc_idx(SubmitType submit_ty) const {
-    auto it = submit_detail_idx_by_submit_ty.find((uint32_t)submit_ty);
-    assert(it != submit_detail_idx_by_submit_ty.end(), "submit type ",
-      submit_ty, " is not available");
-    return it->second;
-  }
-  inline const ContextSubmitDetail& get_submit_detail(
-    SubmitType submit_ty
-  ) const {
-    auto i = get_queue_rsc_idx(submit_ty);
-    assert(i < submit_details.size(), "unsupported submit type");
-    return submit_details[i];
-  }
-  inline uint32_t get_submit_ty_qfam_idx(SubmitType submit_ty) const {
-    if (submit_ty == L_SUBMIT_TYPE_ANY) {
-      return VK_QUEUE_FAMILY_IGNORED;
-    }
-    auto isubmit_detail = get_queue_rsc_idx(submit_ty);
-    return submit_details[isubmit_detail].qfam_idx;
-  }
-  inline VkQueue get_submit_ty_queue(SubmitType submit_ty) const {
-    if (submit_ty == L_SUBMIT_TYPE_ANY) {
-      return VK_NULL_HANDLE;
-    }
-    auto isubmit_detail = get_queue_rsc_idx(submit_ty);
-    return submit_details[isubmit_detail].queue;
-  }
 };
 
 
