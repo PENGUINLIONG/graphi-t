@@ -232,29 +232,31 @@ Context create_ctxt(const ContextConfig& cfg) {
     SubmitType submit_ty;
     VkQueueFlags queue_flags;
     const char* submit_ty_name;
-    std::vector<const char*> cmd_names;
   };
   std::vector<SubmitTypeQueueRequirement> submit_ty_reqs {
+    SubmitTypeQueueRequirement {
+      L_SUBMIT_TYPE_ANY,
+      ~VkQueueFlags(0),
+      "ANY",
+    },
     SubmitTypeQueueRequirement {
       L_SUBMIT_TYPE_GRAPHICS,
       VK_QUEUE_GRAPHICS_BIT,
       "GRAPHICS",
-      {
-        "DRAW",
-        "DRAW_INDEXED",
-      },
     },
     SubmitTypeQueueRequirement {
       L_SUBMIT_TYPE_COMPUTE,
       VK_QUEUE_COMPUTE_BIT,
       "COMPUTE",
-      {
-        "DISPATCH",
-      },
+    },
+    SubmitTypeQueueRequirement {
+      L_SUBMIT_TYPE_TRANSFER,
+      VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT,
+      "TRANSFER",
     },
   };
 
-  std::map<uint32_t, uint32_t> queue_allocs;
+  std::map<SubmitType, uint32_t> queue_allocs;
   for (size_t i = 0; i < submit_ty_reqs.size(); ++i) {
     const SubmitTypeQueueRequirement& submit_ty_queue_req = submit_ty_reqs[i];
     VkQueueFlags req_queue_flags = submit_ty_queue_req.queue_flags;
@@ -269,7 +271,7 @@ Context create_ctxt(const ContextConfig& cfg) {
       // Otherwise, look for a queue family that could satisfy all the required
       // flags.
       for (auto qfam_trait : it->second) {
-        if ((req_queue_flags & qfam_trait.queue_flags) == req_queue_flags) {
+        if ((req_queue_flags & qfam_trait.queue_flags) != 0) {
           qfam_idx_alloc = qfam_trait.qfam_idx;
           break;
         }
@@ -278,8 +280,7 @@ Context create_ctxt(const ContextConfig& cfg) {
 
     if (qfam_idx_alloc == VK_QUEUE_FAMILY_IGNORED) {
       log::warn("cannot find a suitable queue family for ",
-        submit_ty_queue_req.submit_ty_name, ", the following commands won't be "
-        "available: ", util::join(", ", submit_ty_queue_req.cmd_names));
+        submit_ty_queue_req.submit_ty_name);
     }
   }
 
@@ -332,13 +333,18 @@ Context create_ctxt(const ContextConfig& cfg) {
   VkDevice dev;
   VK_ASSERT << vkCreateDevice(physdev, &dci, nullptr, &dev);
 
-  std::vector<ContextSubmitDetail> submit_details;
+  std::map<SubmitType, ContextSubmitDetail> submit_details;
   for (const auto& pair : queue_allocs) {
+    SubmitType submit_ty = pair.first;
     uint32_t qfam_idx = pair.second;
+    VkQueue queue;
+    vkGetDeviceQueue(dev, qfam_idx, 0, &queue);
+
     ContextSubmitDetail submit_detail {};
     submit_detail.qfam_idx = qfam_idx;
-    vkGetDeviceQueue(dev, qfam_idx, 0, &submit_detail.queue);
-    submit_details.emplace_back(std::move(submit_detail));
+    submit_detail.queue = queue;
+    submit_details.insert(std::make_pair<SubmitType, ContextSubmitDetail>(
+      std::move(submit_ty), std::move(submit_detail)));
   }
 
   VkPhysicalDeviceMemoryProperties mem_prop;
@@ -412,7 +418,7 @@ Context create_ctxt(const ContextConfig& cfg) {
     cfg.dev_idx, ": ", physdev_descs[cfg.dev_idx]);
   return Context {
     dev, physdev, std::move(physdev_prop), std::move(submit_details),
-    std::move(queue_allocs), img_samplers, depth_img_samplers, allocator, cfg
+    img_samplers, depth_img_samplers, allocator, cfg
   };
 }
 void destroy_ctxt(Context& ctxt) {
@@ -674,7 +680,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
 
   log::debug("created image '", img_cfg.label, "'");
-  uint32_t qfam_idx = ctxt.get_submit_ty_qfam_idx(init_submit_ty);
+  uint32_t qfam_idx = ctxt.submit_details.at(init_submit_ty).qfam_idx;
   return Image {
     &ctxt, alloc, img, img_view, img_cfg, is_staging_img, std::move(dyn_detail)
   };
@@ -1691,7 +1697,7 @@ Invocation create_trans_invoke(
   Invocation out {};
   out.label = cfg.label;
   out.ctxt = &ctxt;
-  out.submit_ty = L_SUBMIT_TYPE_ANY;
+  out.submit_ty = L_SUBMIT_TYPE_TRANSFER;
   out.query_pool = cfg.is_timed ?
     _create_query_pool(ctxt, VK_QUERY_TYPE_TIMESTAMP, 2) : VK_NULL_HANDLE;
 
@@ -1962,7 +1968,7 @@ VkCommandPool _create_cmd_pool(const Context& ctxt, SubmitType submit_ty) {
   VkCommandPoolCreateInfo cpci {};
   cpci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
   cpci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-  cpci.queueFamilyIndex = ctxt.get_submit_ty_qfam_idx(submit_ty);
+  cpci.queueFamilyIndex = ctxt.submit_details.at(submit_ty).qfam_idx;
 
   VkCommandPool cmd_pool;
   VK_ASSERT << vkCreateCommandPool(ctxt.dev, &cpci, nullptr, &cmd_pool);
@@ -2053,7 +2059,7 @@ void _submit_transact_submit_detail(
   submit_info.pSignalSemaphores = &submit_detail.signal_sema;
 
   // Finish recording and submit the command buffer to the device.
-  VkQueue queue = ctxt.get_submit_ty_queue(submit_detail.submit_ty);
+  VkQueue queue = ctxt.submit_details.at(submit_detail.submit_ty).queue;
   VK_ASSERT << vkQueueSubmit(queue, 1, &submit_info, fence);
 }
 VkCommandBuffer _get_cmdbuf(
@@ -2065,7 +2071,7 @@ VkCommandBuffer _get_cmdbuf(
       "submit-type-independent command");
     submit_ty = transact.submit_details.back().submit_ty;
   }
-  const auto& submit_detail = transact.ctxt->get_submit_detail(submit_ty);
+  const auto& submit_detail = transact.ctxt->submit_details.at(submit_ty);
   auto queue = submit_detail.queue;
   auto qfam_idx = submit_detail.qfam_idx;
 
