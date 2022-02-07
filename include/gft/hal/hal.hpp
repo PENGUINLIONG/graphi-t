@@ -48,6 +48,7 @@ struct ContextConfig {
 };
 L_IMPL_STRUCT struct Context;
 L_IMPL_FN Context create_ctxt(const ContextConfig& cfg);
+L_IMPL_FN Context create_ctxt(uint32_t dev_idx, const std::string& label = "");
 L_IMPL_FN void destroy_ctxt(Context& ctxt);
 L_IMPL_FN const ContextConfig& get_ctxt_cfg(const Context& ctxt);
 

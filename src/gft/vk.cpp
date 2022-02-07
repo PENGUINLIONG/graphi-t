@@ -421,6 +421,12 @@ Context create_ctxt(const ContextConfig& cfg) {
     img_samplers, depth_img_samplers, allocator, cfg
   };
 }
+Context create_ctxt(uint32_t dev_idx, const std::string& label) {
+  ContextConfig cfg {};
+  cfg.label = label;
+  cfg.dev_idx = dev_idx;
+  return create_ctxt(cfg);
+}
 void destroy_ctxt(Context& ctxt) {
   if (ctxt.dev != VK_NULL_HANDLE) {
     for (const auto& samp : ctxt.img_samplers) {

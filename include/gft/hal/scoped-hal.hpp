@@ -15,26 +15,33 @@ namespace scoped {
 
 // Enter a scope of garbage collection so the resources created after this call
 // will be released during a next call to `pop_gc_frame`.
-extern void push_gc_frame();
+extern void push_gc_frame(const std::string& label);
 // Release all scoped objects created after a last call to `push_gc_frame`. Mark
 // `flatten` true if you want the scoped objects created in this frame to be
-// released at the end of the parent frame.
-extern void pop_gc_frame(bool flatten);
+// released at the end of the parent frame. The provided `label` should match 
+// that passed to `push_gc_frame` of the same scope.
+extern void pop_gc_frame(const std::string& label);
 
 // RAII helper to manage GC frame scopes.
 struct GcScope {
-  bool flatten;
-  inline GcScope(bool flatten = false) : flatten(flatten) { push_gc_frame(); }
-  inline ~GcScope() { pop_gc_frame(flatten); }
+  std::string label;
+
+  inline GcScope(const std::string& label = "") : label(label) {
+    push_gc_frame(label);
+  }
+  inline ~GcScope() { pop_gc_frame(label); }
 };
+
 
 
 struct Transaction {
   HAL_IMPL_NAMESPACE::Transaction* inner;
+  bool gc;
 
   Transaction() = default;
-  Transaction(HAL_IMPL_NAMESPACE::Transaction&& inner);
+  Transaction(HAL_IMPL_NAMESPACE::Transaction&& inner, bool gc = true);
   Transaction(Transaction&&) = default;
+  ~Transaction();
 
   Transaction& operator=(Transaction&&) = default;
 
@@ -57,10 +64,12 @@ struct Transaction {
 
 struct Invocation {
   HAL_IMPL_NAMESPACE::Invocation* inner;
+  bool gc;
 
   Invocation() = default;
-  Invocation(HAL_IMPL_NAMESPACE::Invocation&& inner);
+  Invocation(HAL_IMPL_NAMESPACE::Invocation&& inner, bool gc = true);
   Invocation(Invocation&&) = default;
+  ~Invocation();
 
   Invocation& operator=(Invocation&&) = default;
 
@@ -125,7 +134,7 @@ struct TransferInvocationBuilder {
     return dst(make_rsc_view(depth_img_view));
   }
 
-  Invocation build();
+  Invocation build(bool gc = true);
 };
 struct ComputeInvocationBuilder {
   using Self = ComputeInvocationBuilder;
@@ -168,7 +177,7 @@ struct ComputeInvocationBuilder {
     return rsc(make_rsc_view(depth_img_view));
   }
 
-  Invocation build();
+  Invocation build(bool gc = true);
 };
 struct GraphicsInvocationBuilder {
   using Self = GraphicsInvocationBuilder;
@@ -222,7 +231,7 @@ struct GraphicsInvocationBuilder {
     return *this;
   }
 
-  Invocation build();
+  Invocation build(bool gc = true);
 };
 struct RenderPassInvocationBuilder {
   using Self = RenderPassInvocationBuilder;
@@ -257,7 +266,7 @@ struct RenderPassInvocationBuilder {
     return attm(make_rsc_view(depth_img_view));
   }
 
-  Invocation build();
+  Invocation build(bool gc = true);
 };
 struct CompositeInvocationBuilder {
   using Self = CompositeInvocationBuilder;
@@ -281,16 +290,19 @@ struct CompositeInvocationBuilder {
     return *this;
   }
 
-  Invocation build();
+  Invocation build(bool gc = true);
 };
+
 
 
 struct Task {
   HAL_IMPL_NAMESPACE::Task* inner;
+  bool gc;
 
   Task() = default;
-  Task(HAL_IMPL_NAMESPACE::Task&& inner);
+  Task(HAL_IMPL_NAMESPACE::Task&& inner, bool gc = true);
   Task(Task&&) = default;
+  ~Task();
 
   Task& operator=(Task&&) = default;
 
@@ -350,7 +362,7 @@ struct ComputeTaskBuilder {
     return comp(buf.data(), buf.size() * sizeof(T));
   }
 
-  Task build();
+  Task build(bool gc = true);
 };
 struct GraphicsTaskBuilder {
   using Self = GraphicsTaskBuilder;
@@ -415,7 +427,7 @@ struct GraphicsTaskBuilder {
     return vert_input(fmt, L_VERTEX_INPUT_RATE_INSTANCE);
   }
 
-  Task build();
+  Task build(bool gc = true);
 };
 
 
@@ -465,10 +477,12 @@ struct MappedImage {
 
 struct Image {
   HAL_IMPL_NAMESPACE::Image* inner;
+  bool gc;
 
   Image() = default;
-  Image(HAL_IMPL_NAMESPACE::Image&& inner);
+  Image(HAL_IMPL_NAMESPACE::Image&& inner, bool gc = true);
   Image(Image&&) = default;
+  ~Image();
 
   Image& operator=(Image&&) = default;
 
@@ -590,16 +604,19 @@ struct ImageBuilder {
     return usage(L_IMAGE_USAGE_PRESENT_BIT);
   }
 
-  Image build();
+  Image build(bool gc = true);
 };
 
 
 
 struct DepthImage {
   HAL_IMPL_NAMESPACE::DepthImage* inner;
+  bool gc;
 
-  DepthImage(HAL_IMPL_NAMESPACE::DepthImage&& inner);
+  DepthImage();
+  DepthImage(HAL_IMPL_NAMESPACE::DepthImage&& inner, bool gc = true);
   DepthImage(DepthImage&&) = default;
+  ~DepthImage();
 
   inline operator HAL_IMPL_NAMESPACE::DepthImage& () {
     return *inner;
@@ -684,7 +701,7 @@ struct DepthImageBuilder {
     return usage(L_DEPTH_IMAGE_USAGE_TILE_MEMORY_BIT);
   }
 
-  DepthImage build();
+  DepthImage build(bool gc = true);
 };
 
 
@@ -743,10 +760,12 @@ struct MappedBuffer {
 };
 struct Buffer {
   HAL_IMPL_NAMESPACE::Buffer* inner;
+  bool gc;
 
   Buffer() = default;
-  Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner);
+  Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner, bool gc = true);
   Buffer(Buffer&&) = default;
+  ~Buffer();
 
   Buffer& operator=(Buffer&&) = default;
 
@@ -846,7 +865,7 @@ struct BufferBuilder {
     return size(sizeof(T));
   }
 
-  Buffer build();
+  Buffer build(bool gc = true);
 };
 
 
@@ -854,9 +873,12 @@ struct BufferBuilder {
 struct RenderPass {
 public:
   HAL_IMPL_NAMESPACE::RenderPass* inner;
+  bool gc;
 
-  RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner);
+  RenderPass() = default;
+  RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner, bool gc = true);
   RenderPass(RenderPass&&) = default;
+  ~RenderPass();
 
   inline operator HAL_IMPL_NAMESPACE::RenderPass& () {
     return *inner;
@@ -933,7 +955,7 @@ struct RenderPassBuilder {
     return attm((AttachmentAccess)access, fmt);
   }
 
-  RenderPass build();
+  RenderPass build(bool gc = true);
 };
 
 
@@ -941,12 +963,12 @@ struct RenderPassBuilder {
 struct Context {
 public:
   HAL_IMPL_NAMESPACE::Context* inner;
+  bool gc;
 
   Context() = default;
-  Context(const ContextConfig& cfg);
-  Context(const std::string& label, uint32_t dev_idx);
-  Context(HAL_IMPL_NAMESPACE::Context&& inner);
+  Context(HAL_IMPL_NAMESPACE::Context&& inner, bool gc = true);
   Context(Context&&) = default;
+  ~Context();
 
   Context& operator=(Context&&) = default;
 
