@@ -252,14 +252,19 @@ inline DepthImageView make_depth_img_view(
 
 
 
+struct AccelStructView {
+  const struct AccelStruct* accel_struct;
+};
+
 struct BottomLevelAccelStructConfig {
   std::string label;
   fmt::Format vert_fmt;
-  uint32_t nvert;
-  uint32_t ntri;
+  uint32_t max_nvert;
+  uint32_t max_ntri;
 };
 struct TopLevelAccelStructConfig {
   std::string label;
+  uint32_t max_ninst;
 };
 L_IMPL_STRUCT struct AccelStruct;
 L_IMPL_FN AccelStruct create_bl_accel_struct(
@@ -271,7 +276,13 @@ L_IMPL_FN AccelStruct create_tl_accel_struct(
   const TopLevelAccelStructConfig& cfg
 );
 L_IMPL_FN void destroy_accel_struct(AccelStruct& accel_struct);
-
+inline AccelStructView make_accel_struct_view(
+  const AccelStruct& accel_struct
+) {
+  AccelStructView out {};
+  out.accel_struct = &accel_struct;
+  return out;
+}
 
 
 

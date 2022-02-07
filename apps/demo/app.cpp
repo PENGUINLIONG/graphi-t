@@ -341,12 +341,17 @@ void guarded_main3() {
   };
 
   BottomLevelAccelStructConfig blas_cfg {};
-  blas_cfg.ntri = idxs.size();
   blas_cfg.vert_fmt = L_FORMAT_R32G32B32A32_SFLOAT;
-  blas_cfg.nvert = verts.size();
+  blas_cfg.max_nvert = verts.size();
+  blas_cfg.max_ntri = idxs.size();
 
-  AccelStruct as = create_bl_accel_struct(ctxt, blas_cfg);
-  destroy_accel_struct(as);
+  TopLevelAccelStructConfig tlas_cfg {};
+  tlas_cfg.max_ninst = 1;
+
+  AccelStruct blas = create_bl_accel_struct(ctxt, blas_cfg);
+  AccelStruct tlas = create_tl_accel_struct(ctxt, tlas_cfg);
+  destroy_accel_struct(blas);
+  destroy_accel_struct(tlas);
 }
 
 

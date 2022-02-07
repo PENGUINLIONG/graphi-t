@@ -896,8 +896,10 @@ AccelStruct create_bl_accel_struct(
   const Context& ctxt,
   const BottomLevelAccelStructConfig& cfg
 ) {
-  assert(cfg.nvert != 0, "vertex count cannot be zero");
-  assert(cfg.ntri != 0, "triangle count cannot be zero");
+  assert(cfg.max_nvert != 0,
+    "bottom-level acceleration structure max vertex count cannot be zero");
+  assert(cfg.max_ntri != 0,
+    "bottom-level acceleration structure max triangle count cannot be zero");
   assert(ctxt.rt_detail != nullptr,
     "current platform doesn't support ray tracing");
 
@@ -908,7 +910,7 @@ AccelStruct create_bl_accel_struct(
       VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
     asgtd.vertexFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
     asgtd.vertexStride = fmt::get_fmt_size(cfg.vert_fmt);
-    asgtd.maxVertex = cfg.nvert - 1;
+    asgtd.maxVertex = cfg.max_nvert - 1;
     asgtd.indexType = VK_INDEX_TYPE_UINT16;
 
     VkAccelerationStructureGeometryKHR asg {};
@@ -927,12 +929,12 @@ AccelStruct create_bl_accel_struct(
   asbgi.geometryCount = (uint32_t)asgs.size();
   asbgi.pGeometries = asgs.data();
 
-  uint32_t max_prim_count = cfg.ntri;
+  uint32_t max_nprim = cfg.max_ntri;
 
   VkAccelerationStructureBuildSizesInfoKHR asbsi {};
   asbsi.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
   ctxt.rt_detail->vkGetAccelerationStructureBuildSizesKHR(ctxt.dev,
-    VK_ACCELERATION_STRUCTURE_BUILD_TYPE_HOST_KHR, &asbgi, &max_prim_count,
+    VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &asbgi, &max_nprim,
     &asbsi);
 
   VkDeviceSize build_scratch_size = asbsi.buildScratchSize;
@@ -963,7 +965,80 @@ AccelStruct create_bl_accel_struct(
   VK_ASSERT << ctxt.rt_detail->vkCreateAccelerationStructureKHR(ctxt.dev, &asci,
     nullptr, &accel_struct);
 
-  log::debug("created acceleration structure");
+  log::debug("created bottom-level acceleration structure");
+
+  return AccelStruct {
+    cfg.label, &ctxt, buf, alloc, accel_struct
+  };
+}
+AccelStruct create_tl_accel_struct(
+  const Context& ctxt,
+  const TopLevelAccelStructConfig& cfg
+) {
+  assert(cfg.max_ninst != 0,
+    "top-level acceleration structure max instance count cannot be zero");
+  assert(ctxt.rt_detail != nullptr,
+    "current platform doesn't support ray tracing");
+
+  std::vector<VkAccelerationStructureGeometryKHR> asgs;
+  {
+    VkAccelerationStructureGeometryInstancesDataKHR asgid {};
+    asgid.sType =
+      VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_INSTANCES_DATA_KHR;
+
+    VkAccelerationStructureGeometryKHR asg {};
+    asg.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+    asg.geometryType = VK_GEOMETRY_TYPE_INSTANCES_KHR;
+    asg.geometry.instances = std::move(asgid);
+
+    asgs.emplace_back(asg);
+  }
+
+  VkAccelerationStructureBuildGeometryInfoKHR asbgi {};
+  asbgi.sType =
+    VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+  asbgi.type = VK_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL_KHR;
+  asbgi.flags = 0/*VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR*/;
+  asbgi.geometryCount = (uint32_t)asgs.size();
+  asbgi.pGeometries = asgs.data();
+
+  uint32_t max_ninst = cfg.max_ninst;
+
+  VkAccelerationStructureBuildSizesInfoKHR asbsi {};
+  asbsi.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+  ctxt.rt_detail->vkGetAccelerationStructureBuildSizesKHR(ctxt.dev,
+    VK_ACCELERATION_STRUCTURE_BUILD_TYPE_DEVICE_KHR, &asbgi, &max_ninst,
+    &asbsi);
+
+  VkDeviceSize build_scratch_size = asbsi.buildScratchSize;
+  VkDeviceSize update_scratch_size = asbsi.updateScratchSize;
+
+  VkBufferCreateInfo bci {};
+  bci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  bci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  bci.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+  bci.size = asbsi.accelerationStructureSize;
+
+  VmaAllocationCreateInfo aci {};
+  aci.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+  VkBuffer buf;
+  VmaAllocation alloc;
+  VK_ASSERT <<
+    vmaCreateBuffer(ctxt.allocator, &bci, &aci, &buf, &alloc, nullptr);
+
+  VkAccelerationStructureCreateInfoKHR asci {};
+  asci.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+  asci.buffer = buf;
+  asci.offset = 0;
+  asci.size = asbsi.accelerationStructureSize;
+  asci.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+
+  VkAccelerationStructureKHR accel_struct;
+  VK_ASSERT << ctxt.rt_detail->vkCreateAccelerationStructureKHR(ctxt.dev, &asci,
+    nullptr, &accel_struct);
+
+  log::debug("created top-level acceleration structure");
 
   return AccelStruct {
     cfg.label, &ctxt, buf, alloc, accel_struct
