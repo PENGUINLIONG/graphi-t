@@ -156,6 +156,8 @@ void destroy_extern_obj(void* obj) {
   auto it = OBJ_POOL.extern_objs.find(obj);
   if (it == OBJ_POOL.extern_objs.end()) {
     log::warn("attempt to release unregistered external scoped obj");
+  } else {
+    OBJ_POOL.extern_objs.erase(it);
   }
 }
 
@@ -164,7 +166,9 @@ void destroy_extern_obj(void* obj) {
 Context::Context(HAL_IMPL_NAMESPACE::Context&& inner, bool gc) :
   inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::Context>(inner), gc)),
   gc(gc) {}
-Context::~Context() { if (!gc) { destroy_extern_obj(inner); } }
+Context::~Context() {
+  if (!gc && inner != nullptr) { destroy_extern_obj(inner); }
+}
 
 
 
@@ -281,7 +285,9 @@ MappedImage::~MappedImage() {
 Buffer::Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner, bool gc) :
   inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::Buffer>(inner), gc)),
   gc(gc) {}
-Buffer::~Buffer() { if (!gc) { if (!gc) { destroy_extern_obj(inner); } } }
+Buffer::~Buffer() {
+  if (!gc && inner != nullptr) { destroy_extern_obj(inner); }
+}
 Buffer BufferBuilder::build(bool gc) {
   return Buffer(create_buf(parent, inner), gc);
 }
@@ -291,7 +297,9 @@ Buffer BufferBuilder::build(bool gc) {
 Image::Image(HAL_IMPL_NAMESPACE::Image&& inner, bool gc) :
   inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::Image>(inner), gc)),
   gc(gc) {}
-Image::~Image() { if (!gc) { destroy_extern_obj(inner); } }
+Image::~Image() {
+  if (!gc && inner != nullptr) { destroy_extern_obj(inner); }
+}
 Image ImageBuilder::build(bool gc) {
   return Image(create_img(parent, inner), gc);
 }
@@ -301,7 +309,9 @@ Image ImageBuilder::build(bool gc) {
 DepthImage::DepthImage(HAL_IMPL_NAMESPACE::DepthImage&& inner, bool gc) :
   inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::DepthImage>(inner), gc)),
   gc(gc) {}
-DepthImage::~DepthImage() { if (!gc) { destroy_extern_obj(inner); } }
+DepthImage::~DepthImage() {
+  if (!gc && inner != nullptr) { destroy_extern_obj(inner); }
+}
 DepthImage DepthImageBuilder::build(bool gc) {
   return DepthImage(create_depth_img(parent, inner), gc);
 }
@@ -311,7 +321,9 @@ DepthImage DepthImageBuilder::build(bool gc) {
 RenderPass::RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner, bool gc) :
   inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::RenderPass>(inner), gc)),
   gc(gc) {}
-RenderPass::~RenderPass() { if (!gc) { destroy_extern_obj(inner); } }
+RenderPass::~RenderPass() {
+  if (!gc && inner != nullptr) { destroy_extern_obj(inner); }
+}
 RenderPass RenderPassBuilder::build(bool gc) {
   return RenderPass(create_pass(parent, inner), gc);
 }
@@ -332,7 +344,9 @@ RenderPassInvocationBuilder RenderPass::build_pass_invoke(
 Task::Task(HAL_IMPL_NAMESPACE::Task&& inner, bool gc) :
   inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::Task>(inner), gc)),
   gc(gc) {}
-Task::~Task() { if (!gc) { destroy_extern_obj(inner); } }
+Task::~Task() {
+  if (!gc && inner != nullptr) { destroy_extern_obj(inner); }
+}
 Task ComputeTaskBuilder::build(bool gc) {
   return Task(create_comp_task(parent, inner), gc);
 }
@@ -381,7 +395,9 @@ Transaction Invocation::submit() {
 Transaction::Transaction(HAL_IMPL_NAMESPACE::Transaction&& inner, bool gc) :
   inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::Transaction>(inner), gc)),
   gc(gc) {}
-Transaction::~Transaction() { if (!gc) { destroy_extern_obj(inner); } }
+Transaction::~Transaction() {
+  if (!gc && inner != nullptr) { destroy_extern_obj(inner); }
+}
 
 } // namespace scoped
 } // namespace HAL_IMPL_NAMESPACE
