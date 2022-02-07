@@ -328,13 +328,34 @@ void guarded_main2() {
     liong::util::save_bmp(out_data, FRAMEBUF_WIDTH, FRAMEBUF_HEIGHT, "out_img.bmp");
   }
 }
+void guarded_main3() {
+  scoped::Context ctxt("ctxt", 0);
+
+  std::vector<vmath::float4> verts {
+    { 0.0f, 0.0f, 0.0f, 1.0f },
+    { 0.0f, 1.0f, 0.0f, 1.0f },
+    { 1.0f, 1.0f, 0.0f, 1.0f },
+  };
+  std::vector<uint16_t> idxs {
+    0, 1, 2
+  };
+
+  BottomLevelAccelStructConfig blas_cfg {};
+  blas_cfg.ntri = idxs.size();
+  blas_cfg.vert_fmt = L_FORMAT_R32G32B32A32_SFLOAT;
+  blas_cfg.nvert = verts.size();
+
+  AccelStruct as = create_bl_accel_struct(ctxt, blas_cfg);
+  destroy_accel_struct(as);
+}
 
 
 int main(int argc, char** argv) {
   liong::log::set_log_callback(log_cb);
   try {
-    guarded_main();
-    guarded_main2();
+    //guarded_main();
+    //guarded_main2();
+    guarded_main3();
   } catch (const std::exception& e) {
     liong::log::error("application threw an exception");
     liong::log::error(e.what());

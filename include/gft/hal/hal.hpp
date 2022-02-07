@@ -252,6 +252,29 @@ inline DepthImageView make_depth_img_view(
 
 
 
+struct BottomLevelAccelStructConfig {
+  std::string label;
+  fmt::Format vert_fmt;
+  uint32_t nvert;
+  uint32_t ntri;
+};
+struct TopLevelAccelStructConfig {
+  std::string label;
+};
+L_IMPL_STRUCT struct AccelStruct;
+L_IMPL_FN AccelStruct create_bl_accel_struct(
+  const Context& ctxt,
+  const BottomLevelAccelStructConfig& cfg
+);
+L_IMPL_FN AccelStruct create_tl_accel_struct(
+  const Context& ctxt,
+  const TopLevelAccelStructConfig& cfg
+);
+L_IMPL_FN void destroy_accel_struct(AccelStruct& accel_struct);
+
+
+
+
 struct DispatchSize {
   uint32_t x, y, z;
 };
@@ -260,6 +283,7 @@ enum ResourceType {
   L_RESOURCE_TYPE_STORAGE_BUFFER,
   L_RESOURCE_TYPE_SAMPLED_IMAGE,
   L_RESOURCE_TYPE_STORAGE_IMAGE,
+  L_RESOURCE_TYPE_ACCELERATION_STRUCTURE,
 };
 // A device program to be feeded in a `Transaction`.
 struct ComputeTaskConfig {

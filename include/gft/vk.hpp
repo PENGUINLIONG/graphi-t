@@ -54,11 +54,21 @@ struct ContextSubmitDetail {
   uint32_t qfam_idx;
   VkQueue queue;
 };
+#define L_DEF_EXT_FN(x) PFN_##x x
+struct ContextRayTracingDetail {
+  L_DEF_EXT_FN(vkCreateAccelerationStructureKHR);
+  L_DEF_EXT_FN(vkDestroyAccelerationStructureKHR);
+  L_DEF_EXT_FN(vkGetAccelerationStructureBuildSizesKHR);
+
+  L_DEF_EXT_FN(vkCreateRayTracingPipelinesKHR);
+};
+#undef L_DEF_EXT_FN
 struct Context {
   VkDevice dev;
   VkPhysicalDevice physdev;
   VkPhysicalDeviceProperties physdev_prop;
   std::map<SubmitType, ContextSubmitDetail> submit_details;
+  std::unique_ptr<ContextRayTracingDetail> rt_detail;
   std::map<ImageSampler, VkSampler> img_samplers;
   std::map<DepthImageSampler, VkSampler> depth_img_samplers;
   VmaAllocator allocator;
@@ -110,6 +120,16 @@ struct DepthImage {
   VkImageView img_view;
   DepthImageConfig depth_img_cfg;
   DepthImageDynamicDetail dyn_detail;
+};
+
+
+
+struct AccelStruct {
+  std::string label;
+  const Context* ctxt; // Lifetime bound.
+  VkBuffer buf;
+  VmaAllocation alloc;
+  VkAccelerationStructureKHR accel_struct;
 };
 
 

@@ -137,6 +137,9 @@ VkSampler _create_sampler(
   float max_aniso,
   VkCompareOp cmp_op
 ) {
+#define L_GET_INST_EXT_FN(x) \
+  PFN_##x x = (PFN_##x)vkGetInstanceProcAddr(inst, #x)
+
   VkSamplerCreateInfo sci {};
   sci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
   sci.magFilter = filter;
@@ -167,8 +170,22 @@ Context create_ctxt(const ContextConfig& cfg) {
       physdevs.size(), " available devices)");
   auto physdev = physdevs[cfg.dev_idx];
 
-  VkPhysicalDeviceFeatures feat;
-  vkGetPhysicalDeviceFeatures(physdev, &feat);
+  L_GET_INST_EXT_FN(vkGetPhysicalDeviceFeatures2KHR);
+
+  VkPhysicalDeviceFeatures2KHR feat2 {};
+  VkPhysicalDeviceAccelerationStructureFeaturesKHR as_feat {};
+  VkPhysicalDeviceRayTracingPipelineFeaturesKHR rt_pipe_feat {};
+  if (vkGetPhysicalDeviceFeatures2KHR) {
+    feat2.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2_KHR;
+    as_feat.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ACCELERATION_STRUCTURE_FEATURES_KHR;
+    rt_pipe_feat.sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_RAY_TRACING_PIPELINE_FEATURES_KHR;
+    rt_pipe_feat.pNext = feat2.pNext;
+    as_feat.pNext = &rt_pipe_feat;
+    feat2.pNext = &as_feat;
+    vkGetPhysicalDeviceFeatures2(physdev, &feat2);
+  } else {
+    vkGetPhysicalDeviceFeatures(physdev, &feat2.features);
+  }
 
   VkPhysicalDeviceProperties physdev_prop;
   vkGetPhysicalDeviceProperties(physdev, &physdev_prop);
@@ -324,7 +341,11 @@ Context create_ctxt(const ContextConfig& cfg) {
 
   VkDeviceCreateInfo dci {};
   dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-  dci.pEnabledFeatures = &feat;
+  if (vkGetPhysicalDeviceFeatures2KHR) {
+    dci.pNext = &feat2;
+  } else {
+    dci.pEnabledFeatures = &feat2.features;
+  }
   dci.queueCreateInfoCount = static_cast<uint32_t>(dqcis.size());
   dci.pQueueCreateInfos = dqcis.data();
   dci.enabledExtensionCount = (uint32_t)dev_ext_names.size();
@@ -346,6 +367,24 @@ Context create_ctxt(const ContextConfig& cfg) {
     submit_details.insert(std::make_pair<SubmitType, ContextSubmitDetail>(
       std::move(submit_ty), std::move(submit_detail)));
   }
+
+#define L_GET_DEV_EXT_FN(cont, x) \
+  cont.x = (decltype(cont.x))vkGetDeviceProcAddr(dev, #x)
+
+  std::unique_ptr<ContextRayTracingDetail> rt_detail;
+  if (as_feat.accelerationStructure && rt_pipe_feat.rayTracingPipeline) {
+    ContextRayTracingDetail detail {};
+    L_GET_DEV_EXT_FN(detail, vkCreateAccelerationStructureKHR);
+    L_GET_DEV_EXT_FN(detail, vkDestroyAccelerationStructureKHR);
+    L_GET_DEV_EXT_FN(detail, vkGetAccelerationStructureBuildSizesKHR);
+
+    L_GET_DEV_EXT_FN(detail, vkCreateRayTracingPipelinesKHR);
+
+    log::debug("ray tracing is enabled");
+    rt_detail = std::make_unique<ContextRayTracingDetail>(detail);
+  }
+
+#undef L_GET_DEV_EXT_FN
 
   VkPhysicalDeviceMemoryProperties mem_prop;
   vkGetPhysicalDeviceMemoryProperties(physdev, &mem_prop);
@@ -418,8 +457,10 @@ Context create_ctxt(const ContextConfig& cfg) {
     cfg.dev_idx, ": ", physdev_descs[cfg.dev_idx]);
   return Context {
     dev, physdev, std::move(physdev_prop), std::move(submit_details),
-    img_samplers, depth_img_samplers, allocator, cfg
+    std::move(rt_detail), img_samplers, depth_img_samplers, allocator, cfg
   };
+
+#undef L_GET_INST_EXT_FN
 }
 void destroy_ctxt(Context& ctxt) {
   if (ctxt.dev != VK_NULL_HANDLE) {
@@ -847,6 +888,95 @@ void unmap_img_mem(
 ) {
   vmaUnmapMemory(img.img->ctxt->allocator, img.img->alloc);
   log::debug("unmapped image '", img.img->img_cfg.label, "'");
+}
+
+
+
+AccelStruct create_bl_accel_struct(
+  const Context& ctxt,
+  const BottomLevelAccelStructConfig& cfg
+) {
+  assert(cfg.nvert != 0, "vertex count cannot be zero");
+  assert(cfg.ntri != 0, "triangle count cannot be zero");
+  assert(ctxt.rt_detail != nullptr,
+    "current platform doesn't support ray tracing");
+
+  std::vector<VkAccelerationStructureGeometryKHR> asgs;
+  {
+    VkAccelerationStructureGeometryTrianglesDataKHR asgtd {};
+    asgtd.sType =
+      VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_TRIANGLES_DATA_KHR;
+    asgtd.vertexFormat = VK_FORMAT_R32G32B32A32_SFLOAT;
+    asgtd.vertexStride = fmt::get_fmt_size(cfg.vert_fmt);
+    asgtd.maxVertex = cfg.nvert - 1;
+    asgtd.indexType = VK_INDEX_TYPE_UINT16;
+
+    VkAccelerationStructureGeometryKHR asg {};
+    asg.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_GEOMETRY_KHR;
+    asg.geometryType = VK_GEOMETRY_TYPE_TRIANGLES_KHR;
+    asg.geometry.triangles = std::move(asgtd);
+
+    asgs.emplace_back(asg);
+  }
+
+  VkAccelerationStructureBuildGeometryInfoKHR asbgi {};
+  asbgi.sType =
+    VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_GEOMETRY_INFO_KHR;
+  asbgi.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+  asbgi.flags = 0/*VK_BUILD_ACCELERATION_STRUCTURE_ALLOW_COMPACTION_BIT_KHR*/;
+  asbgi.geometryCount = (uint32_t)asgs.size();
+  asbgi.pGeometries = asgs.data();
+
+  uint32_t max_prim_count = cfg.ntri;
+
+  VkAccelerationStructureBuildSizesInfoKHR asbsi {};
+  asbsi.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_BUILD_SIZES_INFO_KHR;
+  ctxt.rt_detail->vkGetAccelerationStructureBuildSizesKHR(ctxt.dev,
+    VK_ACCELERATION_STRUCTURE_BUILD_TYPE_HOST_KHR, &asbgi, &max_prim_count,
+    &asbsi);
+
+  VkDeviceSize build_scratch_size = asbsi.buildScratchSize;
+  VkDeviceSize update_scratch_size = asbsi.updateScratchSize;
+
+  VkBufferCreateInfo bci {};
+  bci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+  bci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
+  bci.usage = VK_BUFFER_USAGE_ACCELERATION_STRUCTURE_STORAGE_BIT_KHR;
+  bci.size = asbsi.accelerationStructureSize;
+
+  VmaAllocationCreateInfo aci {};
+  aci.usage = VMA_MEMORY_USAGE_GPU_ONLY;
+
+  VkBuffer buf;
+  VmaAllocation alloc;
+  VK_ASSERT <<
+    vmaCreateBuffer(ctxt.allocator, &bci, &aci, &buf, &alloc, nullptr);
+
+  VkAccelerationStructureCreateInfoKHR asci {};
+  asci.sType = VK_STRUCTURE_TYPE_ACCELERATION_STRUCTURE_CREATE_INFO_KHR;
+  asci.buffer = buf;
+  asci.offset = 0;
+  asci.size = asbsi.accelerationStructureSize;
+  asci.type = VK_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL_KHR;
+
+  VkAccelerationStructureKHR accel_struct;
+  VK_ASSERT << ctxt.rt_detail->vkCreateAccelerationStructureKHR(ctxt.dev, &asci,
+    nullptr, &accel_struct);
+
+  log::debug("created acceleration structure");
+
+  return AccelStruct {
+    cfg.label, &ctxt, buf, alloc, accel_struct
+  };
+}
+void destroy_accel_struct(AccelStruct& as) {
+  if (as.accel_struct != VK_NULL_HANDLE) {
+    const Context& ctxt = *as.ctxt;
+    ctxt.rt_detail->vkDestroyAccelerationStructureKHR(ctxt.dev, as.accel_struct,
+      nullptr);
+    vmaDestroyBuffer(ctxt.allocator, as.buf, as.alloc);
+    log::debug("destroyed acceleration structure");
+  }
 }
 
 
