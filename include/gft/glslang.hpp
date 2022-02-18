@@ -2,7 +2,14 @@
 // @PENGUINLIONG
 #pragma once
 
+#ifndef GFT_WITH_GLSLANG
+#define GFT_WITH_GLSLANG 1
+#endif
+
 #if GFT_WITH_GLSLANG
+#include <string>
+#include <vector>
+#include <cstdint>
 
 namespace liong {
 

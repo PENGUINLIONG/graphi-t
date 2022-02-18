@@ -2,6 +2,10 @@
 // @PENGUINLIONG
 #pragma once
 
+#ifndef GFT_WITH_VULKAN
+#define GFT_WITH_VULKAN 1
+#endif
+
 #if GFT_WITH_VULKAN
 
 #include <array>
