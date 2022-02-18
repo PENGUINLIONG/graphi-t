@@ -12,6 +12,8 @@ namespace fmt {
 enum Format {
   L_FORMAT_R8G8B8A8_UNORM_PACK32,
   L_FORMAT_R16G16B16A16_SFLOAT,
+  L_FORMAT_R32_SFLOAT,
+  L_FORMAT_R32G32_SFLOAT,
   L_FORMAT_R32G32B32A32_SFLOAT,
 };
 
@@ -26,6 +28,8 @@ constexpr size_t get_fmt_size(Format fmt) {
   return
     fmt == L_FORMAT_R8G8B8A8_UNORM_PACK32 ? 4 :
     fmt == L_FORMAT_R16G16B16A16_SFLOAT ? 8 :
+    fmt == L_FORMAT_R32_SFLOAT ? 4 :
+    fmt == L_FORMAT_R32G32_SFLOAT ? 8 :
     fmt == L_FORMAT_R32G32B32A32_SFLOAT ? 16 :
     0; // In which case it shouldn't happen.
 }
@@ -110,6 +114,46 @@ struct FormatCodec<L_FORMAT_R16G16B16A16_SFLOAT> {
         *(const float*)(&f2),
         *(const float*)(&f3),
       };
+    }
+  }
+};
+template<>
+struct FormatCodec<L_FORMAT_R32_SFLOAT> {
+  static void encode(const vmath::float4* src, void* dst, uint32_t npx) {
+    for (uint32_t i = 0; i < npx; ++i) {
+      ((float*)dst)[i] = src[i].x;
+    }
+  }
+  static void decode(const void* src, vmath::float4* dst, uint32_t npx) {
+    for (uint32_t i = 0; i < npx; ++i) {
+      vmath::float4 vec {
+        ((const float*)src)[i],
+        0.0f,
+        0.0f,
+        0.0f,
+      };
+      dst[i] = std::move(vec);
+    }
+  }
+};
+
+template<>
+struct FormatCodec<L_FORMAT_R32G32_SFLOAT> {
+  static void encode(const vmath::float4* src, void* dst, uint32_t npx) {
+    for (uint32_t i = 0; i < npx; ++i) {
+      ((float*)dst)[i * 2 + 0] = src[i].x;
+      ((float*)dst)[i * 2 + 1] = src[i].y;
+    }
+  }
+  static void decode(const void* src, vmath::float4* dst, uint32_t npx) {
+    for (uint32_t i = 0; i < npx; ++i) {
+      vmath::float4 vec {
+        ((const float*)src)[i * 2 + 0],
+        ((const float*)src)[i * 2 + 1],
+        0.0f,
+        0.0f,
+      };
+      dst[i] = std::move(vec);
     }
   }
 };

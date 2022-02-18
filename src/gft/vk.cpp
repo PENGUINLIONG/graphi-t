@@ -474,10 +474,11 @@ Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg) {
   VkBufferCreateInfo bci {};
   bci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
   bci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-  if (buf_cfg.usage & L_BUFFER_USAGE_STAGING_BIT) {
-    bci.usage |=
-      VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
-      VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+  if (buf_cfg.usage & L_BUFFER_USAGE_TRANSFER_SRC_BIT) {
+    bci.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+  }
+  if (buf_cfg.usage & L_BUFFER_USAGE_TRANSFER_SRC_BIT) {
+    bci.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
   }
   if (buf_cfg.usage & L_BUFFER_USAGE_UNIFORM_BIT) {
     bci.usage |=
@@ -593,6 +594,14 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   SubmitType init_submit_ty = L_SUBMIT_TYPE_ANY;
   bool is_staging_img = false;
 
+  if (img_cfg.usage & L_IMAGE_USAGE_TRANSFER_SRC_BIT) {
+    usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    init_submit_ty = L_SUBMIT_TYPE_ANY;
+  }
+  if (img_cfg.usage & L_IMAGE_USAGE_TRANSFER_DST_BIT) {
+    usage |= VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    init_submit_ty = L_SUBMIT_TYPE_ANY;
+  }
   if (img_cfg.usage & L_IMAGE_USAGE_SAMPLED_BIT) {
     usage |=
       VK_IMAGE_USAGE_SAMPLED_BIT |
@@ -617,18 +626,6 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   if (img_cfg.usage & L_IMAGE_USAGE_SUBPASS_DATA_BIT) {
     usage |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
     init_submit_ty = L_SUBMIT_TYPE_GRAPHICS;
-  }
-  // KEEP THIS AT THE END.
-  if (img_cfg.usage & L_IMAGE_USAGE_STAGING_BIT) {
-    assert((img_cfg.usage & (~L_IMAGE_USAGE_STAGING_BIT)) == 0,
-      "staging image can only be used for transfer");
-    usage |=
-      VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-      VK_IMAGE_USAGE_TRANSFER_DST_BIT;
-    init_submit_ty = L_SUBMIT_TYPE_ANY;
-    // The only one case that we can feed the image with our data directly by
-    // memory mapping.
-    is_staging_img = true;
   }
 
   // Check whether the device support our use case.
@@ -656,7 +653,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   ici.initialLayout = layout;
 
   bool is_tile_mem = img_cfg.usage & L_IMAGE_USAGE_TILE_MEMORY_BIT;
-  VmaMemoryUsage vma_usage = _host_access2vma_usage(img_cfg.host_access);
+  VmaMemoryUsage vma_usage = _host_access2vma_usage(0);
   VkImage img;
   VmaAllocation alloc;
   _alloc_img(ctxt, ici, is_tile_mem, vma_usage, img, alloc);
@@ -1641,8 +1638,8 @@ void _fill_transfer_b2b_invoke(
   out.b2b_detail =
     std::make_unique<InvocationCopyBufferToBufferDetail>(std::move(b2b_detail));
 
-  out.transit_detail.reg(src, L_BUFFER_USAGE_STAGING_BIT);
-  out.transit_detail.reg(dst, L_BUFFER_USAGE_STAGING_BIT);
+  out.transit_detail.reg(src, L_BUFFER_USAGE_TRANSFER_SRC_BIT);
+  out.transit_detail.reg(dst, L_BUFFER_USAGE_TRANSFER_DST_BIT);
 }
 void _fill_transfer_b2i_invoke(
   const BufferView& src,
@@ -1657,8 +1654,8 @@ void _fill_transfer_b2i_invoke(
   out.b2i_detail =
     std::make_unique<InvocationCopyBufferToImageDetail>(std::move(b2i_detail));
 
-  out.transit_detail.reg(src, L_BUFFER_USAGE_STAGING_BIT);
-  out.transit_detail.reg(dst, L_IMAGE_USAGE_STAGING_BIT);
+  out.transit_detail.reg(src, L_BUFFER_USAGE_TRANSFER_SRC_BIT);
+  out.transit_detail.reg(dst, L_IMAGE_USAGE_TRANSFER_DST_BIT);
 }
 void _fill_transfer_i2b_invoke(
   const ImageView& src,
@@ -1673,8 +1670,8 @@ void _fill_transfer_i2b_invoke(
   out.i2b_detail =
     std::make_unique<InvocationCopyImageToBufferDetail>(std::move(i2b_detail));
 
-  out.transit_detail.reg(src, L_IMAGE_USAGE_STAGING_BIT);
-  out.transit_detail.reg(dst, L_BUFFER_USAGE_STAGING_BIT);
+  out.transit_detail.reg(src, L_IMAGE_USAGE_TRANSFER_SRC_BIT);
+  out.transit_detail.reg(dst, L_BUFFER_USAGE_TRANSFER_DST_BIT);
 }
 void _fill_transfer_i2i_invoke(
   const ImageView& src,
@@ -1689,8 +1686,8 @@ void _fill_transfer_i2i_invoke(
   out.i2i_detail =
     std::make_unique<InvocationCopyImageToImageDetail>(std::move(i2i_detail));
 
-  out.transit_detail.reg(src, L_IMAGE_USAGE_STAGING_BIT);
-  out.transit_detail.reg(dst, L_IMAGE_USAGE_STAGING_BIT);
+  out.transit_detail.reg(src, L_IMAGE_USAGE_TRANSFER_SRC_BIT);
+  out.transit_detail.reg(dst, L_IMAGE_USAGE_TRANSFER_DST_BIT);
 }
 Invocation create_trans_invoke(
   const Context& ctxt,
@@ -2113,8 +2110,12 @@ void _make_buf_barrier_params(
   switch (usage) {
   case L_BUFFER_USAGE_NONE:
     return; // Keep their original values.
-  case L_BUFFER_USAGE_STAGING_BIT:
-    access = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+  case L_BUFFER_USAGE_TRANSFER_SRC_BIT:
+    access = VK_ACCESS_TRANSFER_READ_BIT;
+    stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    break;
+  case L_BUFFER_USAGE_TRANSFER_DST_BIT:
+    access = VK_ACCESS_TRANSFER_WRITE_BIT;
     stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
     break;
   case L_BUFFER_USAGE_UNIFORM_BIT:
@@ -2150,10 +2151,15 @@ void _make_img_barrier_params(
   switch (usage) {
   case L_IMAGE_USAGE_NONE:
     return; // Keep their original values.
-  case L_IMAGE_USAGE_STAGING_BIT:
-    access = VK_ACCESS_TRANSFER_READ_BIT | VK_ACCESS_TRANSFER_WRITE_BIT;
+  case L_IMAGE_USAGE_TRANSFER_SRC_BIT:
+    access = VK_ACCESS_TRANSFER_READ_BIT;
     stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
     layout = VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL;
+    break;
+  case L_IMAGE_USAGE_TRANSFER_DST_BIT:
+    access = VK_ACCESS_TRANSFER_WRITE_BIT;
+    stage = VK_PIPELINE_STAGE_TRANSFER_BIT;
+    layout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
     break;
   case L_IMAGE_USAGE_SAMPLED_BIT:
     access = VK_ACCESS_SHADER_READ_BIT;

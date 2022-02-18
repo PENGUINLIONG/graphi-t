@@ -62,11 +62,12 @@ typedef uint32_t MemoryAccess;
 
 enum BufferUsageBits {
   L_BUFFER_USAGE_NONE = 0,
-  L_BUFFER_USAGE_STAGING_BIT = (1 << 0),
-  L_BUFFER_USAGE_UNIFORM_BIT = (1 << 1),
-  L_BUFFER_USAGE_STORAGE_BIT = (1 << 2),
-  L_BUFFER_USAGE_VERTEX_BIT = (1 << 3),
-  L_BUFFER_USAGE_INDEX_BIT = (1 << 4),
+  L_BUFFER_USAGE_TRANSFER_SRC_BIT = (1 << 0),
+  L_BUFFER_USAGE_TRANSFER_DST_BIT = (1 << 1),
+  L_BUFFER_USAGE_UNIFORM_BIT = (1 << 2),
+  L_BUFFER_USAGE_STORAGE_BIT = (1 << 3),
+  L_BUFFER_USAGE_VERTEX_BIT = (1 << 4),
+  L_BUFFER_USAGE_INDEX_BIT = (1 << 5),
 };
 typedef uint32_t BufferUsage;
 // Describes a buffer.
@@ -119,20 +120,20 @@ L_IMPL_FN void unmap_buf_mem(
 
 enum ImageUsageBits {
   L_IMAGE_USAGE_NONE = 0,
-  L_IMAGE_USAGE_STAGING_BIT = (1 << 0),
-  L_IMAGE_USAGE_SAMPLED_BIT = (1 << 1),
-  L_IMAGE_USAGE_STORAGE_BIT = (1 << 2),
-  L_IMAGE_USAGE_ATTACHMENT_BIT = (1 << 3),
-  L_IMAGE_USAGE_SUBPASS_DATA_BIT = (1 << 4),
-  L_IMAGE_USAGE_TILE_MEMORY_BIT = (1 << 5),
-  L_IMAGE_USAGE_PRESENT_BIT = (1 << 6),
+  L_IMAGE_USAGE_TRANSFER_SRC_BIT = (1 << 0),
+  L_IMAGE_USAGE_TRANSFER_DST_BIT = (1 << 1),
+  L_IMAGE_USAGE_SAMPLED_BIT = (1 << 2),
+  L_IMAGE_USAGE_STORAGE_BIT = (1 << 3),
+  L_IMAGE_USAGE_ATTACHMENT_BIT = (1 << 4),
+  L_IMAGE_USAGE_SUBPASS_DATA_BIT = (1 << 5),
+  L_IMAGE_USAGE_TILE_MEMORY_BIT = (1 << 6),
+  L_IMAGE_USAGE_PRESENT_BIT = (1 << 7),
 };
 typedef uint32_t ImageUsage;
 // Describe a row-major 2D image.
 struct ImageConfig {
   // Human-readable label of the image.
   std::string label;
-  MemoryAccess host_access;
   // Height of the image, or zero if not 2D or 3D texture.
   uint32_t height;
   // Width of the image.

@@ -556,10 +556,6 @@ struct ImageBuilder {
     inner.height = 1;
   }
 
-  inline Self& host_access(MemoryAccess access) {
-    inner.host_access |= access;
-    return *this;
-  }
   inline Self& width(uint32_t width) {
     inner.width = width;
     return *this;
@@ -577,22 +573,18 @@ struct ImageBuilder {
     return *this;
   }
 
-  inline Self& streaming() {
-    return usage(L_IMAGE_USAGE_STAGING_BIT)
-      .host_access(L_MEMORY_ACCESS_WRITE_BIT);
-  }
-  inline Self& read_back() {
-    return usage(L_IMAGE_USAGE_STAGING_BIT)
-      .host_access(L_MEMORY_ACCESS_READ_BIT);
-  }
   inline Self& sampled() {
-    return usage(L_IMAGE_USAGE_SAMPLED_BIT);
+    return usage(L_IMAGE_USAGE_SAMPLED_BIT)
+      .usage(L_IMAGE_USAGE_TRANSFER_DST_BIT);
   }
   inline Self& storage() {
-    return usage(L_IMAGE_USAGE_STORAGE_BIT);
+    return usage(L_IMAGE_USAGE_STORAGE_BIT)
+      .usage(L_IMAGE_USAGE_TRANSFER_SRC_BIT)
+      .usage(L_IMAGE_USAGE_TRANSFER_DST_BIT);
   }
   inline Self& attachment() {
-    return usage(L_IMAGE_USAGE_ATTACHMENT_BIT);
+    return usage(L_IMAGE_USAGE_ATTACHMENT_BIT)
+      .usage(L_IMAGE_USAGE_TRANSFER_SRC_BIT);
   }
   inline Self& subpass_data() {
     return usage(L_IMAGE_USAGE_SUBPASS_DATA_BIT);
@@ -601,7 +593,8 @@ struct ImageBuilder {
     return usage(L_IMAGE_USAGE_TILE_MEMORY_BIT);
   }
   inline Self& present() {
-    return usage(L_IMAGE_USAGE_PRESENT_BIT);
+    return usage(L_IMAGE_USAGE_PRESENT_BIT)
+      .usage(L_IMAGE_USAGE_TRANSFER_DST_BIT);
   }
 
   Image build(bool gc = true);
@@ -836,24 +829,29 @@ struct BufferBuilder {
   }
 
   inline Self& streaming() {
-    return usage(L_BUFFER_USAGE_STAGING_BIT)
+    return usage(L_BUFFER_USAGE_TRANSFER_SRC_BIT)
       .host_access(L_MEMORY_ACCESS_WRITE_BIT);
   }
   inline Self& read_back() {
-    return usage(L_BUFFER_USAGE_STAGING_BIT)
+    return usage(L_BUFFER_USAGE_TRANSFER_DST_BIT)
       .host_access(L_MEMORY_ACCESS_READ_BIT);
   }
   inline Self& uniform() {
-    return usage(L_BUFFER_USAGE_UNIFORM_BIT);
+    return usage(L_BUFFER_USAGE_TRANSFER_DST_BIT)
+      .usage(L_BUFFER_USAGE_UNIFORM_BIT);
   }
   inline Self& storage() {
-    return usage(L_BUFFER_USAGE_STORAGE_BIT);
+    return usage(L_BUFFER_USAGE_TRANSFER_SRC_BIT)
+      .usage(L_BUFFER_USAGE_TRANSFER_DST_BIT)
+      .usage(L_BUFFER_USAGE_STORAGE_BIT);
   }
   inline Self& vertex() {
-    return usage(L_BUFFER_USAGE_VERTEX_BIT);
+    return usage(L_BUFFER_USAGE_TRANSFER_DST_BIT)
+      .usage(L_BUFFER_USAGE_VERTEX_BIT);
   }
   inline Self& index() {
-    return usage(L_BUFFER_USAGE_INDEX_BIT);
+    return usage(L_BUFFER_USAGE_TRANSFER_DST_BIT)
+      .usage(L_BUFFER_USAGE_INDEX_BIT);
   }
 
   template<typename T>
