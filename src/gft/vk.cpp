@@ -477,7 +477,7 @@ Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg) {
   if (buf_cfg.usage & L_BUFFER_USAGE_TRANSFER_SRC_BIT) {
     bci.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
   }
-  if (buf_cfg.usage & L_BUFFER_USAGE_TRANSFER_SRC_BIT) {
+  if (buf_cfg.usage & L_BUFFER_USAGE_TRANSFER_DST_BIT) {
     bci.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
   }
   if (buf_cfg.usage & L_BUFFER_USAGE_UNIFORM_BIT) {
@@ -560,6 +560,8 @@ VkFormat _make_img_fmt(fmt::Format fmt) {
   switch (fmt) {
   case L_FORMAT_R8G8B8A8_UNORM_PACK32: return VK_FORMAT_R8G8B8A8_UNORM;
   case L_FORMAT_R16G16B16A16_SFLOAT: return VK_FORMAT_R16G16B16A16_SFLOAT;
+  case L_FORMAT_R32_SFLOAT: return VK_FORMAT_R32_SFLOAT;
+  case L_FORMAT_R32G32_SFLOAT: return VK_FORMAT_R32G32_SFLOAT;
   case L_FORMAT_R32G32B32A32_SFLOAT: return VK_FORMAT_R32G32B32A32_SFLOAT;
   default: panic("unrecognized pixel format");
   }
