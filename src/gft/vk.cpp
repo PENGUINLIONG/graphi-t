@@ -406,7 +406,7 @@ Context create_ctxt(const ContextConfig& cfg) {
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 4.0f, VK_COMPARE_OP_LESS);
 
   VmaAllocatorCreateInfo allocatorInfo = {};
-  allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_2;
+  allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_0;
   allocatorInfo.physicalDevice = physdev;
   allocatorInfo.device = dev;
   allocatorInfo.instance = inst;
