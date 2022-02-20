@@ -6,8 +6,6 @@
 //
 // Before implementing a HAL, please include `common.hpp` at the beginning of
 // your header.
-
-// Don't use `#pragma once` here.
 #pragma once
 #include <array>
 #include <memory>
@@ -40,11 +38,25 @@ L_IMPL_FN std::string desc_dev(uint32_t idx);
 
 
 
+// A batch of works dispatched to the device.
+L_IMPL_STRUCT struct Transaction;
+L_IMPL_FN void destroy_transact(Transaction& transact);
+// Check whether the transaction is finished. `true` is returned if so.
+L_IMPL_FN bool is_transact_done(const Transaction& transact);
+// Wait the invocation submitted to device for execution. Returns immediately if
+// the invocation has already been waited.
+L_IMPL_FN void wait_transact(const Transaction& transact);
+
+
+
 struct ContextConfig {
   // Human-readable label of the context.
   std::string label;
   // Index of the device.
   uint32_t dev_idx;
+  // Optional surface to draw on. Not required for headless renderers and
+  // compute-only applications.
+  const struct Surface* surf;
 };
 L_IMPL_STRUCT struct Context;
 L_IMPL_FN Context create_ctxt(const ContextConfig& cfg);
@@ -251,6 +263,30 @@ inline DepthImageView make_depth_img_view(
   out.sampler = sampler;
   return out;
 }
+
+
+
+struct SwapchainConfig {
+  std::string label;
+  // Number of image for multibuffering, can be 1, 2 or 3.
+  uint32_t nimg;
+  // Image color format.
+  fmt::Format fmt;
+  // Render output color space.
+  //cspace::ColorSpace cspace;
+};
+L_IMPL_STRUCT struct Swapchain;
+L_IMPL_FN Swapchain create_swapchain(
+  const Context& ctxt,
+  const SwapchainConfig& cfg
+);
+L_IMPL_FN void destroy_swapchain(Swapchain& swapchain);
+// Acquire the next available image for drawing and presentation.
+L_IMPL_FN Transaction acquire_swapchain_img(Context& ctxt);
+// Get the surface image for the current frame. Surface image is alive after the
+// `acquire_surf_img` transition finishes and before the next presentation
+// invocation.
+L_IMPL_FN const Image& get_swapchain_img(const Context& ctxt);
 
 
 
@@ -483,6 +519,10 @@ L_IMPL_FN Invocation create_pass_invoke(
   const RenderPass& pass,
   const RenderPassInvocationConfig& cfg
 );
+// Present the content written to the current surface image.
+L_IMPL_FN Invocation create_present_invoke(
+  const Context& ctxt
+);
 L_IMPL_FN Invocation create_composite_invoke(
   const Context& ctxt,
   const CompositeInvocationConfig& cfg
@@ -493,18 +533,8 @@ L_IMPL_FN double get_invoke_time_us(const Invocation& invoke);
 // Pre-encode the invocation commands to reduce host-side overhead on constant
 // device-side procedures.
 L_IMPL_FN void bake_invoke(Invocation& invoke);
-
-
-
-L_IMPL_STRUCT struct Transaction;
 // Create a device transactiona and submit `invoke` to device for execution.
-L_IMPL_FN Transaction create_transact(const Invocation& invoke);
-L_IMPL_FN void destroy_transact(Transaction& transact);
-// Check whether the transaction is finished. `true` is returned if so.
-L_IMPL_FN bool is_transact_done(const Transaction& transact);
-// Wait the invocation submitted to device for execution. Returns immediately if
-// the invocation has already been waited.
-L_IMPL_FN void wait_transact(const Transaction& transact);
+L_IMPL_FN Transaction submit_invoke(Invocation& invoke);
 
 } // namespace HAL_IMPL_NAMESPACE
 

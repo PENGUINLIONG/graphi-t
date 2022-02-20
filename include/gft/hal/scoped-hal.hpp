@@ -437,6 +437,7 @@ struct Image {
   bool gc;
 
   Image() = default;
+  Image(HAL_IMPL_NAMESPACE::Image* inner);
   Image(HAL_IMPL_NAMESPACE::Image&& inner, bool gc = false);
   Image(Image&&) = default;
   ~Image();
@@ -551,17 +552,12 @@ struct DepthImage {
   bool gc;
 
   DepthImage();
+  DepthImage(HAL_IMPL_NAMESPACE::DepthImage* inner);
   DepthImage(HAL_IMPL_NAMESPACE::DepthImage&& inner, bool gc = false);
   DepthImage(DepthImage&&) = default;
   ~DepthImage();
 
   DepthImage& operator=(DepthImage&&) = default;
-
-  inline static DepthImage from_extern(HAL_IMPL_NAMESPACE::DepthImage&& inner) {
-    DepthImage out(std::forward<HAL_IMPL_NAMESPACE::DepthImage>(inner), false);
-    out.gc = true;
-    return out;
-  }
 
   inline operator HAL_IMPL_NAMESPACE::DepthImage& () {
     return *inner;
@@ -708,6 +704,7 @@ struct Buffer {
   bool gc;
 
   Buffer() = default;
+  Buffer(HAL_IMPL_NAMESPACE::Buffer* inner);
   Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner, bool gc = false);
   Buffer(Buffer&&) = default;
   ~Buffer();

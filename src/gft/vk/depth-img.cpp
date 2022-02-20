@@ -26,7 +26,9 @@ DepthImage create_depth_img(
   }
   // KEEP THIS AFTER ANY SUBMIT TYPES.
   if (depth_img_cfg.usage & L_DEPTH_IMAGE_USAGE_SUBPASS_DATA_BIT) {
-    usage |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+    usage |=
+      VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
+      VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
     init_submit_ty = L_SUBMIT_TYPE_GRAPHICS;
   }
 

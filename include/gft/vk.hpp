@@ -84,11 +84,27 @@ extern std::vector<std::string> physdev_descs;
 
 
 
+struct TransactionSubmitDetail {
+  SubmitType submit_ty;
+  VkCommandPool cmd_pool;
+  VkCommandBuffer cmdbuf;
+  VkSemaphore wait_sema;
+  VkSemaphore signal_sema;
+};
+struct Transaction {
+  const Context* ctxt;
+  std::vector<TransactionSubmitDetail> submit_details;
+  VkFence fence;
+};
+
+
+
 enum SubmitType {
   L_SUBMIT_TYPE_ANY,
   L_SUBMIT_TYPE_COMPUTE,
   L_SUBMIT_TYPE_GRAPHICS,
   L_SUBMIT_TYPE_TRANSFER,
+  L_SUBMIT_TYPE_PRESENT,
 };
 struct ContextSubmitDetail {
   uint32_t qfam_idx;
@@ -132,7 +148,6 @@ struct Image {
   VkImage img;
   VkImageView img_view;
   ImageConfig img_cfg;
-  bool is_staging_img;
   ImageDynamicDetail dyn_detail;
 };
 
@@ -150,6 +165,16 @@ struct DepthImage {
   VkImageView img_view;
   DepthImageConfig depth_img_cfg;
   DepthImageDynamicDetail dyn_detail;
+};
+
+
+
+struct Swapchain {
+  const Surface* surf;
+  VkSwapchainKHR swapchain;
+  std::vector<Image> imgs;
+  SwapchainConfig swapchain_cfg;
+  std::unique_ptr<uint32_t> img_idx;
 };
 
 
@@ -247,6 +272,10 @@ struct InvocationRenderPassDetail {
   bool is_baked;
   std::vector<const Invocation*> subinvokes;
 };
+struct InvocationPresentDetail {
+  const Swapchain* swapchain;
+  uint32_t img_idx;
+};
 struct InvocationCompositeDetail {
   std::vector<const Invocation*> subinvokes;
 };
@@ -267,6 +296,7 @@ struct Invocation {
   std::unique_ptr<InvocationComputeDetail> comp_detail;
   std::unique_ptr<InvocationGraphicsDetail> graph_detail;
   std::unique_ptr<InvocationRenderPassDetail> pass_detail;
+  std::unique_ptr<InvocationPresentDetail> present_detail;
   std::unique_ptr<InvocationCompositeDetail> composite_detail;
   // Managed transitioning of resources referenced by invocation.
   InvocationTransitionDetail transit_detail;
@@ -275,21 +305,6 @@ struct Invocation {
   // Baking artifacts. Currently we don't support baking render pass invocations
   // and those with switching submit types.
   std::unique_ptr<InvocationBakingDetail> bake_detail;
-};
-
-
-
-struct TransactionSubmitDetail {
-  SubmitType submit_ty;
-  VkCommandPool cmd_pool;
-  VkCommandBuffer cmdbuf;
-  VkSemaphore wait_sema;
-  VkSemaphore signal_sema;
-};
-struct Transaction {
-  const Invocation* invoke;
-  std::vector<TransactionSubmitDetail> submit_details;
-  VkFence fence;
 };
 
 } // namespace vk

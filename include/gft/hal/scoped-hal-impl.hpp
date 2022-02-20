@@ -282,6 +282,8 @@ MappedImage::~MappedImage() {
 
 
 
+Buffer::Buffer(HAL_IMPL_NAMESPACE::Buffer* inner) :
+  inner(&inner), gc(true) {}
 Buffer::Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner, bool gc) :
   inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::Buffer>(inner), gc)),
   gc(gc) {}
@@ -294,6 +296,8 @@ Buffer BufferBuilder::build(bool gc) {
 
 
 
+Image::Image(HAL_IMPL_NAMESPACE::Image* inner) :
+  inner(&inner), gc(true) {}
 Image::Image(HAL_IMPL_NAMESPACE::Image&& inner, bool gc) :
   inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::Image>(inner), gc)),
   gc(gc) {}
@@ -306,6 +310,8 @@ Image ImageBuilder::build(bool gc) {
 
 
 
+DepthImage::DepthImage(HAL_IMPL_NAMESPACE::DepthImage* inner) :
+  inner(&inner), gc(true) {}
 DepthImage::DepthImage(HAL_IMPL_NAMESPACE::DepthImage&& inner, bool gc) :
   inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::DepthImage>(inner), gc)),
   gc(gc) {}
