@@ -2,12 +2,6 @@
 // @PENGUINLIONG
 #pragma once
 
-#ifndef GFT_WITH_VULKAN
-#define GFT_WITH_VULKAN 1
-#endif
-
-#if GFT_WITH_VULKAN
-
 #include <array>
 #include <map>
 #include <memory>
@@ -18,15 +12,32 @@
 #include "gft/hal/scoped-hal.hpp"
 
 namespace liong {
-
 namespace vk {
 
 class VkException : public std::exception {
   std::string msg;
 public:
-  VkException(VkResult code);
+  inline VkException(VkResult code) {
+    switch (code) {
+    case VK_ERROR_OUT_OF_HOST_MEMORY: msg = "out of host memory"; break;
+    case VK_ERROR_OUT_OF_DEVICE_MEMORY: msg = "out of device memory"; break;
+    case VK_ERROR_INITIALIZATION_FAILED: msg = "initialization failed"; break;
+    case VK_ERROR_DEVICE_LOST: msg = "device lost"; break;
+    case VK_ERROR_MEMORY_MAP_FAILED: msg = "memory map failed"; break;
+    case VK_ERROR_LAYER_NOT_PRESENT: msg = "layer not supported"; break;
+    case VK_ERROR_EXTENSION_NOT_PRESENT: msg = "extension may present"; break;
+    case VK_ERROR_INCOMPATIBLE_DRIVER: msg = "incompatible driver"; break;
+    case VK_ERROR_TOO_MANY_OBJECTS: msg = "too many objects"; break;
+    case VK_ERROR_FORMAT_NOT_SUPPORTED: msg = "format not supported"; break;
+    case VK_ERROR_FRAGMENTED_POOL: msg = "fragmented pool"; break;
+    case VK_ERROR_OUT_OF_POOL_MEMORY: msg = "out of pool memory"; break;
+    default: msg = std::string("unknown vulkan error: ") + std::to_string(code); break;
+    }
+  }
 
-  const char* what() const noexcept override;
+  inline const char* what() const noexcept override {
+    return msg.c_str(); 
+  }
 };
 struct VkAssert {
   inline const VkAssert& operator<<(VkResult code) const {
@@ -34,6 +45,31 @@ struct VkAssert {
     return *this;
   }
 };
+#define VK_ASSERT (::liong::vk::VkAssert{})
+
+
+
+inline VkFormat fmt2vk(fmt::Format fmt) {
+  using namespace fmt;
+  switch (fmt) {
+  case L_FORMAT_R8G8B8A8_UNORM_PACK32: return VK_FORMAT_R8G8B8A8_UNORM;
+  case L_FORMAT_R16G16B16A16_SFLOAT: return VK_FORMAT_R16G16B16A16_SFLOAT;
+  case L_FORMAT_R32_SFLOAT: return VK_FORMAT_R32_SFLOAT;
+  case L_FORMAT_R32G32_SFLOAT: return VK_FORMAT_R32G32_SFLOAT;
+  case L_FORMAT_R32G32B32A32_SFLOAT: return VK_FORMAT_R32G32B32A32_SFLOAT;
+  default: panic("unrecognized pixel format");
+  }
+  return VK_FORMAT_UNDEFINED;
+}
+inline VkFormat depth_fmt2vk(fmt::DepthFormat fmt) {
+  using namespace fmt;
+  switch (fmt) {
+  case L_DEPTH_FORMAT_D16_UNORM: return VK_FORMAT_D16_UNORM;
+  case L_DEPTH_FORMAT_D32_SFLOAT: return VK_FORMAT_D32_SFLOAT;
+  default: panic("unsupported depth format");
+  }
+  return VK_FORMAT_UNDEFINED;
+}
 
 
 
@@ -257,7 +293,4 @@ struct Transaction {
 };
 
 } // namespace vk
-
 } // namespace liong
-
-#endif // GFT_WITH_VULKAN
