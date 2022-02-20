@@ -105,36 +105,56 @@ Context create_ctxt(const ContextConfig& cfg) {
 
   struct SubmitTypeQueueRequirement {
     SubmitType submit_ty;
-    VkQueueFlags queue_flags;
     const char* submit_ty_name;
+    std::function<bool(const QueueFamilyTrait&)> pred;
   };
   std::vector<SubmitTypeQueueRequirement> submit_ty_reqs {
     SubmitTypeQueueRequirement {
       L_SUBMIT_TYPE_ANY,
-      ~VkQueueFlags(0),
       "ANY",
+      [](const QueueFamilyTrait& qfam_trait) {
+        return true;
+      },
     },
     SubmitTypeQueueRequirement {
       L_SUBMIT_TYPE_GRAPHICS,
-      VK_QUEUE_GRAPHICS_BIT,
       "GRAPHICS",
+      [](const QueueFamilyTrait& qfam_trait) {
+        return qfam_trait.queue_flags & VK_QUEUE_GRAPHICS_BIT;
+      },
     },
     SubmitTypeQueueRequirement {
       L_SUBMIT_TYPE_COMPUTE,
-      VK_QUEUE_COMPUTE_BIT,
       "COMPUTE",
+      [](const QueueFamilyTrait& qfam_trait) {
+        return qfam_trait.queue_flags & VK_QUEUE_COMPUTE_BIT;
+      },
     },
     SubmitTypeQueueRequirement {
       L_SUBMIT_TYPE_TRANSFER,
-      VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT,
       "TRANSFER",
+      [](const QueueFamilyTrait& qfam_trait) {
+        return qfam_trait.queue_flags & (
+          VK_QUEUE_GRAPHICS_BIT | VK_QUEUE_COMPUTE_BIT | VK_QUEUE_TRANSFER_BIT
+        );
+      },
+    },
+    SubmitTypeQueueRequirement {
+      L_SUBMIT_TYPE_PRESENT,
+      "PRESENT",
+      [&](const QueueFamilyTrait& qfam_trait) {
+        if (cfg.surf == nullptr) { return false; }
+        VkBool32 is_supported = VK_FALSE;
+        VK_ASSERT << vkGetPhysicalDeviceSurfaceSupportKHR(physdev,
+          qfam_trait.qfam_idx, cfg.surf->surf, &is_supported);
+        return is_supported == VK_TRUE;
+      },
     },
   };
 
   std::map<SubmitType, uint32_t> queue_allocs;
   for (size_t i = 0; i < submit_ty_reqs.size(); ++i) {
     const SubmitTypeQueueRequirement& submit_ty_queue_req = submit_ty_reqs[i];
-    VkQueueFlags req_queue_flags = submit_ty_queue_req.queue_flags;
 
     queue_allocs[submit_ty_queue_req.submit_ty] = VK_QUEUE_FAMILY_IGNORED;
     uint32_t& qfam_idx_alloc = queue_allocs[submit_ty_queue_req.submit_ty];
@@ -146,7 +166,7 @@ Context create_ctxt(const ContextConfig& cfg) {
       // Otherwise, look for a queue family that could satisfy all the required
       // flags.
       for (auto qfam_trait : it->second) {
-        if ((req_queue_flags & qfam_trait.queue_flags) != 0) {
+        if (submit_ty_queue_req.pred(qfam_trait)) {
           qfam_idx_alloc = qfam_trait.qfam_idx;
           break;
         }

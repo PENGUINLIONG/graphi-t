@@ -8,7 +8,6 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   VkFormat fmt = fmt2vk(img_cfg.fmt);
   VkImageUsageFlags usage = 0;
   SubmitType init_submit_ty = L_SUBMIT_TYPE_ANY;
-  bool is_staging_img = false;
 
   if (img_cfg.usage & L_IMAGE_USAGE_TRANSFER_SRC_BIT) {
     usage |= VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
@@ -35,12 +34,13 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   if (img_cfg.usage & L_IMAGE_USAGE_ATTACHMENT_BIT) {
     usage |=
       VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT |
-      VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     init_submit_ty = L_SUBMIT_TYPE_GRAPHICS;
   }
   if (img_cfg.usage & L_IMAGE_USAGE_SUBPASS_DATA_BIT) {
-    usage |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT;
+    usage |=
+      VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
+      VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
     init_submit_ty = L_SUBMIT_TYPE_GRAPHICS;
   }
 
@@ -49,8 +49,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   VK_ASSERT << vkGetPhysicalDeviceImageFormatProperties(ctxt.physdev, fmt,
     VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL, usage, 0, &ifp);
 
-  VkImageLayout layout = is_staging_img ?
-    VK_IMAGE_LAYOUT_PREINITIALIZED : VK_IMAGE_LAYOUT_UNDEFINED;
+  VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
 
   VkImageCreateInfo ici {};
   ici.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -62,8 +61,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   ici.mipLevels = 1;
   ici.arrayLayers = 1;
   ici.samples = VK_SAMPLE_COUNT_1_BIT;
-  ici.tiling = is_staging_img ?
-    VK_IMAGE_TILING_LINEAR : VK_IMAGE_TILING_OPTIMAL;
+  ici.tiling = VK_IMAGE_TILING_OPTIMAL;
   ici.usage = usage;
   ici.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
   ici.initialLayout = layout;
@@ -86,25 +84,17 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
       vmaCreateImage(ctxt.allocator, &ici, &aci, &img, &alloc, nullptr);
   }
 
-  VkImageView img_view = VK_NULL_HANDLE;
-  if (!is_staging_img) {
-    VkImageViewCreateInfo ivci {};
-    ivci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    ivci.image = img;
-    ivci.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    ivci.format = fmt;
-    ivci.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
-    ivci.components.g = VK_COMPONENT_SWIZZLE_IDENTITY;
-    ivci.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
-    ivci.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
-    ivci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    ivci.subresourceRange.baseArrayLayer = 0;
-    ivci.subresourceRange.layerCount = 1;
-    ivci.subresourceRange.baseMipLevel = 0;
-    ivci.subresourceRange.levelCount = 1;
+  VkImageViewCreateInfo ivci {};
+  ivci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+  ivci.image = img;
+  ivci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  ivci.format = fmt;
+  ivci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+  ivci.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
+  ivci.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
 
-    VK_ASSERT << vkCreateImageView(ctxt.dev, &ivci, nullptr, &img_view);
-  }
+  VkImageView img_view = VK_NULL_HANDLE;
+  VK_ASSERT << vkCreateImageView(ctxt.dev, &ivci, nullptr, &img_view);
 
   ImageDynamicDetail dyn_detail {};
   dyn_detail.layout = layout;
@@ -114,7 +104,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   log::debug("created image '", img_cfg.label, "'");
   uint32_t qfam_idx = ctxt.submit_details.at(init_submit_ty).qfam_idx;
   return Image {
-    &ctxt, alloc, img, img_view, img_cfg, is_staging_img, std::move(dyn_detail)
+    &ctxt, alloc, img, img_view, img_cfg, std::move(dyn_detail)
   };
 }
 void destroy_img(Image& img) {

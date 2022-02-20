@@ -576,6 +576,31 @@ Invocation create_pass_invoke(
   log::debug("created render pass invocation");
   return out;
 }
+Invocation create_present_invoke(const Swapchain& swapchain) {
+  assert(swapchain.img_idx != nullptr,
+    "swapchain has not acquired an image to present for the current frame");
+
+  uint32_t img_idx = *swapchain.img_idx;
+  swapchain.img_idx = nullptr;
+
+  const Surface& surf = *swapchain.surf;
+
+  Invocation out {};
+  out.label = util::format(surf.surf_cfg.label, " (image #", img_idx, ")");
+  out.ctxt = &ctxt;
+  out.submit_ty = L_SUBMIT_TYPE_PRESENT;
+  out.query_pool = VK_NULL_HANDLE;
+
+  InvocationPresentDetail present_detail {};
+  present_detail.surf = &surf;
+  present_detail.img_idx = img_idx;
+
+  out.present_detail =
+    std::make_unique<InvocationPresentDetail>(std::move(present_detail));
+
+  log::debug("created present invocation");
+  return out;
+}
 Invocation create_composite_invoke(
   const Context& ctxt,
   const CompositeInvocationConfig& cfg
@@ -698,9 +723,12 @@ struct TransactionLike {
   const Context* ctxt;
   std::vector<TransactionSubmitDetail> submit_details;
   VkCommandBufferLevel level;
+  // Some invocations cannot be followedby subsequent invocations, e.g.
+  // presentation.
+  bool is_frozen;
 
   inline TransactionLike(const Context& ctxt, VkCommandBufferLevel level) :
-    ctxt(&ctxt), level(level) {}
+    ctxt(&ctxt), submit_details(), level(level), is_frozen(false) {}
 };
 void _begin_cmdbuf(const TransactionSubmitDetail& submit_detail) {
   VkCommandBufferInheritanceInfo cbii {};
@@ -1114,6 +1142,40 @@ void _transit_rscs(
 }
 
 void _record_invoke(TransactionLike& transact, const Invocation& invoke) {
+  assert(!transact.is_frozen, "invocations cannot be recorded while the "
+    "transaction is frozen");
+
+  if (invoke.present_detail) {
+    assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+      "present invocation cannot be baked");
+
+    const InvocationPresentDetail& present_detail = *invoke.present_detail;
+    const Swapchain& swapchain = *present_detail.swapchain;
+    const Context& ctxt = *surf.ctxt;
+
+    // Present the rendered image.
+    VkResult present_res = VK_SUCCESS;
+    VkPresentInfoKHR pi {};
+    pi.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+    pi.swapchainCount = 1;
+    pi.pSwapchains = &swapchain.swapchain;
+    pi.pImageIndices = &present_detail.img_idx;
+    pi.pResults = &present_res;
+    if (transact.submit_details.size() != 0) {
+      pi.waitSemaphoreCount = 1;
+      pi.pWaitSemaphores = &transact.submit_details.back().wait_sema;
+    }
+
+    VkQueue queue = ctxt.submit_details.at(L_SUBMIT_TYPE_PRESENT).queue;
+    VK_ASSERT << vkQueuePresentKHR(queue, &pi);
+
+    transact.is_frozen = true;
+
+    log::debug("applied presentation invocation (image #",
+      present_detail.img_idx, ")");
+    return;
+  }
+
   VkCommandBuffer cmdbuf = _get_cmdbuf(transact, invoke.submit_ty);
 
   // If the invocation has been baked, simply inline the baked secondary command
@@ -1303,10 +1365,10 @@ VkFence _create_fence(const Context& ctxt) {
   VK_ASSERT << vkCreateFence(ctxt.dev, &fci, nullptr, &fence);
   return fence;
 }
-Transaction create_transact(const Invocation& invoke) {
+Transaction submit_invoke(const Invocation& invoke) {
   const Context& ctxt = *invoke.ctxt;
 
-  TransactionLike transact(*invoke.ctxt, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
+  TransactionLike transact(ctxt, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
   util::Timer timer {};
   timer.tic();
   _record_invoke(transact, invoke);
@@ -1314,7 +1376,7 @@ Transaction create_transact(const Invocation& invoke) {
   timer.toc();
 
   Transaction out {};
-  out.invoke = &invoke;
+  out.ctxt = &ctxt;
   out.submit_details = std::move(transact.submit_details);
   out.fence = _create_fence(ctxt);
 
@@ -1323,54 +1385,6 @@ Transaction create_transact(const Invocation& invoke) {
   log::debug("created and submitted transaction for execution, command "
     "recording took ", timer.us(), "us");
   return out;
-}
-void destroy_transact(Transaction& transact) {
-  const Context& ctxt = *transact.invoke->ctxt;
-  if (transact.fence != VK_NULL_HANDLE) {
-    for (auto& submit_detail : transact.submit_details) {
-      if (submit_detail.signal_sema != VK_NULL_HANDLE) {
-        vkDestroySemaphore(ctxt.dev, submit_detail.signal_sema, nullptr);
-      }
-      if (submit_detail.cmd_pool != VK_NULL_HANDLE) {
-        vkDestroyCommandPool(ctxt.dev, submit_detail.cmd_pool, nullptr);
-      }
-    }
-    vkDestroyFence(ctxt.dev, transact.fence, nullptr);
-    log::debug("destroyed transaction");
-  }
-  transact = {};
-}
-bool is_transact_done(const Transaction& transact) {
-  const Context& ctxt = *transact.invoke->ctxt;
-  VkResult err = vkGetFenceStatus(ctxt.dev, transact.fence);
-  if (err == VK_NOT_READY) {
-    return false;
-  } else {
-    VK_ASSERT << err;
-    return true;
-  }
-}
-void wait_transact(const Transaction& transact) {
-  const uint32_t SPIN_INTERVAL = 3000;
-
-  const Context& ctxt = *transact.invoke->ctxt;
-
-  util::Timer wait_timer {};
-  wait_timer.tic();
-  for (VkResult err;;) {
-    err = vkWaitForFences(ctxt.dev, 1, &transact.fence, VK_TRUE,
-      SPIN_INTERVAL);
-    if (err == VK_TIMEOUT) {
-      // log::warn("timeout after 3000ns");
-    } else {
-      VK_ASSERT << err;
-      break;
-    }
-  }
-  wait_timer.toc();
-
-  log::debug("command drain returned after ", wait_timer.us(), "us since the "
-    "wait started (spin interval = ", SPIN_INTERVAL / 1000.0, "us");
 }
 
 } // namespace vk
