@@ -167,20 +167,6 @@ void guarded_main() {
     }
   }
 
-  scoped::Image map_test_img = ctxt.build_img("map_test_img")
-    .width(7)
-    .height(7)
-    .fmt(L_FORMAT_R32G32B32A32_SFLOAT)
-    .streaming()
-    .read_back()
-    .build();
-  map_test_img.map_write().write(pattern);
-  {
-    scoped::MappedImage mapped = map_test_img.map_read();
-    const float* out_data = (const float*)mapped;
-    liong::util::save_bmp(out_data, 7, 7, "map_test.bmp");
-  }
-
 }
 
 void guarded_main2() {
