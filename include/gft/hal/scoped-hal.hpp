@@ -39,7 +39,7 @@ struct Transaction {
   bool gc;
 
   Transaction() = default;
-  Transaction(HAL_IMPL_NAMESPACE::Transaction&& inner, bool gc = true);
+  Transaction(HAL_IMPL_NAMESPACE::Transaction&& inner, bool gc = false);
   Transaction(Transaction&&) = default;
   ~Transaction();
 
@@ -67,7 +67,7 @@ struct Invocation {
   bool gc;
 
   Invocation() = default;
-  Invocation(HAL_IMPL_NAMESPACE::Invocation&& inner, bool gc = true);
+  Invocation(HAL_IMPL_NAMESPACE::Invocation&& inner, bool gc = false);
   Invocation(Invocation&&) = default;
   ~Invocation();
 
@@ -300,7 +300,7 @@ struct Task {
   bool gc;
 
   Task() = default;
-  Task(HAL_IMPL_NAMESPACE::Task&& inner, bool gc = true);
+  Task(HAL_IMPL_NAMESPACE::Task&& inner, bool gc = false);
   Task(Task&&) = default;
   ~Task();
 
@@ -480,7 +480,7 @@ struct Image {
   bool gc;
 
   Image() = default;
-  Image(HAL_IMPL_NAMESPACE::Image&& inner, bool gc = true);
+  Image(HAL_IMPL_NAMESPACE::Image&& inner, bool gc = false);
   Image(Image&&) = default;
   ~Image();
 
@@ -607,7 +607,7 @@ struct DepthImage {
   bool gc;
 
   DepthImage();
-  DepthImage(HAL_IMPL_NAMESPACE::DepthImage&& inner, bool gc = true);
+  DepthImage(HAL_IMPL_NAMESPACE::DepthImage&& inner, bool gc = false);
   DepthImage(DepthImage&&) = default;
   ~DepthImage();
 
@@ -756,7 +756,7 @@ struct Buffer {
   bool gc;
 
   Buffer() = default;
-  Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner, bool gc = true);
+  Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner, bool gc = false);
   Buffer(Buffer&&) = default;
   ~Buffer();
 
@@ -874,7 +874,7 @@ public:
   bool gc;
 
   RenderPass() = default;
-  RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner, bool gc = true);
+  RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner, bool gc = false);
   RenderPass(RenderPass&&) = default;
   ~RenderPass();
 
@@ -964,7 +964,7 @@ public:
   bool gc;
 
   Context() = default;
-  Context(HAL_IMPL_NAMESPACE::Context&& inner, bool gc = true);
+  Context(HAL_IMPL_NAMESPACE::Context&& inner, bool gc = false);
   Context(Context&&) = default;
   ~Context();
 
