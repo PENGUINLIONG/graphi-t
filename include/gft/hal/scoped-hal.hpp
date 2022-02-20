@@ -432,49 +432,6 @@ struct GraphicsTaskBuilder {
 
 
 
-struct MappedImage {
-  void* mapped;
-  size_t row_pitch;
-  ImageView view;
-
-  void* buf;
-  size_t buf_size;
-
-  MappedImage(const ImageView& view, MemoryAccess map_access);
-  inline MappedImage(MappedImage&& x) :
-    mapped(std::exchange(x.mapped, nullptr)),
-    row_pitch(std::exchange(x.row_pitch, 0)),
-    view(std::exchange(x.view, {})) {}
-  ~MappedImage();
-
-  constexpr void* data() {
-    return buf == nullptr ? mapped : buf;
-  }
-  constexpr const void* data() const {
-    return buf == nullptr ? mapped : buf;
-  }
-
-  template<typename T, typename _ = std::enable_if_t<std::is_pointer<T>::value>>
-  inline operator T() const {
-    return (T)data();
-  }
-
-  inline void read(void* dst, size_t size) const {
-    std::memcpy(dst, data(), size);
-  }
-  template<typename T>
-  inline void read(std::vector<T>& src) const {
-    read(src.data(), src.size() * sizeof(T));
-  }
-  inline void write(const void* src, size_t size) {
-    std::memcpy(data(), src, size);
-  }
-  template<typename T>
-  inline void write(const std::vector<T>& src) {
-    write(src.data(), src.size() * sizeof(T));
-  }
-};
-
 struct Image {
   HAL_IMPL_NAMESPACE::Image* inner;
   bool gc;
@@ -485,6 +442,12 @@ struct Image {
   ~Image();
 
   Image& operator=(Image&&) = default;
+
+  inline static Image from_extern(HAL_IMPL_NAMESPACE::Image&& inner) {
+    Image out(std::forward<HAL_IMPL_NAMESPACE::Image>(inner), false);
+    out.gc = true;
+    return out;
+  }
 
   inline operator HAL_IMPL_NAMESPACE::Image& () {
     return *inner;
@@ -520,25 +483,6 @@ struct Image {
   }
   inline ImageView view() const {
     return view(L_IMAGE_SAMPLER_LINEAR);
-  }
-
-  inline MappedImage map(
-    uint32_t x_offset,
-    uint32_t y_offset,
-    uint32_t width,
-    uint32_t height,
-    MemoryAccess map_access
-  ) const {
-    return MappedImage(view(x_offset, y_offset, width, height), map_access);
-  }
-  inline MappedImage map(MemoryAccess map_access) const {
-    return MappedImage(view(), map_access);
-  }
-  inline MappedImage map_read() const {
-    return map(L_MEMORY_ACCESS_READ_BIT);
-  }
-  inline MappedImage map_write() const {
-    return map(L_MEMORY_ACCESS_WRITE_BIT);
   }
 };
 struct ImageBuilder {
@@ -610,6 +554,14 @@ struct DepthImage {
   DepthImage(HAL_IMPL_NAMESPACE::DepthImage&& inner, bool gc = false);
   DepthImage(DepthImage&&) = default;
   ~DepthImage();
+
+  DepthImage& operator=(DepthImage&&) = default;
+
+  inline static DepthImage from_extern(HAL_IMPL_NAMESPACE::DepthImage&& inner) {
+    DepthImage out(std::forward<HAL_IMPL_NAMESPACE::DepthImage>(inner), false);
+    out.gc = true;
+    return out;
+  }
 
   inline operator HAL_IMPL_NAMESPACE::DepthImage& () {
     return *inner;
@@ -761,6 +713,12 @@ struct Buffer {
   ~Buffer();
 
   Buffer& operator=(Buffer&&) = default;
+
+  inline static Buffer from_extern(HAL_IMPL_NAMESPACE::Buffer&& inner) {
+    Buffer out(std::forward<HAL_IMPL_NAMESPACE::Buffer>(inner), false);
+    out.gc = true;
+    return out;
+  }
 
   inline operator HAL_IMPL_NAMESPACE::Buffer& () {
     return *inner;
