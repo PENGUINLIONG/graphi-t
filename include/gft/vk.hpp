@@ -264,6 +264,7 @@ struct InvocationGraphicsDetail {
   VkDeviceSize idx_buf_offset;
   uint32_t ninst;
   uint32_t nvert;
+  IndexType idx_ty;
   uint32_t nidx;
 };
 struct InvocationRenderPassDetail {

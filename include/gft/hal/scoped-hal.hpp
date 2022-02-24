@@ -209,6 +209,10 @@ struct GraphicsInvocationBuilder {
     inner.idx_buf = idx_buf;
     return *this;
   }
+  inline Self& idx_ty(IndexType idx_ty) {
+    inner.idx_ty = idx_ty;
+    return *this;
+  }
   inline Self& nidx(uint32_t nidx) {
     inner.nidx = nidx;
     return *this;

@@ -465,6 +465,10 @@ struct ComputeInvocationConfig {
   // Set `true` if the device-side execution time is wanted.
   bool is_timed;
 };
+enum IndexType {
+  L_INDEX_TYPE_UINT16,
+  L_INDEX_TYPE_UINT32,
+};
 // Instanced invocation of a graphics task, a.k.a. a draw call.
 struct GraphicsInvocationConfig {
   std::string label;
@@ -479,6 +483,8 @@ struct GraphicsInvocationConfig {
   uint32_t nvert;
   // Index buffer for vertex indexing.
   BufferView idx_buf;
+  // Type of index buffer elements.
+  IndexType idx_ty;
   // Number of indices to be drawn in this draw. If `nvert` is non-zero, `nidx`
   // MUST be zero.
   uint32_t nidx;
