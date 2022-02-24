@@ -936,10 +936,6 @@ public:
     return *inner;
   }
 
-  inline const ContextConfig& cfg() const {
-    return get_ctxt_cfg(*inner);
-  }
-
   ComputeTaskBuilder build_comp_task(const std::string& label = "") const;
   RenderPassBuilder build_pass(const std::string& label = "") const;
   BufferBuilder build_buf(const std::string& label = "") const;

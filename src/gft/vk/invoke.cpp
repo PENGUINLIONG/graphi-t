@@ -577,22 +577,28 @@ Invocation create_pass_invoke(
   return out;
 }
 Invocation create_present_invoke(const Swapchain& swapchain) {
-  assert(swapchain.img_idx != nullptr,
+  assert(swapchain.dyn_detail != nullptr,
+    "swapchain need to be recreated with `acquire_swapchain_img`");
+
+  const Context& ctxt = *swapchain.ctxt;
+  SwapchainDynamicDetail& dyn_detail =
+    (SwapchainDynamicDetail&)*swapchain.dyn_detail;
+
+  assert(dyn_detail.img_idx != nullptr,
     "swapchain has not acquired an image to present for the current frame");
 
-  uint32_t img_idx = *swapchain.img_idx;
-  swapchain.img_idx = nullptr;
+  uint32_t img_idx = *dyn_detail.img_idx;
+  dyn_detail.img_idx = nullptr;
 
-  const Surface& surf = *swapchain.surf;
 
   Invocation out {};
-  out.label = util::format(surf.surf_cfg.label, " (image #", img_idx, ")");
+  out.label = util::format(swapchain.swapchain_cfg.label, " #", img_idx);
   out.ctxt = &ctxt;
   out.submit_ty = L_SUBMIT_TYPE_PRESENT;
   out.query_pool = VK_NULL_HANDLE;
 
   InvocationPresentDetail present_detail {};
-  present_detail.surf = &surf;
+  present_detail.swapchain = &swapchain;
   present_detail.img_idx = img_idx;
 
   out.present_detail =
@@ -1150,8 +1156,8 @@ void _record_invoke(TransactionLike& transact, const Invocation& invoke) {
       "present invocation cannot be baked");
 
     const InvocationPresentDetail& present_detail = *invoke.present_detail;
-    const Swapchain& swapchain = *present_detail.swapchain;
-    const Context& ctxt = *surf.ctxt;
+    Swapchain& swapchain = (Swapchain&)*present_detail.swapchain;
+    const Context& ctxt = *swapchain.ctxt;
 
     // Present the rendered image.
     VkResult present_res = VK_SUCCESS;
@@ -1167,7 +1173,13 @@ void _record_invoke(TransactionLike& transact, const Invocation& invoke) {
     }
 
     VkQueue queue = ctxt.submit_details.at(L_SUBMIT_TYPE_PRESENT).queue;
-    VK_ASSERT << vkQueuePresentKHR(queue, &pi);
+    VkResult res = vkQueuePresentKHR(queue, &pi);
+    if (res == VK_SUBOPTIMAL_KHR) {
+      // Request for swapchain recreation and suppress the result.
+      swapchain.dyn_detail = nullptr;
+      res = VK_SUCCESS;
+    }
+    VK_ASSERT << res;
 
     transact.is_frozen = true;
 

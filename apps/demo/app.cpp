@@ -123,7 +123,7 @@ void guarded_main() {
     glslang::compile_comp(glsl.c_str(), "comp");
   dbg_dump_spv_art("out", art);
 
-  scoped::Context ctxt = create_ctxt(0, "ctxt");
+  scoped::Context ctxt = create_ctxt(ContextConfig { "ctxt", 0 });
 
   scoped::Task task = ctxt.build_comp_task("comp_task")
     .comp(art.comp_spv)
@@ -201,7 +201,7 @@ void guarded_main2() {
   liong::assert(art.ubo_size == 4 * sizeof(float),
     "unexpected ubo size; should be 16, but is ", art.ubo_size);
 
-  scoped::Context ctxt = create_ctxt(0, "ctxt");
+  scoped::Context ctxt = create_ctxt({ "ctxt", 0 });
 
   constexpr uint32_t FRAMEBUF_WIDTH = 4;
   constexpr uint32_t FRAMEBUF_HEIGHT = 4;

@@ -54,15 +54,29 @@ struct ContextConfig {
   std::string label;
   // Index of the device.
   uint32_t dev_idx;
-  // Optional surface to draw on. Not required for headless renderers and
-  // compute-only applications.
-  const struct Surface* surf;
 };
+struct ContextWindowsConfig {
+  std::string label;
+  // Index of the device.
+  uint32_t dev_idx;
+  // Instance handle, aka `HINSTANCE`.
+  const void* hinst;
+  // Window handle, aka `HWND`.
+  const void* hwnd;
+};
+struct ContextAndroidConfig {
+  std::string label;
+  // Index of the device.
+  uint32_t dev_idx;
+  // Android native window.
+  struct ANativeWindow* native_wnd;
+};
+
 L_IMPL_STRUCT struct Context;
 L_IMPL_FN Context create_ctxt(const ContextConfig& cfg);
-L_IMPL_FN Context create_ctxt(uint32_t dev_idx, const std::string& label = "");
+L_IMPL_FN Context create_ctxt_windows(const ContextWindowsConfig& cfg);
+L_IMPL_FN Context create_ctxt_android(const ContextAndroidConfig& cfg);
 L_IMPL_FN void destroy_ctxt(Context& ctxt);
-L_IMPL_FN const ContextConfig& get_ctxt_cfg(const Context& ctxt);
 
 
 
@@ -540,7 +554,7 @@ L_IMPL_FN double get_invoke_time_us(const Invocation& invoke);
 // device-side procedures.
 L_IMPL_FN void bake_invoke(Invocation& invoke);
 // Create a device transactiona and submit `invoke` to device for execution.
-L_IMPL_FN Transaction submit_invoke(Invocation& invoke);
+L_IMPL_FN Transaction submit_invoke(const Invocation& invoke);
 
 } // namespace HAL_IMPL_NAMESPACE
 
