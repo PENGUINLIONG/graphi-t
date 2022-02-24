@@ -227,61 +227,6 @@ void _copy_img_tile(
 
 
 
-MappedImage::MappedImage(const ImageView& view, MemoryAccess map_access) :
-  mapped(nullptr),
-  row_pitch(0),
-  view(view),
-  buf(nullptr),
-  buf_size(0)
-{
-  map_img_mem(view, map_access, mapped, row_pitch);
-
-  const auto& img_cfg = view.img->img_cfg;
-  size_t fmt_size = fmt::get_fmt_size(img_cfg.fmt);
-  size_t expected_pitch = fmt_size * img_cfg.width;
-
-  bool need_stage_buf = false;
-  if (view.width != img_cfg.width || view.height != img_cfg.height) {
-    log::warn("only a portion of the image is mapped; staging buffer will be "
-      "used to relayout data on the host side");
-    need_stage_buf = true;
-  } else if (row_pitch != expected_pitch) {
-    log::warn("image allocation size is not aligned to required pitch (expect=",
-      expected_pitch, ", actual=", row_pitch, "); staging buffer will be used "
-      "to relayout data on the host side");
-    need_stage_buf = true;
-  }
-  if (need_stage_buf) {
-    buf_size = expected_pitch * img_cfg.height;
-    buf = new uint8_t[buf_size];
-  }
-
-  // Copy the image on device to the staging buffer if the user wants to read
-  // the content.
-  if (buf != nullptr && (map_access & L_MEMORY_ACCESS_READ_BIT)) {
-    size_t buf_row_pitch = expected_pitch;
-    _copy_img_tile(buf, expected_pitch, 0, 0, mapped, row_pitch,
-      view.y_offset, view.x_offset * fmt_size, view.height, expected_pitch);
-  }
-}
-MappedImage::~MappedImage() {
-  if (buf != nullptr) {
-    const auto& img_cfg = view.img->img_cfg;
-    size_t fmt_size = fmt::get_fmt_size(img_cfg.fmt);
-    size_t buf_row_pitch = view.width * fmt_size;
-
-    _copy_img_tile(mapped, row_pitch, view.y_offset,
-      view.x_offset * fmt_size, buf, buf_row_pitch, 0, 0, view.height,
-      buf_row_pitch);
-
-    delete [] (uint8_t*)buf;
-    buf = nullptr;
-  }
-  unmap_img_mem(view, mapped);
-}
-
-
-
 Buffer::Buffer(HAL_IMPL_NAMESPACE::Buffer* inner) :
   inner(&inner), gc(true) {}
 Buffer::Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner, bool gc) :
