@@ -84,6 +84,13 @@ extern std::vector<std::string> physdev_descs;
 
 
 
+enum SubmitType {
+  L_SUBMIT_TYPE_ANY,
+  L_SUBMIT_TYPE_COMPUTE,
+  L_SUBMIT_TYPE_GRAPHICS,
+  L_SUBMIT_TYPE_TRANSFER,
+  L_SUBMIT_TYPE_PRESENT,
+};
 struct TransactionSubmitDetail {
   SubmitType submit_ty;
   VkCommandPool cmd_pool;
@@ -99,26 +106,20 @@ struct Transaction {
 
 
 
-enum SubmitType {
-  L_SUBMIT_TYPE_ANY,
-  L_SUBMIT_TYPE_COMPUTE,
-  L_SUBMIT_TYPE_GRAPHICS,
-  L_SUBMIT_TYPE_TRANSFER,
-  L_SUBMIT_TYPE_PRESENT,
-};
 struct ContextSubmitDetail {
   uint32_t qfam_idx;
   VkQueue queue;
 };
 struct Context {
+  std::string label;
   VkDevice dev;
+  VkSurfaceKHR surf;
   VkPhysicalDevice physdev;
   VkPhysicalDeviceProperties physdev_prop;
   std::map<SubmitType, ContextSubmitDetail> submit_details;
   std::map<ImageSampler, VkSampler> img_samplers;
   std::map<DepthImageSampler, VkSampler> depth_img_samplers;
   VmaAllocator allocator;
-  ContextConfig ctxt_cfg;
 };
 
 
@@ -169,12 +170,17 @@ struct DepthImage {
 
 
 
-struct Swapchain {
-  const Surface* surf;
-  VkSwapchainKHR swapchain;
+struct SwapchainDynamicDetail {
+  uint32_t width;
+  uint32_t height;
   std::vector<Image> imgs;
-  SwapchainConfig swapchain_cfg;
   std::unique_ptr<uint32_t> img_idx;
+};
+struct Swapchain {
+  const Context* ctxt;
+  SwapchainConfig swapchain_cfg;
+  VkSwapchainKHR swapchain;
+  std::unique_ptr<SwapchainDynamicDetail> dyn_detail;
 };
 
 

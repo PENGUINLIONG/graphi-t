@@ -2,9 +2,63 @@
 #include "gft/vk.hpp"
 #include "gft/log.hpp"
 
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#include "vulkan/vulkan_win32.h"
+#endif // _WIN32
+
+#if defined(ANDROID) || defined(__ANDROID__)
+#include "vulkan/vulkan_android.h"
+#endif // defined(ANDROID) || defined(__ANDROID__)
+
 namespace liong {
 namespace vk {
 
+VkSurfaceKHR _create_surf_windows(const ContextWindowsConfig& cfg) {
+#if VK_KHR_win32_surface
+  assert(cfg.dev_idx < physdevs.size(),
+    "wanted vulkan device does not exists (#", cfg.dev_idx, " of ",
+      physdevs.size(), " available devices)");
+  auto physdev = physdevs[cfg.dev_idx];
+
+  VkWin32SurfaceCreateInfoKHR wsci {};
+  wsci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+  wsci.hinstance = (HINSTANCE)cfg.hinst;
+  wsci.hwnd = (HWND)cfg.hwnd;
+
+  VkSurfaceKHR surf;
+  VK_ASSERT << vkCreateWin32SurfaceKHR(inst, &wsci, nullptr, &surf);
+
+  log::debug("created windows surface '", cfg.label, "'");
+  return surf;
+#else
+  panic("windows surface cannot be created on current platform");
+  return VK_NULL_HANDLE;
+#endif // VK_KHR_win32_surface
+}
+
+VkSurfaceKHR _create_surf_android(const ContextAndroidConfig& cfg) {
+#if VK_KHR_android_surface
+  assert(cfg.dev_idx < physdevs.size(),
+    "wanted vulkan device does not exists (#", cfg.dev_idx, " of ",
+      physdevs.size(), " available devices)");
+  auto physdev = physdevs[cfg.dev_idx];
+
+  VkAndroidSurfaceCreateInfoKHR asci {};
+  asci.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
+  asci.window = cfg.native_wnd;
+
+  VkSurfaceKHR surf = _create_surf(ctxt, cfg);
+  VK_ASSERT << vkCreateAndroidSurfaceKHR(inst, &asci, nullptr, &surf);
+
+  log::debug("created android surface '", cfg.label, "'");
+  return surf;
+#else
+  panic("android surface cannot be created on current platform");
+  return VK_NULL_HANDLE;
+#endif // VK_KHR_android_surface
+}
 VkSampler _create_sampler(
   VkDevice dev,
   VkFilter filter,
@@ -33,14 +87,18 @@ VkSampler _create_sampler(
   VK_ASSERT << vkCreateSampler(dev, &sci, nullptr, &sampler);
   return sampler;
 }
-Context create_ctxt(const ContextConfig& cfg) {
+Context _create_ctxt(
+  const std::string& label,
+  uint32_t dev_idx,
+  VkSurfaceKHR surf
+) {
   if (inst == VK_NULL_HANDLE) {
     initialize();
   }
-  assert(cfg.dev_idx < physdevs.size(),
-    "wanted vulkan device does not exists (#", cfg.dev_idx, " of ",
+  assert(dev_idx < physdevs.size(),
+    "wanted vulkan device does not exists (#", dev_idx, " of ",
       physdevs.size(), " available devices)");
-  auto physdev = physdevs[cfg.dev_idx];
+  auto physdev = physdevs[dev_idx];
 
   VkPhysicalDeviceFeatures feat;
   vkGetPhysicalDeviceFeatures(physdev, &feat);
@@ -49,7 +107,7 @@ Context create_ctxt(const ContextConfig& cfg) {
   vkGetPhysicalDeviceProperties(physdev, &physdev_prop);
 
   if (physdev_prop.limits.timestampComputeAndGraphics == VK_FALSE) {
-    log::warn("context '", cfg.label, "' device does not support timestamps, "
+    log::warn("context '", label, "' device does not support timestamps, "
       "the following command won't be available: WRITE_TIMESTAMP");
   }
 
@@ -100,8 +158,8 @@ Context create_ctxt(const ContextConfig& cfg) {
     }
     it->second.emplace_back(QueueFamilyTrait { i, queue_flags });
   }
-  assert(!qfam_props.empty(), "cannot find any queue family on device #",
-    cfg.dev_idx);
+  assert(!qfam_props.empty(),
+    "cannot find any queue family on device #", dev_idx);
 
   struct SubmitTypeQueueRequirement {
     SubmitType submit_ty;
@@ -143,10 +201,10 @@ Context create_ctxt(const ContextConfig& cfg) {
       L_SUBMIT_TYPE_PRESENT,
       "PRESENT",
       [&](const QueueFamilyTrait& qfam_trait) {
-        if (cfg.surf == nullptr) { return false; }
+        if (surf == VK_NULL_HANDLE) { return false; }
         VkBool32 is_supported = VK_FALSE;
         VK_ASSERT << vkGetPhysicalDeviceSurfaceSupportKHR(physdev,
-          qfam_trait.qfam_idx, cfg.surf->surf, &is_supported);
+          qfam_trait.qfam_idx, surf, &is_supported);
         return is_supported == VK_TRUE;
       },
     },
@@ -309,20 +367,30 @@ Context create_ctxt(const ContextConfig& cfg) {
   VmaAllocator allocator;
   VK_ASSERT << vmaCreateAllocator(&allocatorInfo, &allocator);
 
-  log::debug("created vulkan context '", cfg.label, "' on device #",
-    cfg.dev_idx, ": ", physdev_descs[cfg.dev_idx]);
+  log::debug("created vulkan context '", label, "' on device #", dev_idx, ": ",
+    physdev_descs[dev_idx]);
   return Context {
-    dev, physdev, std::move(physdev_prop), std::move(submit_details),
-    img_samplers, depth_img_samplers, allocator, cfg
+    label, dev, surf, physdev, std::move(physdev_prop),
+    std::move(submit_details), img_samplers, depth_img_samplers, allocator
   };
+
 }
-Context create_ctxt(uint32_t dev_idx, const std::string& label) {
-  ContextConfig cfg {};
-  cfg.label = label;
-  cfg.dev_idx = dev_idx;
-  return create_ctxt(cfg);
+
+Context create_ctxt(const ContextConfig& cfg) {
+  return _create_ctxt(cfg.label, cfg.dev_idx, VK_NULL_HANDLE);
+}
+Context create_ctxt_windows(const ContextWindowsConfig& cfg) {
+  VkSurfaceKHR surf = _create_surf_windows(cfg);
+  return _create_ctxt(cfg.label, cfg.dev_idx, surf);
+}
+Context create_ctxt_android(const ContextAndroidConfig& cfg) {
+  VkSurfaceKHR surf = _create_surf_android(cfg);
+  return _create_ctxt(cfg.label, cfg.dev_idx, surf);
 }
 void destroy_ctxt(Context& ctxt) {
+  if (ctxt.surf != VK_NULL_HANDLE) {
+    vkDestroySurfaceKHR(inst, ctxt.surf, nullptr);
+  }
   if (ctxt.dev != VK_NULL_HANDLE) {
     for (const auto& samp : ctxt.img_samplers) {
       vkDestroySampler(ctxt.dev, samp.second, nullptr);
@@ -332,12 +400,9 @@ void destroy_ctxt(Context& ctxt) {
     }
     vmaDestroyAllocator(ctxt.allocator);
     vkDestroyDevice(ctxt.dev, nullptr);
-    log::debug("destroyed vulkan context '", ctxt.ctxt_cfg.label, "'");
+    log::debug("destroyed vulkan context '", ctxt.label, "'");
   }
   ctxt = {};
-}
-const ContextConfig& get_ctxt_cfg(const Context& ctxt) {
-  return ctxt.ctxt_cfg;
 }
 
 
