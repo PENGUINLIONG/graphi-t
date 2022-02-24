@@ -1245,8 +1245,14 @@ void _record_invoke(TransactionLike& transact, const Invocation& invoke) {
     vkCmdBindVertexBuffers(cmdbuf, 0, (uint32_t)graph_detail.vert_bufs.size(),
       graph_detail.vert_bufs.data(), graph_detail.vert_buf_offsets.data());
     if (invoke.graph_detail->nidx != 0) {
+      VkIndexType idx_ty {};
+      switch (invoke.graph_detail->idx_ty) {
+        case L_INDEX_TYPE_UINT16: idx_ty = VK_INDEX_TYPE_UINT16; break;
+        case L_INDEX_TYPE_UINT32: idx_ty = VK_INDEX_TYPE_UINT32; break;
+        default: panic("unexpected index type");
+      }
       vkCmdBindIndexBuffer(cmdbuf, graph_detail.idx_buf,
-        graph_detail.idx_buf_offset, VK_INDEX_TYPE_UINT16);
+        graph_detail.idx_buf_offset, idx_ty);
       vkCmdDrawIndexed(cmdbuf, graph_detail.nidx, graph_detail.ninst,
         0, 0, 0);
     } else {
