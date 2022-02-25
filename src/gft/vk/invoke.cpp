@@ -518,6 +518,7 @@ Invocation create_graph_invoke(
   graph_detail.idx_buf_offset = cfg.idx_buf.offset;
   graph_detail.ninst = cfg.ninst;
   graph_detail.nvert = cfg.nvert;
+  graph_detail.idx_ty = cfg.idx_ty;
   graph_detail.nidx = cfg.nidx;
 
   out.graph_detail =
