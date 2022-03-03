@@ -9,6 +9,7 @@
 #include <fstream>
 #include <functional>
 #include <chrono>
+#include "gft/assert.hpp"
 
 namespace liong {
 
@@ -163,6 +164,20 @@ std::vector<U> map(
     out.emplace_back(f(x));
   }
   return out;
+}
+
+template<typename T>
+std::vector<T> reinterpret_data(const void* data, size_t size) {
+  std::vector<T> out;
+  assert(size % sizeof(T) == 0,
+    "cannot reinterpret data with size not aligned to the given type");
+  out.resize(size / sizeof(T));
+  std::memcpy(out.data(), data, size);
+  return out;
+}
+template<typename T, typename U>
+std::vector<U> reinterpret_data(const std::vector<T>& x) {
+  return reinterpret_data<U>(x.data(), x.size());
 }
 
 // - [Timing & Temporal Control] -----------------------------------------------
