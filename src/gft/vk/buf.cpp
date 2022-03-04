@@ -31,18 +31,18 @@ Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg) {
       VK_BUFFER_USAGE_TRANSFER_DST_BIT;
   }
   if (buf_cfg.usage & L_BUFFER_USAGE_STORAGE_BIT) {
-    bci.usage =
+    bci.usage |=
       VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
       VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
       VK_BUFFER_USAGE_TRANSFER_DST_BIT;
   }
   if (buf_cfg.usage & L_BUFFER_USAGE_VERTEX_BIT) {
-    bci.usage =
+    bci.usage |=
       VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
       VK_BUFFER_USAGE_TRANSFER_DST_BIT;
   }
   if (buf_cfg.usage & L_BUFFER_USAGE_INDEX_BIT) {
-    bci.usage =
+    bci.usage |=
       VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
       VK_BUFFER_USAGE_TRANSFER_DST_BIT;
   }
