@@ -761,11 +761,13 @@ struct BufferBuilder {
 
   const HAL_IMPL_NAMESPACE::Context& parent;
   BufferConfig inner;
+  const void* streaming_data;
+  size_t streaming_data_size;
 
   BufferBuilder(
     const HAL_IMPL_NAMESPACE::Context& ctxt,
     const std::string& label = ""
-  ) : parent(ctxt), inner() {
+  ) : parent(ctxt), inner(), streaming_data(), streaming_data_size() {
     inner.label = label;
     inner.align = 1;
   }
@@ -820,6 +822,16 @@ struct BufferBuilder {
   template<typename T>
   inline Self& size_like(const T& data) {
     return size(sizeof(T));
+  }
+
+  Self& streaming_with(const void* data, size_t size);
+  template<typename T>
+  inline Self& streaming_with(const std::vector<T>& data) {
+    return streaming_with(data.data(), data.size() * sizeof(T));
+  }
+  template<typename T>
+  inline Self& streaming_with(const T& data) {
+    return streaming_with(&data, sizeof(T));
   }
 
   Buffer build(bool gc = true);

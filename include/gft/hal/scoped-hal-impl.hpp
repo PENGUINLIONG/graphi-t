@@ -235,8 +235,19 @@ Buffer::Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner, bool gc) :
 Buffer::~Buffer() {
   if (!gc && inner != nullptr) { destroy_extern_obj(inner); }
 }
+BufferBuilder& BufferBuilder::streaming_with(const void* data, size_t size) {
+  assert(inner.size == size || inner.size == 0,
+    "buffer streaming must cover the entire range");
+  streaming_data = data;
+  streaming_data_size = size;
+  return streaming().size(size);
+}
 Buffer BufferBuilder::build(bool gc) {
-  return Buffer(create_buf(parent, inner), gc);
+  auto out = Buffer(create_buf(parent, inner), gc);
+  if (streaming_data != nullptr && streaming_data_size > 0) {
+    out.map_write().write(streaming_data, streaming_data_size);
+  }
+  return std::move(out);
 }
 
 
