@@ -301,8 +301,8 @@ VkImageCopy _make_ic(const ImageView& src, const ImageView& dst) {
   ic.dstSubresource.layerCount = 1;
   ic.dstSubresource.mipLevel = 0;
   ic.extent.width = dst.width;
-  ic.extent.height = dst.height;
-  ic.extent.depth = dst.depth;
+  ic.extent.height = dst.height == 0 ? 1 : dst.height;
+  ic.extent.depth = dst.depth == 0 ? 1 : dst.depth;
   return ic;
 }
 VkBufferImageCopy _make_bic(const BufferView& buf, const ImageView& img) {
@@ -317,8 +317,8 @@ VkBufferImageCopy _make_bic(const BufferView& buf, const ImageView& img) {
   bic.imageOffset.x = img.x_offset;
   bic.imageOffset.y = img.y_offset;
   bic.imageExtent.width = img.width;
-  bic.imageExtent.height = img.height;
-  bic.imageExtent.depth = img.depth;
+  bic.imageExtent.height = img.height == 0 ? 1 : img.height;
+  bic.imageExtent.depth = img.depth == 0 ? 1 : img.depth;
   return bic;
 }
 void _fill_transfer_b2b_invoke(
