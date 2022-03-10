@@ -470,21 +470,25 @@ struct Image {
     uint32_t y_offset,
     uint32_t width,
     uint32_t height,
+    uint32_t depth,
     ImageSampler sampler
   ) const {
-    return make_img_view(*inner, x_offset, y_offset, width, height, sampler);
+    return make_img_view(*inner, x_offset, y_offset, width, height, depth,
+      sampler);
   }
   inline ImageView view(
     uint32_t x_offset,
     uint32_t y_offset,
     uint32_t width,
-    uint32_t height
+    uint32_t height,
+    uint32_t depth
   ) const {
-    return view(x_offset, y_offset, width, height, L_IMAGE_SAMPLER_LINEAR);
+    return view(x_offset, y_offset, width, height, depth,
+      L_IMAGE_SAMPLER_LINEAR);
   }
   inline ImageView view(ImageSampler sampler) const {
     const ImageConfig& cfg = get_img_cfg(*inner);
-    return view(0, 0, cfg.width, cfg.height, sampler);
+    return view(0, 0, cfg.width, cfg.height, cfg.depth, sampler);
   }
   inline ImageView view() const {
     return view(L_IMAGE_SAMPLER_LINEAR);
@@ -502,7 +506,8 @@ struct ImageBuilder {
   ) : parent(ctxt), inner() {
     inner.label = label;
     inner.width = 1;
-    inner.height = 1;
+    inner.height = 0;
+    inner.depth = 0;
   }
 
   inline Self& width(uint32_t width) {
@@ -511,6 +516,10 @@ struct ImageBuilder {
   }
   inline Self& height(uint32_t height) {
     inner.height = height;
+    return *this;
+  }
+  inline Self& depth(uint32_t depth) {
+    inner.depth = depth;
     return *this;
   }
   inline Self& fmt(fmt::Format fmt) {

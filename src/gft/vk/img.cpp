@@ -44,20 +44,33 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
     init_submit_ty = L_SUBMIT_TYPE_GRAPHICS;
   }
 
+  VkImageType img_ty;
+  VkImageViewType img_view_ty;
+  if (img_cfg.depth != 0) {
+    img_ty = VK_IMAGE_TYPE_3D;
+    img_view_ty = VK_IMAGE_VIEW_TYPE_3D;
+  } else if (img_cfg.height != 0) {
+    img_ty = VK_IMAGE_TYPE_2D;
+    img_view_ty = VK_IMAGE_VIEW_TYPE_2D;
+  } else {
+    img_ty = VK_IMAGE_TYPE_1D;
+    img_view_ty = VK_IMAGE_VIEW_TYPE_1D;
+  }
+
   // Check whether the device support our use case.
   VkImageFormatProperties ifp;
   VK_ASSERT << vkGetPhysicalDeviceImageFormatProperties(ctxt.physdev, fmt,
-    VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL, usage, 0, &ifp);
+    img_ty, VK_IMAGE_TILING_OPTIMAL, usage, 0, &ifp);
 
   VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
 
   VkImageCreateInfo ici {};
   ici.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-  ici.imageType = VK_IMAGE_TYPE_2D;
+  ici.imageType = img_ty;
   ici.format = fmt;
   ici.extent.width = img_cfg.width;
-  ici.extent.height = img_cfg.height;
-  ici.extent.depth = 1;
+  ici.extent.height = img_cfg.height == 0 ? 1 : img_cfg.height;
+  ici.extent.depth = img_cfg.depth == 0 ? 1 : img_cfg.depth;
   ici.mipLevels = 1;
   ici.arrayLayers = 1;
   ici.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -87,7 +100,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   VkImageViewCreateInfo ivci {};
   ivci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   ivci.image = img;
-  ivci.viewType = VK_IMAGE_VIEW_TYPE_2D;
+  ivci.viewType = img_view_ty;
   ivci.format = fmt;
   ivci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   ivci.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;

@@ -160,10 +160,12 @@ typedef uint32_t ImageUsage;
 struct ImageConfig {
   // Human-readable label of the image.
   std::string label;
-  // Height of the image, or zero if not 2D or 3D texture.
-  uint32_t height;
   // Width of the image.
   uint32_t width;
+  // Height of the image, or zero if not 2D or 3D texture.
+  uint32_t height;
+  // Depth of the image, or zero if not 3D texture.
+  uint32_t depth;
   // Pixel format of the image.
   fmt::Format fmt;
   // Usage of the image.
@@ -185,6 +187,7 @@ struct ImageView {
   uint32_t y_offset;
   uint32_t width;
   uint32_t height;
+  uint32_t depth;
   ImageSampler sampler;
 };
 inline ImageView make_img_view(
@@ -193,6 +196,7 @@ inline ImageView make_img_view(
   uint32_t y_offset,
   uint32_t width,
   uint32_t height,
+  uint32_t depth,
   ImageSampler sampler
 ) {
   ImageView out {};
@@ -201,6 +205,7 @@ inline ImageView make_img_view(
   out.y_offset = y_offset;
   out.width = width;
   out.height = height;
+  out.depth = depth;
   out.sampler = sampler;
   return out;
 }
