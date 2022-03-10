@@ -47,9 +47,9 @@ VkSurfaceKHR _create_surf_android(const ContextAndroidConfig& cfg) {
 
   VkAndroidSurfaceCreateInfoKHR asci {};
   asci.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
-  asci.window = cfg.native_wnd;
+  asci.window = (struct ANativeWindow* const)cfg.native_wnd;
 
-  VkSurfaceKHR surf = _create_surf(ctxt, cfg);
+  VkSurfaceKHR surf;
   VK_ASSERT << vkCreateAndroidSurfaceKHR(inst, &asci, nullptr, &surf);
 
   log::debug("created android surface '", cfg.label, "'");
@@ -290,6 +290,9 @@ Context _create_ctxt(
   for (const auto& pair : queue_allocs) {
     SubmitType submit_ty = pair.first;
     uint32_t qfam_idx = pair.second;
+
+    if (qfam_idx == VK_QUEUE_FAMILY_IGNORED) { continue; }
+
     VkQueue queue;
     vkGetDeviceQueue(dev, qfam_idx, 0, &queue);
 

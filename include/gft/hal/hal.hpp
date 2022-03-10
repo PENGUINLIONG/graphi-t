@@ -68,8 +68,8 @@ struct ContextAndroidConfig {
   std::string label;
   // Index of the device.
   uint32_t dev_idx;
-  // Android native window.
-  struct ANativeWindow* native_wnd;
+  // Android native window, `ANativeWindow`.
+  const void* native_wnd;
 };
 
 L_IMPL_STRUCT struct Context;
