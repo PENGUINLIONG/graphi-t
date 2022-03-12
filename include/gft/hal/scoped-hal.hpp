@@ -34,23 +34,27 @@ struct GcScope {
 
 
 
+#define L_DECLR_SCOPED_OBJ(ty) \
+  HAL_IMPL_NAMESPACE::ty* inner; \
+  bool gc; \
+  ty() = default; \
+  inline ty(HAL_IMPL_NAMESPACE::ty* inner) : inner(inner), gc(true) {} \
+  ty(HAL_IMPL_NAMESPACE::ty&& inner, bool gc = false);\
+  ty(ty&&) = default; \
+  ~ty(); \
+  ty& operator=(ty&&) = default; \
+  inline static ty from_extern(HAL_IMPL_NAMESPACE::ty && inner) { \
+    ty out(std::forward<HAL_IMPL_NAMESPACE::ty>(inner), false); \
+    out.gc = true; \
+    return out; \
+  } \
+  inline operator HAL_IMPL_NAMESPACE::ty& () { return *inner; } \
+  inline operator const HAL_IMPL_NAMESPACE::ty& () const { return *inner; }
+
+
+
 struct Transaction {
-  HAL_IMPL_NAMESPACE::Transaction* inner;
-  bool gc;
-
-  Transaction() = default;
-  Transaction(HAL_IMPL_NAMESPACE::Transaction&& inner, bool gc = false);
-  Transaction(Transaction&&) = default;
-  ~Transaction();
-
-  Transaction& operator=(Transaction&&) = default;
-
-  inline operator HAL_IMPL_NAMESPACE::Transaction& () {
-    return *inner;
-  }
-  inline operator const HAL_IMPL_NAMESPACE::Transaction& () const {
-    return *inner;
-  }
+  L_DECLR_SCOPED_OBJ(Transaction);
 
   inline bool is_done() const {
     return is_transact_done(*this);
@@ -63,22 +67,7 @@ struct Transaction {
 
 
 struct Invocation {
-  HAL_IMPL_NAMESPACE::Invocation* inner;
-  bool gc;
-
-  Invocation() = default;
-  Invocation(HAL_IMPL_NAMESPACE::Invocation&& inner, bool gc = false);
-  Invocation(Invocation&&) = default;
-  ~Invocation();
-
-  Invocation& operator=(Invocation&&) = default;
-
-  inline operator HAL_IMPL_NAMESPACE::Invocation& () {
-    return *inner;
-  }
-  inline operator const HAL_IMPL_NAMESPACE::Invocation& () const {
-    return *inner;
-  }
+  L_DECLR_SCOPED_OBJ(Invocation);
 
   inline double get_time_us() const {
     return get_invoke_time_us(*this);
@@ -300,22 +289,7 @@ struct CompositeInvocationBuilder {
 
 
 struct Task {
-  HAL_IMPL_NAMESPACE::Task* inner;
-  bool gc;
-
-  Task() = default;
-  Task(HAL_IMPL_NAMESPACE::Task&& inner, bool gc = false);
-  Task(Task&&) = default;
-  ~Task();
-
-  Task& operator=(Task&&) = default;
-
-  inline operator HAL_IMPL_NAMESPACE::Task& () {
-    return *inner;
-  }
-  inline operator const HAL_IMPL_NAMESPACE::Task& () const {
-    return *inner;
-  }
+  L_DECLR_SCOPED_OBJ(Task);
 
   ComputeInvocationBuilder build_comp_invoke(
     const std::string& label = ""
@@ -437,29 +411,7 @@ struct GraphicsTaskBuilder {
 
 
 struct Image {
-  HAL_IMPL_NAMESPACE::Image* inner;
-  bool gc;
-
-  Image() = default;
-  Image(HAL_IMPL_NAMESPACE::Image* inner);
-  Image(HAL_IMPL_NAMESPACE::Image&& inner, bool gc = false);
-  Image(Image&&) = default;
-  ~Image();
-
-  Image& operator=(Image&&) = default;
-
-  inline static Image from_extern(HAL_IMPL_NAMESPACE::Image&& inner) {
-    Image out(std::forward<HAL_IMPL_NAMESPACE::Image>(inner), false);
-    out.gc = true;
-    return out;
-  }
-
-  inline operator HAL_IMPL_NAMESPACE::Image& () {
-    return *inner;
-  }
-  inline operator const HAL_IMPL_NAMESPACE::Image& () const {
-    return *inner;
-  }
+  L_DECLR_SCOPED_OBJ(Image);
 
   inline const ImageConfig& cfg() const {
     return get_img_cfg(*inner);
@@ -561,23 +513,7 @@ struct ImageBuilder {
 
 
 struct DepthImage {
-  HAL_IMPL_NAMESPACE::DepthImage* inner;
-  bool gc;
-
-  DepthImage();
-  DepthImage(HAL_IMPL_NAMESPACE::DepthImage* inner);
-  DepthImage(HAL_IMPL_NAMESPACE::DepthImage&& inner, bool gc = false);
-  DepthImage(DepthImage&&) = default;
-  ~DepthImage();
-
-  DepthImage& operator=(DepthImage&&) = default;
-
-  inline operator HAL_IMPL_NAMESPACE::DepthImage& () {
-    return *inner;
-  }
-  inline operator const HAL_IMPL_NAMESPACE::DepthImage& () const {
-    return *inner;
-  }
+  L_DECLR_SCOPED_OBJ(DepthImage);
 
   inline const DepthImageConfig& cfg() const {
     return get_depth_img_cfg(*inner);
@@ -713,29 +649,7 @@ struct MappedBuffer {
   }
 };
 struct Buffer {
-  HAL_IMPL_NAMESPACE::Buffer* inner;
-  bool gc;
-
-  Buffer() = default;
-  Buffer(HAL_IMPL_NAMESPACE::Buffer* inner);
-  Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner, bool gc = false);
-  Buffer(Buffer&&) = default;
-  ~Buffer();
-
-  Buffer& operator=(Buffer&&) = default;
-
-  inline static Buffer from_extern(HAL_IMPL_NAMESPACE::Buffer&& inner) {
-    Buffer out(std::forward<HAL_IMPL_NAMESPACE::Buffer>(inner), false);
-    out.gc = true;
-    return out;
-  }
-
-  inline operator HAL_IMPL_NAMESPACE::Buffer& () {
-    return *inner;
-  }
-  inline operator const HAL_IMPL_NAMESPACE::Buffer& () const {
-    return *inner;
-  }
+  L_DECLR_SCOPED_OBJ(Buffer);
 
   inline const BufferConfig& cfg() const {
     return get_buf_cfg(*inner);
@@ -849,21 +763,7 @@ struct BufferBuilder {
 
 
 struct RenderPass {
-public:
-  HAL_IMPL_NAMESPACE::RenderPass* inner;
-  bool gc;
-
-  RenderPass() = default;
-  RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner, bool gc = false);
-  RenderPass(RenderPass&&) = default;
-  ~RenderPass();
-
-  inline operator HAL_IMPL_NAMESPACE::RenderPass& () {
-    return *inner;
-  }
-  inline operator const HAL_IMPL_NAMESPACE::RenderPass& () const {
-    return *inner;
-  }
+  L_DECLR_SCOPED_OBJ(RenderPass);
 
   GraphicsTaskBuilder build_graph_task(const std::string& label) const;
   RenderPassInvocationBuilder build_pass_invoke(const std::string& label) const;
@@ -939,36 +839,36 @@ struct RenderPassBuilder {
 
 
 struct Context {
-public:
-  HAL_IMPL_NAMESPACE::Context* inner;
-  bool gc;
+  L_DECLR_SCOPED_OBJ(Context);
 
-  Context() = default;
-  Context(HAL_IMPL_NAMESPACE::Context&& inner, bool gc = false);
-  Context(Context&&) = default;
-  ~Context();
-
-  Context& operator=(Context&&) = default;
-
-  inline operator HAL_IMPL_NAMESPACE::Context& () {
-    return *inner;
+  ComputeTaskBuilder build_comp_task(const std::string& label = "") const {
+    return ComputeTaskBuilder(*this, label);
   }
-  inline operator const HAL_IMPL_NAMESPACE::Context& () const {
-    return *inner;
+  RenderPassBuilder build_pass(const std::string& label = "") const {
+    return RenderPassBuilder(*this, label);
   }
-
-  ComputeTaskBuilder build_comp_task(const std::string& label = "") const;
-  RenderPassBuilder build_pass(const std::string& label = "") const;
-  BufferBuilder build_buf(const std::string& label = "") const;
-  ImageBuilder build_img(const std::string& label = "") const;
-  DepthImageBuilder build_depth_img(const std::string& label = "") const;
+  BufferBuilder build_buf(const std::string& label = "") const {
+    return BufferBuilder(*this, label);
+  }
+  ImageBuilder build_img(const std::string& label = "") const {
+    return ImageBuilder(*this, label);
+  }
+  DepthImageBuilder build_depth_img(const std::string& label = "") const {
+    return DepthImageBuilder(*this, label);
+  }
   TransferInvocationBuilder build_trans_invoke(
     const std::string& label = ""
-  ) const;
+  ) const {
+    return TransferInvocationBuilder(*this, label);
+  }
   CompositeInvocationBuilder build_composite_invoke(
     const std::string& label = ""
-  ) const;
+  ) const {
+    return CompositeInvocationBuilder(*this, label);
+  }
 };
+
+
 
 } // namespace scoped
 

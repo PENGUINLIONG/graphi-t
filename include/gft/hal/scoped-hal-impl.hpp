@@ -153,88 +153,35 @@ L_DEF_REG_GC(Transaction, L_OBJECT_TYPE_TRANSACTION);
 #undef L_DEF_REG_GC
 
 void destroy_extern_obj(void* obj) {
+  if (obj == nullptr) {
+    log::warn("attempted to destroy an external null object");
+    return;
+  }
   auto it = OBJ_POOL.extern_objs.find(obj);
   if (it == OBJ_POOL.extern_objs.end()) {
-    log::warn("attempt to release unregistered external scoped obj");
+    log::warn("attempted to release unregistered external scoped obj");
   } else {
     OBJ_POOL.extern_objs.erase(it);
   }
 }
 
-
-
-Context::Context(HAL_IMPL_NAMESPACE::Context&& inner, bool gc) :
-  inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::Context>(inner), gc)),
-  gc(gc) {}
-Context::~Context() {
-  if (!gc && inner != nullptr) { destroy_extern_obj(inner); }
-}
-
-
-
-ComputeTaskBuilder Context::build_comp_task(const std::string& label) const {
-  return ComputeTaskBuilder(*this, label);
-}
-RenderPassBuilder Context::build_pass(const std::string& label) const {
-  return RenderPassBuilder(*this, label);
-}
-BufferBuilder Context::build_buf(const std::string& label) const {
-  return BufferBuilder(*this, label);
-}
-ImageBuilder Context::build_img(const std::string& label) const {
-  return ImageBuilder(*this, label);
-}
-DepthImageBuilder Context::build_depth_img(const std::string& label) const {
-  return DepthImageBuilder(*this, label);
-}
-TransferInvocationBuilder Context::build_trans_invoke(
-  const std::string& label
-) const {
-  return TransferInvocationBuilder(*this, label);
-}
-CompositeInvocationBuilder Context::build_composite_invoke(
-  const std::string& label
-) const {
-  return CompositeInvocationBuilder(*this, label);
-}
-
-void _copy_img_tile(
-  void* dst,
-  size_t dst_row_pitch,
-  size_t dst_y_offset,
-  size_t dst_local_offset, // Offset starting from base of each row.
-  void* src,
-  size_t src_row_pitch,
-  size_t src_y_offset,
-  size_t src_local_offset,
-  size_t height,
-  size_t row_size
-) {
-  uint8_t* dst_typed = (uint8_t*)dst;
-  uint8_t* src_typed = (uint8_t*)src;
-
-  for (size_t row = 0; row < height; ++row) {
-    size_t dst_offset =
-      (dst_y_offset + row) * dst_row_pitch + dst_local_offset;
-    size_t src_offset =
-      (src_y_offset + row) * src_row_pitch + src_local_offset;
-    std::memcpy(
-      (uint8_t*)dst_typed + dst_offset,
-      (uint8_t*)src_typed + src_offset,
-      row_size);
+#define L_DEF_CTOR_DTOR(ty) \
+  ty::ty(HAL_IMPL_NAMESPACE::ty&& inner, bool gc) : \
+    inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::ty>(inner), gc)), \
+    gc(gc) {} \
+  ty::~ty() { \
+    if (inner != nullptr) { \
+      if (!gc) { destroy_extern_obj(inner); } \
+      inner = nullptr; \
+    } \
   }
-}
 
 
 
-Buffer::Buffer(HAL_IMPL_NAMESPACE::Buffer* inner) :
-  inner(inner), gc(true) {}
-Buffer::Buffer(HAL_IMPL_NAMESPACE::Buffer&& inner, bool gc) :
-  inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::Buffer>(inner), gc)),
-  gc(gc) {}
-Buffer::~Buffer() {
-  if (!gc && inner != nullptr) { destroy_extern_obj(inner); }
-}
+L_DEF_CTOR_DTOR(Context);
+
+
+L_DEF_CTOR_DTOR(Buffer);
 BufferBuilder& BufferBuilder::streaming_with(const void* data, size_t size) {
   assert(inner.size == size || inner.size == 0,
     "buffer streaming must cover the entire range");
@@ -252,40 +199,21 @@ Buffer BufferBuilder::build(bool gc) {
 
 
 
-Image::Image(HAL_IMPL_NAMESPACE::Image* inner) :
-  inner(inner), gc(true) {}
-Image::Image(HAL_IMPL_NAMESPACE::Image&& inner, bool gc) :
-  inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::Image>(inner), gc)),
-  gc(gc) {}
-Image::~Image() {
-  if (!gc && inner != nullptr) { destroy_extern_obj(inner); }
-}
+L_DEF_CTOR_DTOR(Image);
 Image ImageBuilder::build(bool gc) {
   return Image(create_img(parent, inner), gc);
 }
 
 
 
-DepthImage::DepthImage(HAL_IMPL_NAMESPACE::DepthImage* inner) :
-  inner(inner), gc(true) {}
-DepthImage::DepthImage(HAL_IMPL_NAMESPACE::DepthImage&& inner, bool gc) :
-  inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::DepthImage>(inner), gc)),
-  gc(gc) {}
-DepthImage::~DepthImage() {
-  if (!gc && inner != nullptr) { destroy_extern_obj(inner); }
-}
+L_DEF_CTOR_DTOR(DepthImage);
 DepthImage DepthImageBuilder::build(bool gc) {
   return DepthImage(create_depth_img(parent, inner), gc);
 }
 
 
 
-RenderPass::RenderPass(HAL_IMPL_NAMESPACE::RenderPass&& inner, bool gc) :
-  inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::RenderPass>(inner), gc)),
-  gc(gc) {}
-RenderPass::~RenderPass() {
-  if (!gc && inner != nullptr) { destroy_extern_obj(inner); }
-}
+L_DEF_CTOR_DTOR(RenderPass);
 RenderPass RenderPassBuilder::build(bool gc) {
   return RenderPass(create_pass(parent, inner), gc);
 }
@@ -303,12 +231,7 @@ RenderPassInvocationBuilder RenderPass::build_pass_invoke(
 
 
 
-Task::Task(HAL_IMPL_NAMESPACE::Task&& inner, bool gc) :
-  inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::Task>(inner), gc)),
-  gc(gc) {}
-Task::~Task() {
-  if (!gc && inner != nullptr) { destroy_extern_obj(inner); }
-}
+L_DEF_CTOR_DTOR(Task);
 Task ComputeTaskBuilder::build(bool gc) {
   return Task(create_comp_task(parent, inner), gc);
 }
@@ -329,10 +252,7 @@ GraphicsInvocationBuilder Task::build_graph_invoke(
 
 
 
-Invocation::Invocation(HAL_IMPL_NAMESPACE::Invocation&& inner, bool gc) :
-  inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::Invocation>(inner), gc)),
-  gc(gc) {}
-Invocation::~Invocation() { if (!gc) { destroy_extern_obj(inner); } }
+L_DEF_CTOR_DTOR(Invocation);
 Invocation TransferInvocationBuilder::build(bool gc) {
   return Invocation(create_trans_invoke(parent, inner), gc);
 }
@@ -354,12 +274,9 @@ Transaction Invocation::submit() {
 
 
 
-Transaction::Transaction(HAL_IMPL_NAMESPACE::Transaction&& inner, bool gc) :
-  inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::Transaction>(inner), gc)),
-  gc(gc) {}
-Transaction::~Transaction() {
-  if (!gc && inner != nullptr) { destroy_extern_obj(inner); }
-}
+L_DEF_CTOR_DTOR(Transaction);
+
+
 
 } // namespace scoped
 } // namespace HAL_IMPL_NAMESPACE
