@@ -33,23 +33,42 @@ struct GcScope {
 };
 
 
+enum ScopedObjectOwnership {
+  // The scoped object is borrowed from an external creator, e.g. another
+  // application or the operating system. The scoped objects never attempts to
+  // release its `inner`.
+  L_SCOPED_OBJECT_OWNERSHIP_BORROWED = 0,
+  // The scoped object owns its `inner` but its lifetime is externally
+  // controlled, which means that the scoped object follows a RAII pattern. The
+  // `inner` is released in the destructor.
+  L_SCOPED_OBJECT_OWNERSHIP_OWNED_BY_RAII,
+  // The scoped object is borrowed from a GC frame. The `inner` is released when
+  // the owner frame is poped.
+  L_SCOPED_OBJECT_OWNERSHIP_OWNED_BY_GC_FRAME,
+};
 
 #define L_DECLR_SCOPED_OBJ(ty) \
   HAL_IMPL_NAMESPACE::ty* inner; \
-  bool gc; \
+  ScopedObjectOwnership ownership; \
   ty() = default; \
-  inline ty(HAL_IMPL_NAMESPACE::ty* inner) : inner(inner), gc(true) {} \
-  ty(HAL_IMPL_NAMESPACE::ty&& inner, bool gc = false);\
-  ty(ty&&) = default; \
+  inline ty(HAL_IMPL_NAMESPACE::ty* inner, ScopedObjectOwnership ownership) : \
+    inner(inner), ownership(ownership) {} \
+  ty(const ty&) = delete; \
+  ty(ty&& b) : \
+    inner(std::exchange(b.inner, nullptr)), \
+    ownership(std::exchange(b.ownership, L_SCOPED_OBJECT_OWNERSHIP_BORROWED)) {} \
   ~ty(); \
-  ty& operator=(ty&&) = default; \
-  inline static ty from_extern(HAL_IMPL_NAMESPACE::ty && inner) { \
-    ty out(std::forward<HAL_IMPL_NAMESPACE::ty>(inner), false); \
-    out.gc = true; \
-    return out; \
+  ty& operator=(const ty&) = delete; \
+  ty& operator=(ty&& b) { \
+    inner = std::exchange(b.inner, nullptr); \
+    ownership = std::exchange(b.ownership, L_SCOPED_OBJECT_OWNERSHIP_BORROWED); \
+    return *this; \
   } \
-  inline operator HAL_IMPL_NAMESPACE::ty& () { return *inner; } \
-  inline operator const HAL_IMPL_NAMESPACE::ty& () const { return *inner; }
+  static ty borrow(const HAL_IMPL_NAMESPACE::ty& inner); \
+  static ty own_by_raii(HAL_IMPL_NAMESPACE::ty&& inner); \
+  static ty own_by_gc_frame(HAL_IMPL_NAMESPACE::ty&& inner); \
+  inline operator HAL_IMPL_NAMESPACE::ty&() { return *inner; } \
+  inline operator const HAL_IMPL_NAMESPACE::ty&() const { return *inner; }
 
 
 
@@ -76,7 +95,7 @@ struct Invocation {
     bake_invoke(*this);
   }
 
-  Transaction submit();
+  Transaction submit(bool gc = true);
 };
 struct TransferInvocationBuilder {
   using Self = TransferInvocationBuilder;

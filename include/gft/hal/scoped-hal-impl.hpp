@@ -125,19 +125,22 @@ void pop_gc_frame(const std::string& label) {
 
 
 #define L_DEF_REG_GC(ty, ty_enum) \
-  HAL_IMPL_NAMESPACE::ty* reg_obj(HAL_IMPL_NAMESPACE::ty&& x, bool gc) { \
+  HAL_IMPL_NAMESPACE::ty* reg_gc_frame_obj(HAL_IMPL_NAMESPACE::ty&& x) { \
     void* obj = new HAL_IMPL_NAMESPACE::ty( \
       std::forward<HAL_IMPL_NAMESPACE::ty>(x)); \
-    if (gc) { \
-      GcEntry entry {}; \
-      entry.obj_ty = ty_enum; \
-      entry.obj = obj; \
-      OBJ_POOL.gc_stack.back().entries.emplace_back(std::move(entry)); \
-    } else { \
-      OBJ_POOL.extern_objs.insert( \
-        std::make_pair<void*, ObjectType>( \
-          std::move(obj), std::move(ty_enum))); \
-    } \
+    GcEntry entry {}; \
+    entry.obj_ty = ty_enum; \
+    entry.obj = obj; \
+    OBJ_POOL.gc_stack.back().entries.emplace_back(std::move(entry)); \
+    return (HAL_IMPL_NAMESPACE::ty*)obj; \
+  } \
+  HAL_IMPL_NAMESPACE::ty* reg_raii_obj(HAL_IMPL_NAMESPACE::ty&& x) { \
+    void* obj = new HAL_IMPL_NAMESPACE::ty( \
+      std::forward<HAL_IMPL_NAMESPACE::ty>(x)); \
+    std::pair<void*, ObjectType> extern_obj {}; \
+    extern_obj.first = obj; \
+    extern_obj.second = ty_enum; \
+    OBJ_POOL.extern_objs.insert(std::move(extern_obj)); \
     return (HAL_IMPL_NAMESPACE::ty*)obj; \
   }
 
@@ -152,7 +155,7 @@ L_DEF_REG_GC(Transaction, L_OBJECT_TYPE_TRANSACTION);
 
 #undef L_DEF_REG_GC
 
-void destroy_extern_obj(void* obj) {
+void destroy_raii_obj(void* obj) {
   if (obj == nullptr) {
     log::warn("attempted to destroy an external null object");
     return;
@@ -166,15 +169,31 @@ void destroy_extern_obj(void* obj) {
 }
 
 #define L_DEF_CTOR_DTOR(ty) \
-  ty::ty(HAL_IMPL_NAMESPACE::ty&& inner, bool gc) : \
-    inner(reg_obj(std::forward<HAL_IMPL_NAMESPACE::ty>(inner), gc)), \
-    gc(gc) {} \
+  ty ty::own_by_raii(HAL_IMPL_NAMESPACE::ty&& inner) { \
+    ty out {}; \
+    out.inner = reg_raii_obj(std::forward<HAL_IMPL_NAMESPACE::ty>(inner)); \
+    out.ownership = L_SCOPED_OBJECT_OWNERSHIP_OWNED_BY_RAII; \
+    return out; \
+  } \
+  ty ty::own_by_gc_frame(HAL_IMPL_NAMESPACE::ty&& inner) { \
+    ty out {}; \
+    out.inner = reg_gc_frame_obj(std::forward<HAL_IMPL_NAMESPACE::ty>(inner)); \
+    out.ownership = L_SCOPED_OBJECT_OWNERSHIP_OWNED_BY_GC_FRAME; \
+    return out; \
+  } \
   ty::~ty() { \
     if (inner != nullptr) { \
-      if (!gc) { destroy_extern_obj(inner); } \
+      if (ownership == L_SCOPED_OBJECT_OWNERSHIP_OWNED_BY_RAII) { \
+        destroy_raii_obj(inner); \
+      } \
       inner = nullptr; \
     } \
   }
+
+#define L_BUILD_WITH_CFG(ty, create_fn) \
+  gc ? \
+    ty::own_by_gc_frame(create_fn(parent, inner)) : \
+    ty::own_by_raii(create_fn(parent, inner));
 
 
 
@@ -190,7 +209,7 @@ BufferBuilder& BufferBuilder::streaming_with(const void* data, size_t size) {
   return streaming().size(size);
 }
 Buffer BufferBuilder::build(bool gc) {
-  auto out = Buffer(create_buf(parent, inner), gc);
+  auto out = L_BUILD_WITH_CFG(Buffer, create_buf);
   if (streaming_data != nullptr && streaming_data_size > 0) {
     out.map_write().write(streaming_data, streaming_data_size);
   }
@@ -201,21 +220,21 @@ Buffer BufferBuilder::build(bool gc) {
 
 L_DEF_CTOR_DTOR(Image);
 Image ImageBuilder::build(bool gc) {
-  return Image(create_img(parent, inner), gc);
+  return L_BUILD_WITH_CFG(Image, create_img);
 }
 
 
 
 L_DEF_CTOR_DTOR(DepthImage);
 DepthImage DepthImageBuilder::build(bool gc) {
-  return DepthImage(create_depth_img(parent, inner), gc);
+  return L_BUILD_WITH_CFG(DepthImage, create_depth_img);
 }
 
 
 
 L_DEF_CTOR_DTOR(RenderPass);
 RenderPass RenderPassBuilder::build(bool gc) {
-  return RenderPass(create_pass(parent, inner), gc);
+  return L_BUILD_WITH_CFG(RenderPass, create_pass);
 }
 
 GraphicsTaskBuilder RenderPass::build_graph_task(
@@ -233,10 +252,10 @@ RenderPassInvocationBuilder RenderPass::build_pass_invoke(
 
 L_DEF_CTOR_DTOR(Task);
 Task ComputeTaskBuilder::build(bool gc) {
-  return Task(create_comp_task(parent, inner), gc);
+  return L_BUILD_WITH_CFG(Task, create_comp_task);
 }
 Task GraphicsTaskBuilder::build(bool gc) {
-  return Task(create_graph_task(parent, inner), gc);
+  return L_BUILD_WITH_CFG(Task, create_graph_task);
 }
 
 ComputeInvocationBuilder Task::build_comp_invoke(
@@ -254,22 +273,24 @@ GraphicsInvocationBuilder Task::build_graph_invoke(
 
 L_DEF_CTOR_DTOR(Invocation);
 Invocation TransferInvocationBuilder::build(bool gc) {
-  return Invocation(create_trans_invoke(parent, inner), gc);
+  return L_BUILD_WITH_CFG(Invocation, create_trans_invoke);
 }
 Invocation ComputeInvocationBuilder::build(bool gc) {
-  return Invocation(create_comp_invoke(parent, inner), gc);
+  return L_BUILD_WITH_CFG(Invocation, create_comp_invoke);
 }
 Invocation GraphicsInvocationBuilder::build(bool gc) {
-  return Invocation(create_graph_invoke(parent, inner), gc);
+  return L_BUILD_WITH_CFG(Invocation, create_graph_invoke);
 }
 Invocation RenderPassInvocationBuilder::build(bool gc) {
-  return Invocation(create_pass_invoke(parent, inner), gc);
+  return L_BUILD_WITH_CFG(Invocation, create_pass_invoke);
 }
 Invocation CompositeInvocationBuilder::build(bool gc) {
-  return Invocation(create_composite_invoke(parent, inner), gc);
+  return L_BUILD_WITH_CFG(Invocation, create_composite_invoke);
 }
-Transaction Invocation::submit() {
-  return submit_invoke(*inner);
+Transaction Invocation::submit(bool gc) {
+  return gc ?
+    Transaction::own_by_gc_frame(submit_invoke(*inner)) :
+    Transaction::own_by_raii(submit_invoke(*inner));
 }
 
 
@@ -277,6 +298,8 @@ Transaction Invocation::submit() {
 L_DEF_CTOR_DTOR(Transaction);
 
 
+
+#undef L_DEF_CTOR_DTOR
 
 } // namespace scoped
 } // namespace HAL_IMPL_NAMESPACE
