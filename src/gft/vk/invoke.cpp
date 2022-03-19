@@ -1328,7 +1328,12 @@ void _record_invoke(TransactionLike& transact, const Invocation& invoke) {
   }
 
   if (invoke.query_pool != VK_NULL_HANDLE) {
-    vkCmdWriteTimestamp(cmdbuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
+    VkCommandBuffer cmdbuf2 = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
+    if (cmdbuf != cmdbuf2) {
+      log::warn("begin and end timestamps are recorded in different command "
+        "buffers, timing accuracy might be compromised");
+    }
+    vkCmdWriteTimestamp(cmdbuf2, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
       invoke.query_pool, 1);
   }
 
