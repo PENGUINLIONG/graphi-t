@@ -766,6 +766,7 @@ void _push_transact_submit_detail(
   submit_detail.submit_ty = submit_ty;
   submit_detail.cmd_pool = cmd_pool;
   submit_detail.cmdbuf = cmdbuf;
+  submit_detail.queue = ctxt.submit_details.at(submit_detail.submit_ty).queue;
   submit_detail.wait_sema = submit_details.empty() ?
     VK_NULL_HANDLE : submit_details.back().signal_sema;
   if (level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
@@ -797,8 +798,7 @@ void _submit_transact_submit_detail(
   submit_info.pSignalSemaphores = &submit_detail.signal_sema;
 
   // Finish recording and submit the command buffer to the device.
-  VkQueue queue = ctxt.submit_details.at(submit_detail.submit_ty).queue;
-  VK_ASSERT << vkQueueSubmit(queue, 1, &submit_info, fence);
+  VK_ASSERT << vkQueueSubmit(submit_detail.queue, 1, &submit_info, fence);
 }
 VkCommandBuffer _get_cmdbuf(
   TransactionLike& transact,
@@ -814,10 +814,10 @@ VkCommandBuffer _get_cmdbuf(
   auto qfam_idx = submit_detail.qfam_idx;
 
   if (!transact.submit_details.empty()) {
-    // Do nothing if the submit type is unchanged. It means that the commands
-    // can still be fed into the last command buffer.
+    // Do nothing if the queue is unchanged. It means that the commands can
+    // still be fed into the last command buffer.
     auto& last_submit = transact.submit_details.back();
-    if (submit_ty == last_submit.submit_ty) {
+    if (submit_detail.queue == last_submit.queue) {
       return last_submit.cmdbuf;
     }
 

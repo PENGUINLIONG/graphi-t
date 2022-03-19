@@ -96,6 +96,7 @@ struct TransactionSubmitDetail {
   SubmitType submit_ty;
   VkCommandPool cmd_pool;
   VkCommandBuffer cmdbuf;
+  VkQueue queue;
   VkSemaphore wait_sema;
   VkSemaphore signal_sema;
 };
