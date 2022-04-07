@@ -179,16 +179,79 @@ std::vector<U> reinterpret_data(const std::vector<T>& x) {
   return reinterpret_data<U>(x.data(), x.size());
 }
 
+struct DataStream {
+  const void* borrowed;
+  size_t size;
+  std::vector<uint8_t> owned;
+  size_t offset;
+
+  inline DataStream(const void* borrowed, size_t size) :
+    borrowed(borrowed),
+    size(size),
+    owned(),
+    offset(0) {}
+  inline DataStream(std::vector<uint8_t>&& owned) :
+    borrowed(nullptr),
+    size(owned.size()),
+    owned(std::forward<std::vector<uint8_t>>(owned)),
+    offset(0) {}
+
+  constexpr const void* data() const {
+    return borrowed != nullptr ? borrowed : owned.data();
+  }
+  constexpr size_t size_remain() const {
+    return size - offset;
+  }
+  constexpr bool ate() const {
+    return size_remain() <= 0;
+  }
+
+  void extract_data(void* out, size_t size);
+
+  DataStream& skip(size_t n);
+  template<typename T>
+  inline DataStream& skip() {
+    return skip(sizeof(T));
+  }
+
+  template<typename T>
+  const T& extract() {
+    T out {};
+    extract_data(&out);
+  }
+  template<typename T>
+  std::vector<T> extract_all() {
+    std::vector<T> out {};
+    size_t n = size_remain() / sizeof(T);
+    out.resize(n);
+    extract_data(out.data(), n * sizeof(T));
+    return out;
+  }
+  template<typename T, typename U>
+  std::vector<U> extract_all_map(const std::function<U(const T&)>& f) {
+    std::vector<T> tmp {};
+    std::vector<U> out {};
+    size_t n = size_remain() / sizeof(T);
+    tmp.resize(n);
+    out.resize(n);
+    extract_data(tmp.data(), n * sizeof(T));
+    for (size_t i = 0; i < tmp.size(); ++i) {
+      out[i] = f(tmp[i]);
+    }
+    return out;
+  }
+};
+
 // - [Timing & Temporal Control] -----------------------------------------------
 
 struct Timer {
   std::chrono::time_point<std::chrono::high_resolution_clock> beg, end;
 
   inline void tic() {
-      beg = std::chrono::high_resolution_clock::now();
+    beg = std::chrono::high_resolution_clock::now();
   }
   inline void toc() {
-      end = std::chrono::high_resolution_clock::now();
+    end = std::chrono::high_resolution_clock::now();
   }
 
   inline double us() const {

@@ -165,6 +165,19 @@ std::string trim(const std::string& str) {
   return std::string(beg, end);
 }
 
+
+DataStream& DataStream::skip(size_t n) {
+  assert(size >= offset + n);
+  offset += n;
+  return *this;
+}
+void DataStream::extract_data(void* out, size_t size) {
+  assert(size_remain() >= size);
+  const void* buf = (const uint8_t*)data() + offset;
+  offset += size;
+  std::memcpy(out, buf, size);
+}
+
 } // namespace util
 
 } // namespace liong
