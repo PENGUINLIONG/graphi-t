@@ -86,21 +86,14 @@ namespace renderdoc {
 
 struct Context {
   RENDERDOC_API_1_0_0* api;
-  bool is_captureing = false;
   Context(RENDERDOC_API_1_0_0* api) :
-    api(api), is_captureing(false) {}
+    api(api) {}
   virtual ~Context() {};
 
   virtual void begin_capture() {
-    assert(!is_captureing, "cannot begin capture session inside another");
-    is_captureing = true;
-
     api->StartFrameCapture(nullptr, nullptr);
   };
   virtual void end_capture() {
-    assert(is_captureing, "cannot end a capture out of any session");
-    is_captureing = false;
-
     if (api->EndFrameCapture(nullptr, nullptr) != 1) {
       log::warn("renderdoc failed to capture this scoped frame");
       return;
@@ -139,10 +132,10 @@ struct WindowsContext : public Context {
 
 
 
+static bool is_first_call = true;
 void initialize() {
   if (ctxt != nullptr) { return; }
 
-  static bool is_first_call = true;
   if (!is_first_call) { return; }
   is_first_call = false;
 
@@ -218,12 +211,31 @@ void initialize() {
   }
 }
 
+bool is_captureing = false;
 void begin_capture() {
-  initialize();
-  ctxt->begin_capture();
+  assert(!is_captureing, "cannot begin capture session inside another");
+  is_captureing = true;
+  if (ctxt == nullptr) {
+    if (is_first_call) {
+      panic("renderdoc must be initialized before any capture");
+    } else {
+      log::warn("frame capture is attempted but it will be ignored because "
+        "renderdoc failed to initialize");
+    }
+  } else {
+    ctxt->begin_capture();
+  }
 }
 void end_capture() {
-  ctxt->end_capture();
+  assert(is_captureing, "cannot end a capture out of any session");
+  is_captureing = false;
+  if (ctxt == nullptr) {
+    if (is_first_call) {
+      panic("renderdoc must be initialized before any capture");
+    }
+  } else {
+    ctxt->end_capture();
+  }
 }
 
 } // namespace renderdoc

@@ -5,13 +5,13 @@ namespace liong {
 
 namespace renderdoc {
 
-// Initialize RenderDoc for further capture. For convinience this is implicitly
-// called by other functions. Repeated calls are silently ignored with a same
-// same output as the first call.
+// Initialize RenderDoc. Repeated calls are silently ignored.
 //
 // WARNING: This API should be called BEFORE ANY CALL TO HAL `initialize`, or
 // RenderDoc would fail to hook the graphics APIs and any attempt to capture
-// will fail.
+// will fail. Also note that, unlike many other modules in GraphiT, this
+// `initialize` is not implicitly called by other functions because a strict
+// execution order has to be enforced.
 extern void initialize();
 
 // Kick off a capture session and record all commands coming after this.
