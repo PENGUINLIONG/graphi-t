@@ -1,5 +1,3 @@
-#if GFT_WITH_GLSLANG
-
 #include "glslang/SPIRV/GlslangToSpv.h"
 #include "glslang/glslang/Public/ShaderLang.h"
 #include "glslang/glslang/Include/BaseTypes.h"
@@ -462,5 +460,3 @@ GraphicsSpirvArtifact compile_graph_hlsl(
 } // namespace glslang
 
 } // namespace liong
-
-#endif // GFT_WITH_GLSLANG

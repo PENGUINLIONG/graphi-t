@@ -1,12 +1,6 @@
 // GLSL shader compilation.
 // @PENGUINLIONG
 #pragma once
-
-#ifndef GFT_WITH_GLSLANG
-#define GFT_WITH_GLSLANG 1
-#endif
-
-#if GFT_WITH_GLSLANG
 #include <string>
 #include <vector>
 #include <cstdint>
@@ -51,5 +45,3 @@ GraphicsSpirvArtifact compile_graph_hlsl(
 } // namespace glslang
 
 } // namespace liong
-
-#endif // GFT_WITH_GLSLANG

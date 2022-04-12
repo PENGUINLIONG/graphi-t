@@ -3,8 +3,6 @@
 project ("GraphiT" LANGUAGES CXX)
 
 option(GFT_BUILD_APPS "Build Graphi-T example apps" ON)
-option(GFT_WITH_VULKAN "Build Graphi-T with Vulkan GPU backend" ON)
-option(GFT_WITH_GLSLANG "Build Graphi-T with glslang for runtime-shader compilation" ON)
 
 
 
@@ -28,41 +26,35 @@ set(INC_DIRS
     "${PROJECT_SOURCE_DIR}/include"
 )
 
-if(GFT_WITH_VULKAN)
-    add_definitions(-DGFT_WITH_VULKAN=1)
-    find_package(Vulkan)
-    add_subdirectory(third/VulkanMemoryAllocator)
-    if(NOT Vulkan_FOUND)
-        message("")
-        message("-- Vulkan not found! Vulkan context is disabled")
-        message("")
-    else()
-        message("-- Vulkan context enabled")
-        list(APPEND INC_DIRS
-            ${Vulkan_INCLUDE_DIRS}
-            third/VulkanMemoryAllocator/include
-        )
-        list(APPEND LINK_LIBS
-            ${Vulkan_LIBRARIES}
-            VulkanMemoryAllocator
-        )
-    endif()
+find_package(Vulkan)
+add_subdirectory(third/VulkanMemoryAllocator)
+if(NOT Vulkan_FOUND)
+    message("")
+    message("-- Vulkan not found! Vulkan context is disabled")
+    message("")
+else()
+    message("-- Vulkan context enabled")
+    list(APPEND INC_DIRS
+        ${Vulkan_INCLUDE_DIRS}
+        third/VulkanMemoryAllocator/include
+    )
+    list(APPEND LINK_LIBS
+        ${Vulkan_LIBRARIES}
+        VulkanMemoryAllocator
+    )
 endif()
 
 
 # Runtime shader compilation support.
-if(GFT_WITH_GLSLANG)
-    add_definitions(-DGFT_WITH_GLSLANG=1)
-    set(BUILD_EXTERNAL OFF CACHE BOOL "" FORCE)
-    add_subdirectory(third/glslang)
-    list(APPEND INC_DIRS
-        "${PROJECT_SOURCE_DIR}/third"
-    )
-    list(APPEND LINK_LIBS
-        glslang
-        SPIRV
-    )
-endif()
+set(BUILD_EXTERNAL OFF CACHE BOOL "" FORCE)
+add_subdirectory(third/glslang)
+list(APPEND INC_DIRS
+    "${PROJECT_SOURCE_DIR}/third"
+)
+list(APPEND LINK_LIBS
+    glslang
+    SPIRV
+)
 
 # Used to inline kernel/shaders.
 add_executable(bin2c
