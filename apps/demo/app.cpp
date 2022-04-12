@@ -1,6 +1,7 @@
 #include "gft/log.hpp"
 #include "gft/vk.hpp"
 #include "gft/glslang.hpp"
+#include "gft/renderdoc.hpp"
 
 using namespace liong;
 using namespace vk;
@@ -100,9 +101,6 @@ void dbg_dump_spv_art(
 void guarded_main() {
   scoped::GcScope scope;
 
-  vk::initialize();
-  glslang::initialize();
-
   dbg_enum_dev_descs();
 
   std::string glsl = R"(
@@ -123,7 +121,8 @@ void guarded_main() {
     glslang::compile_comp(glsl.c_str(), "comp");
   dbg_dump_spv_art("out", art);
 
-  scoped::Context ctxt = create_ctxt(ContextConfig { "ctxt", 0 });
+  ContextConfig ctxt_cfg { "ctxt", 0 };
+  scoped::Context ctxt = scoped::Context::own_by_gc_frame(create_ctxt(ctxt_cfg));
 
   scoped::Task task = ctxt.build_comp_task("comp_task")
     .comp(art.comp_spv)
@@ -172,9 +171,6 @@ void guarded_main() {
 void guarded_main2() {
   scoped::GcScope scope;
 
-  vk::initialize();
-  glslang::initialize();
-
   dbg_enum_dev_descs();
 
   std::string vert_glsl = R"(
@@ -201,7 +197,10 @@ void guarded_main2() {
   liong::assert(art.ubo_size == 4 * sizeof(float),
     "unexpected ubo size; should be 16, but is ", art.ubo_size);
 
-  scoped::Context ctxt = create_ctxt({ "ctxt", 0 });
+  ContextConfig ctxt_cfg { "ctxt", 0 };
+  scoped::Context ctxt = scoped::Context::own_by_gc_frame(create_ctxt(ctxt_cfg));
+
+  renderdoc::CaptureGuard capture;
 
   constexpr uint32_t FRAMEBUF_WIDTH = 4;
   constexpr uint32_t FRAMEBUF_HEIGHT = 4;
@@ -318,6 +317,10 @@ void guarded_main2() {
 int main(int argc, char** argv) {
   liong::log::set_log_callback(log_cb);
   try {
+    renderdoc::initialize();
+    vk::initialize();
+    glslang::initialize();
+
     guarded_main();
     guarded_main2();
   } catch (const std::exception& e) {
