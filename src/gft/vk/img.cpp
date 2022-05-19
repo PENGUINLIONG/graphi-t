@@ -5,7 +5,7 @@ namespace liong {
 namespace vk {
 
 Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
-  VkFormat fmt = fmt2vk(img_cfg.fmt);
+  VkFormat fmt = fmt2vk(img_cfg.fmt, img_cfg.cspace);
   VkImageUsageFlags usage = 0;
   SubmitType init_submit_ty = L_SUBMIT_TYPE_ANY;
 

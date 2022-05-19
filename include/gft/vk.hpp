@@ -49,10 +49,21 @@ struct VkAssert {
 
 
 
-inline VkFormat fmt2vk(fmt::Format fmt) {
+inline VkFormat fmt2vk(fmt::Format fmt, fmt::ColorSpace cspace) {
   using namespace fmt;
   switch (fmt) {
-  case L_FORMAT_R8G8B8A8_UNORM_PACK32: return VK_FORMAT_R8G8B8A8_UNORM;
+  case L_FORMAT_R8G8B8A8_UNORM_PACK32:
+    if (cspace == L_COLOR_SPACE_SRGB) {
+      return VK_FORMAT_R8G8B8A8_SRGB;
+    } else {
+      return VK_FORMAT_R8G8B8A8_UNORM;
+    }
+  case L_FORMAT_B8G8R8A8_UNORM_PACK32:
+    if (cspace == L_COLOR_SPACE_SRGB) {
+      return VK_FORMAT_B8G8R8A8_SRGB;
+    } else {
+      return VK_FORMAT_B8G8R8A8_UNORM;
+    }
   case L_FORMAT_B10G11R11_UFLOAT_PACK32: return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
   case L_FORMAT_R16G16B16A16_SFLOAT: return VK_FORMAT_R16G16B16A16_SFLOAT;
   case L_FORMAT_R32_SFLOAT: return VK_FORMAT_R32_SFLOAT;
@@ -70,6 +81,13 @@ inline VkFormat depth_fmt2vk(fmt::DepthFormat fmt) {
   default: panic("unsupported depth format");
   }
   return VK_FORMAT_UNDEFINED;
+}
+inline VkColorSpaceKHR cspace2vk(fmt::ColorSpace cspace) {
+  using namespace fmt;
+  switch (cspace) {
+  case L_COLOR_SPACE_SRGB: return VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+  default: panic("unsupported color space");
+  }
 }
 
 
@@ -99,11 +117,12 @@ struct TransactionSubmitDetail {
   VkQueue queue;
   VkSemaphore wait_sema;
   VkSemaphore signal_sema;
+  bool is_submitted;
 };
 struct Transaction {
   const Context* ctxt;
   std::vector<TransactionSubmitDetail> submit_details;
-  VkFence fence;
+  std::vector<VkFence> fences;
 };
 
 
@@ -283,7 +302,6 @@ struct InvocationRenderPassDetail {
 };
 struct InvocationPresentDetail {
   const Swapchain* swapchain;
-  uint32_t img_idx;
 };
 struct InvocationCompositeDetail {
   std::vector<const Invocation*> subinvokes;

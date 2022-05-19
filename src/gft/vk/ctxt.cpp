@@ -92,9 +92,6 @@ Context _create_ctxt(
   uint32_t dev_idx,
   VkSurfaceKHR surf
 ) {
-  if (inst == VK_NULL_HANDLE) {
-    initialize();
-  }
   assert(dev_idx < physdevs.size(),
     "wanted vulkan device does not exists (#", dev_idx, " of ",
       physdevs.size(), " available devices)");
@@ -380,13 +377,16 @@ Context _create_ctxt(
 }
 
 Context create_ctxt(const ContextConfig& cfg) {
+  if (inst == VK_NULL_HANDLE) { initialize(); }
   return _create_ctxt(cfg.label, cfg.dev_idx, VK_NULL_HANDLE);
 }
 Context create_ctxt_windows(const ContextWindowsConfig& cfg) {
+  if (inst == VK_NULL_HANDLE) { initialize(); }
   VkSurfaceKHR surf = _create_surf_windows(cfg);
   return _create_ctxt(cfg.label, cfg.dev_idx, surf);
 }
 Context create_ctxt_android(const ContextAndroidConfig& cfg) {
+  if (inst == VK_NULL_HANDLE) { initialize(); }
   VkSurfaceKHR surf = _create_surf_android(cfg);
   return _create_ctxt(cfg.label, cfg.dev_idx, surf);
 }

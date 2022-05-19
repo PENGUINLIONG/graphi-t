@@ -615,6 +615,49 @@ struct DepthImageBuilder {
 
 
 
+struct Swapchain {
+  L_DECLR_SCOPED_OBJ(Swapchain);
+
+  inline const SwapchainConfig& cfg() const {
+    return get_swapchain_cfg(*inner);
+  }
+
+  Invocation create_present_invoke(bool gc = true) const;
+
+  inline Image get_img() const {
+    return Image::borrow(get_swapchain_img(*inner));
+  }
+};
+struct SwapchainBuilder {
+  using Self = SwapchainBuilder;
+
+  const HAL_IMPL_NAMESPACE::Context& parent;
+  SwapchainConfig inner;
+
+  SwapchainBuilder(
+    const HAL_IMPL_NAMESPACE::Context& ctxt,
+    const std::string& label = ""
+  ) : parent(ctxt), inner() {
+    inner.label = label;
+    inner.nimg = 3;
+    inner.fmt = fmt::L_FORMAT_B8G8R8A8_UNORM_PACK32;
+    inner.cspace = fmt::L_COLOR_SPACE_SRGB;
+  }
+
+  inline Self& nimg(uint32_t nimg) {
+    inner.nimg = nimg;
+    return *this;
+  }
+  inline Self& fmt(fmt::Format fmt) {
+    inner.fmt = fmt;
+    return *this;
+  }
+
+  Swapchain build(bool gc = true);
+};
+
+
+
 struct MappedBuffer {
   void* mapped;
   BufferView view;
@@ -874,6 +917,9 @@ struct Context {
   }
   DepthImageBuilder build_depth_img(const std::string& label = "") const {
     return DepthImageBuilder(*this, label);
+  }
+  SwapchainBuilder build_swapchain(const std::string& label = "") const {
+    return SwapchainBuilder(*this, label);
   }
   TransferInvocationBuilder build_trans_invoke(
     const std::string& label = ""

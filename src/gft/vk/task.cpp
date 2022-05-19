@@ -192,7 +192,7 @@ Task create_graph_task(
     VkVertexInputAttributeDescription viad {};
     viad.location = i;
     viad.binding = 0;
-    viad.format = fmt2vk(vert_input.fmt);
+    viad.format = fmt2vk(vert_input.fmt, fmt::L_COLOR_SPACE_LINEAR);
     viad.offset = (uint32_t)base_offset;
     viads.emplace_back(std::move(viad));
 

@@ -6,29 +6,33 @@ namespace vk {
 
 void destroy_transact(Transaction& transact) {
   const Context& ctxt = *transact.ctxt;
-  if (transact.fence != VK_NULL_HANDLE) {
-    for (auto& submit_detail : transact.submit_details) {
-      if (submit_detail.signal_sema != VK_NULL_HANDLE) {
-        vkDestroySemaphore(ctxt.dev, submit_detail.signal_sema, nullptr);
-      }
-      if (submit_detail.cmd_pool != VK_NULL_HANDLE) {
-        vkDestroyCommandPool(ctxt.dev, submit_detail.cmd_pool, nullptr);
-      }
+  for (auto& submit_detail : transact.submit_details) {
+    if (submit_detail.signal_sema != VK_NULL_HANDLE) {
+      vkDestroySemaphore(ctxt.dev, submit_detail.signal_sema, nullptr);
     }
-    vkDestroyFence(ctxt.dev, transact.fence, nullptr);
-    log::debug("destroyed transaction");
+    if (submit_detail.cmd_pool != VK_NULL_HANDLE) {
+      vkDestroyCommandPool(ctxt.dev, submit_detail.cmd_pool, nullptr);
+    }
   }
+
+  for (const auto& fence : transact.fences) {
+    vkDestroyFence(ctxt.dev, fence, nullptr);
+  }
+
+  log::debug("destroyed transaction");
   transact = {};
 }
 bool is_transact_done(const Transaction& transact) {
   const Context& ctxt = *transact.ctxt;
-  VkResult err = vkGetFenceStatus(ctxt.dev, transact.fence);
-  if (err == VK_NOT_READY) {
-    return false;
-  } else {
-    VK_ASSERT << err;
-    return true;
+  for (const auto& fence : transact.fences) {
+    VkResult err = vkGetFenceStatus(ctxt.dev, fence);
+    if (err == VK_NOT_READY) {
+      return false;
+    } else {
+      VK_ASSERT << err;
+    }
   }
+  return true;
 }
 void wait_transact(const Transaction& transact) {
   const uint32_t SPIN_INTERVAL = 3000;
@@ -38,8 +42,8 @@ void wait_transact(const Transaction& transact) {
   util::Timer wait_timer {};
   wait_timer.tic();
   for (VkResult err;;) {
-    err = vkWaitForFences(ctxt.dev, 1, &transact.fence, VK_TRUE,
-      SPIN_INTERVAL);
+    err = vkWaitForFences(ctxt.dev, transact.fences.size(),
+      transact.fences.data(), VK_TRUE, SPIN_INTERVAL);
     if (err == VK_TIMEOUT) {
       // log::warn("timeout after 3000ns");
     } else {

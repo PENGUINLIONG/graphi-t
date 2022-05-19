@@ -588,19 +588,14 @@ Invocation create_present_invoke(const Swapchain& swapchain) {
   assert(dyn_detail.img_idx != nullptr,
     "swapchain has not acquired an image to present for the current frame");
 
-  uint32_t img_idx = *dyn_detail.img_idx;
-  dyn_detail.img_idx = nullptr;
-
-
   Invocation out {};
-  out.label = util::format(swapchain.swapchain_cfg.label, " #", img_idx);
+  out.label = util::format(swapchain.swapchain_cfg.label);
   out.ctxt = &ctxt;
   out.submit_ty = L_SUBMIT_TYPE_PRESENT;
   out.query_pool = VK_NULL_HANDLE;
 
   InvocationPresentDetail present_detail {};
   present_detail.swapchain = &swapchain;
-  present_detail.img_idx = img_idx;
 
   out.present_detail =
     std::make_unique<InvocationPresentDetail>(std::move(present_detail));
@@ -777,11 +772,13 @@ void _push_transact_submit_detail(
 
   submit_details.emplace_back(std::move(submit_detail));
 }
-void _submit_transact_submit_detail(
-  const Context& ctxt,
-  const TransactionSubmitDetail& submit_detail,
+void _submit_cmdbuf(
+  TransactionLike& transact,
   VkFence fence
 ) {
+  const Context& ctxt = *transact.ctxt;
+  TransactionSubmitDetail& submit_detail = transact.submit_details.back();
+
   VkPipelineStageFlags stage_mask = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
 
   VkSubmitInfo submit_info {};
@@ -799,6 +796,26 @@ void _submit_transact_submit_detail(
 
   // Finish recording and submit the command buffer to the device.
   VK_ASSERT << vkQueueSubmit(submit_detail.queue, 1, &submit_info, fence);
+
+  submit_detail.is_submitted = true;
+}
+// `is_fenced` means that the command buffer is waited by the host so no
+// semaphore signaling should be scheduled.
+void _seal_cmdbuf(TransactionLike& transact) {
+  if (!transact.submit_details.empty()) {
+    // Do nothing if the queue is unchanged. It means that the commands can
+    // still be fed into the last command buffer.
+    auto& last_submit = transact.submit_details.back();
+
+    if (last_submit.is_submitted) { return; }
+
+    // End the command buffer and, it it's a primary command buffer, submit the
+    // recorded commands.
+    _end_cmdbuf(last_submit);
+    if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+      _submit_cmdbuf(transact, VK_NULL_HANDLE);
+    }
+  }
 }
 VkCommandBuffer _get_cmdbuf(
   TransactionLike& transact,
@@ -820,15 +837,11 @@ VkCommandBuffer _get_cmdbuf(
     if (submit_detail.queue == last_submit.queue) {
       return last_submit.cmdbuf;
     }
-
-    // Otherwise, end the command buffer and, it it's a primary command buffer,
-    // submit the recorded commands.
-    _end_cmdbuf(last_submit);
-    if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-      _submit_transact_submit_detail(*transact.ctxt,
-        transact.submit_details.back(), VK_NULL_HANDLE);
-    }
   }
+
+  // Otherwise, end the command buffer and, it it's a primary command buffer,
+  // submit the recorded commands.
+  _seal_cmdbuf(transact);
 
   _push_transact_submit_detail(*transact.ctxt, transact.submit_details,
     submit_ty, transact.level);
@@ -1148,7 +1161,19 @@ void _transit_rscs(
   }
 }
 
-void _record_invoke(TransactionLike& transact, const Invocation& invoke) {
+VkFence _create_fence(const Context& ctxt) {
+  VkFenceCreateInfo fci {};
+  fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+
+  VkFence fence;
+  VK_ASSERT << vkCreateFence(ctxt.dev, &fci, nullptr, &fence);
+  return fence;
+}
+// Return true if the invocation forces an termination.
+std::vector<VkFence> _record_invoke_impl(
+  TransactionLike& transact,
+  const Invocation& invoke
+) {
   assert(!transact.is_frozen, "invocations cannot be recorded while the "
     "transaction is frozen");
 
@@ -1160,17 +1185,34 @@ void _record_invoke(TransactionLike& transact, const Invocation& invoke) {
     Swapchain& swapchain = (Swapchain&)*present_detail.swapchain;
     const Context& ctxt = *swapchain.ctxt;
 
+    // Transition image layout for presentation.
+    uint32_t& img_idx = *swapchain.dyn_detail->img_idx;
+    const Image& img = swapchain.dyn_detail->imgs[img_idx];
+    ImageView img_view = make_img_view(img, 0, 0, img.img_cfg.width,
+      img.img_cfg.height, img.img_cfg.depth, L_IMAGE_SAMPLER_NEAREST);
+    _transit_rsc(transact, img_view, L_IMAGE_USAGE_PRESENT_BIT);
+
+
     // Present the rendered image.
+    VkFence present_fence = _create_fence(ctxt);
+    VkFence acquire_fence = _create_fence(ctxt);
+
     VkResult present_res = VK_SUCCESS;
     VkPresentInfoKHR pi {};
     pi.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     pi.swapchainCount = 1;
     pi.pSwapchains = &swapchain.swapchain;
-    pi.pImageIndices = &present_detail.img_idx;
+    pi.pImageIndices = &img_idx;
     pi.pResults = &present_res;
     if (transact.submit_details.size() != 0) {
+      const auto& last_submit = transact.submit_details.back();
+      assert(!last_submit.is_submitted);
+
+      _end_cmdbuf(last_submit);
+      _submit_cmdbuf(transact, present_fence);
+
       pi.waitSemaphoreCount = 1;
-      pi.pWaitSemaphores = &transact.submit_details.back().wait_sema;
+      pi.pWaitSemaphores = &transact.submit_details.back().signal_sema;
     }
 
     VkQueue queue = ctxt.submit_details.at(L_SUBMIT_TYPE_PRESENT).queue;
@@ -1182,11 +1224,14 @@ void _record_invoke(TransactionLike& transact, const Invocation& invoke) {
     }
     VK_ASSERT << res;
 
+    img_idx = ~0u;
+    VK_ASSERT << vkAcquireNextImageKHR(ctxt.dev, swapchain.swapchain, 0,
+      VK_NULL_HANDLE, acquire_fence, &img_idx);
+
     transact.is_frozen = true;
 
-    log::debug("applied presentation invocation (image #",
-      present_detail.img_idx, ")");
-    return;
+    log::debug("applied presentation invocation (image #", img_idx, ")");
+    return { present_fence, acquire_fence };
   }
 
   VkCommandBuffer cmdbuf = _get_cmdbuf(transact, invoke.submit_ty);
@@ -1195,7 +1240,7 @@ void _record_invoke(TransactionLike& transact, const Invocation& invoke) {
   // buffer.
   if (invoke.bake_detail) {
     vkCmdExecuteCommands(cmdbuf, 1, &invoke.bake_detail->cmdbuf);
-    return;
+    return {};
   }
 
   if (invoke.query_pool != VK_NULL_HANDLE) {
@@ -1260,9 +1305,9 @@ void _record_invoke(TransactionLike& transact, const Invocation& invoke) {
     if (invoke.graph_detail->nidx != 0) {
       VkIndexType idx_ty {};
       switch (invoke.graph_detail->idx_ty) {
-        case L_INDEX_TYPE_UINT16: idx_ty = VK_INDEX_TYPE_UINT16; break;
-        case L_INDEX_TYPE_UINT32: idx_ty = VK_INDEX_TYPE_UINT32; break;
-        default: panic("unexpected index type");
+      case L_INDEX_TYPE_UINT16: idx_ty = VK_INDEX_TYPE_UINT16; break;
+      case L_INDEX_TYPE_UINT32: idx_ty = VK_INDEX_TYPE_UINT32; break;
+      default: panic("unexpected index type");
       }
       vkCmdBindIndexBuffer(cmdbuf, graph_detail.idx_buf,
         graph_detail.idx_buf_offset, idx_ty);
@@ -1304,7 +1349,8 @@ void _record_invoke(TransactionLike& transact, const Invocation& invoke) {
 
       const Invocation* subinvoke = pass_detail.subinvokes[i];
       assert(subinvoke != nullptr, "null subinvocation is not allowed");
-      _record_invoke(transact, *subinvoke);
+      std::vector<VkFence> fences = _record_invoke_impl(transact, *subinvoke);
+      if (!fences.empty()) { return fences; }
     }
     vkCmdEndRenderPass(cmdbuf);
     log::debug("render pass invocation '", invoke.label, "' ended");
@@ -1318,7 +1364,8 @@ void _record_invoke(TransactionLike& transact, const Invocation& invoke) {
     for (size_t i = 0; i < composite_detail.subinvokes.size(); ++i) {
       const Invocation* subinvoke = composite_detail.subinvokes[i];
       assert(subinvoke != nullptr, "null subinvocation is not allowed");
-      _record_invoke(transact, *subinvoke);
+      std::vector<VkFence> fences = _record_invoke_impl(transact, *subinvoke);
+      if (!fences.empty()) { return fences; }
     }
 
     log::debug("composite invocation '", invoke.label, "' ended");
@@ -1338,6 +1385,23 @@ void _record_invoke(TransactionLike& transact, const Invocation& invoke) {
   }
 
   log::debug("scheduled invocation '", invoke.label, "' for execution");
+
+  return {};
+}
+std::vector<VkFence> _record_invoke(
+  TransactionLike& transact,
+  const Invocation& invoke
+) {
+  std::vector<VkFence> fences = _record_invoke_impl(transact, invoke);
+  if (fences.empty()) {
+    _end_cmdbuf(transact.submit_details.back());
+    if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
+      VkFence fence = _create_fence(*transact.ctxt);
+      _submit_cmdbuf(transact, fence);
+      fences.emplace_back(fence);
+    }
+  }
+  return fences;
 }
 
 bool _can_bake_invoke(const Invocation& invoke) {
@@ -1361,8 +1425,8 @@ void bake_invoke(Invocation& invoke) {
   if (!_can_bake_invoke(invoke)) { return; }
 
   TransactionLike transact(*invoke.ctxt, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
-  _record_invoke(transact, invoke);
-  _end_cmdbuf(transact.submit_details.back());
+  std::vector<VkFence> fences = _record_invoke(transact, invoke);
+  assert(fences.empty());
 
   assert(transact.submit_details.size() == 1);
   const TransactionSubmitDetail& submit_detail = transact.submit_details[0];
@@ -1381,30 +1445,19 @@ void bake_invoke(Invocation& invoke) {
 
 
 
-VkFence _create_fence(const Context& ctxt) {
-  VkFenceCreateInfo fci {};
-  fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-
-  VkFence fence;
-  VK_ASSERT << vkCreateFence(ctxt.dev, &fci, nullptr, &fence);
-  return fence;
-}
 Transaction submit_invoke(const Invocation& invoke) {
   const Context& ctxt = *invoke.ctxt;
 
   TransactionLike transact(ctxt, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
   util::Timer timer {};
   timer.tic();
-  _record_invoke(transact, invoke);
-  _end_cmdbuf(transact.submit_details.back());
+  std::vector<VkFence> fences = _record_invoke(transact, invoke);
   timer.toc();
 
   Transaction out {};
   out.ctxt = &ctxt;
   out.submit_details = std::move(transact.submit_details);
-  out.fence = _create_fence(ctxt);
-
-  _submit_transact_submit_detail(ctxt, out.submit_details.back(), out.fence);
+  out.fences = fences;
 
   log::debug("created and submitted transaction for execution, command "
     "recording took ", timer.us(), "us");

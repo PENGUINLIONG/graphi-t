@@ -45,7 +45,7 @@ VkRenderPass _create_pass(
     case L_ATTACHMENT_TYPE_COLOR:
     {
       ar.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      ad.format = fmt2vk(attm_cfg.color_fmt);
+      ad.format = fmt2vk(attm_cfg.color_fmt, attm_cfg.cspace);
       ad.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
       ad.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
       sar.color_attm_ref.emplace_back(std::move(ar));

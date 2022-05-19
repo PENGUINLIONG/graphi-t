@@ -58,7 +58,7 @@ Window create_window() {
     NULL, NULL, hinst, NULL);
   assert(hwnd != NULL, "cannot create window");
 
-  assert(ShowWindow(hwnd, SW_SHOW), "cannot display window");
+  ShowWindow(hwnd, SW_SHOW);
 
   Window out {};
   out.hinst = hinst;
