@@ -168,6 +168,9 @@ struct ImageConfig {
   uint32_t depth;
   // Pixel format of the image.
   fmt::Format fmt;
+  // Color space of the image. Only linear and srgb are valid and it only
+  // affects how the image data is interpreted on reads.
+  fmt::ColorSpace cspace;
   // Usage of the image.
   ImageUsage usage;
 };
@@ -291,8 +294,9 @@ struct SwapchainConfig {
   uint32_t nimg;
   // Image color format.
   fmt::Format fmt;
-  // Render output color space.
-  //cspace::ColorSpace cspace;
+  // Render output color space. Note that the color space is specified for
+  // presentation. The rendering output should always be linear colors.
+  fmt::ColorSpace cspace;
 };
 L_IMPL_STRUCT struct Swapchain;
 L_IMPL_FN Swapchain create_swapchain(
@@ -300,12 +304,11 @@ L_IMPL_FN Swapchain create_swapchain(
   const SwapchainConfig& cfg
 );
 L_IMPL_FN void destroy_swapchain(Swapchain& swapchain);
-// Acquire the next available image for drawing and presentation.
-L_IMPL_FN Transaction acquire_swapchain_img(Context& ctxt);
+L_IMPL_FN const SwapchainConfig& get_swapchain_cfg(const Swapchain& swapchain);
 // Get the surface image for the current frame. Surface image is alive after the
 // `acquire_surf_img` transition finishes and before the next presentation
 // invocation.
-L_IMPL_FN const Image& get_swapchain_img(const Context& ctxt);
+L_IMPL_FN const Image& get_swapchain_img(const Swapchain& swapchain);
 
 
 
@@ -363,8 +366,12 @@ struct AttachmentConfig {
   // Attachment type.
   AttachmentType attm_ty;
   union {
-    // Color attachment format.
-    fmt::Format color_fmt;
+    struct {
+      // Color attachment format.
+      fmt::Format color_fmt;
+      // Color attachment color space.
+      fmt::ColorSpace cspace;
+    };
     // Depth attachment format.
     fmt::DepthFormat depth_fmt;
   };
@@ -546,7 +553,7 @@ L_IMPL_FN Invocation create_pass_invoke(
 );
 // Present the content written to the current surface image.
 L_IMPL_FN Invocation create_present_invoke(
-  const Context& ctxt
+  const Swapchain& swapchain
 );
 L_IMPL_FN Invocation create_composite_invoke(
   const Context& ctxt,

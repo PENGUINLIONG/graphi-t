@@ -27,7 +27,23 @@ VkSwapchainKHR _create_swapchain(
       "fallback to ", nimg2);
   }
 
-  VkFormat fmt = fmt2vk(cfg.fmt);
+  uint32_t nsurf_fmt = 0;
+  VK_ASSERT << vkGetPhysicalDeviceSurfaceFormatsKHR(ctxt.physdev, ctxt.surf, &nsurf_fmt, nullptr);
+  std::vector<VkSurfaceFormatKHR> surf_fmts;
+  surf_fmts.resize(nsurf_fmt);
+  VK_ASSERT << vkGetPhysicalDeviceSurfaceFormatsKHR(ctxt.physdev, ctxt.surf, &nsurf_fmt, surf_fmts.data());
+
+  VkFormat fmt = fmt2vk(cfg.fmt, fmt::L_COLOR_SPACE_LINEAR);
+  VkColorSpaceKHR cspace = cspace2vk(cfg.cspace);
+
+  bool found = false;
+  for (const VkSurfaceFormatKHR& surf_fmt : surf_fmts) {
+    if (surf_fmt.format == fmt && surf_fmt.colorSpace == cspace) {
+      found = true;
+      break;
+    }
+  }
+  assert(found, "surface format is not supported by the underlying platform");
 
   VkSwapchainCreateInfoKHR sci {};
   sci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -35,7 +51,7 @@ VkSwapchainKHR _create_swapchain(
   sci.oldSwapchain = old_swapchain;
   sci.minImageCount = nimg;
   sci.imageFormat = fmt;
-  sci.imageColorSpace = VK_COLOR_SPACE_SRGB_NONLINEAR_KHR;
+  sci.imageColorSpace = cspace;
   sci.imageExtent.width = width;
   sci.imageExtent.height = height;
   sci.imageArrayLayers = 1;
@@ -44,7 +60,7 @@ VkSwapchainKHR _create_swapchain(
     VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
   sci.imageSharingMode = VK_SHARING_MODE_EXCLUSIVE;
   sci.preTransform = VK_SURFACE_TRANSFORM_IDENTITY_BIT_KHR;
-  sci.compositeAlpha = VK_COMPOSITE_ALPHA_POST_MULTIPLIED_BIT_KHR;
+  sci.compositeAlpha = VK_COMPOSITE_ALPHA_OPAQUE_BIT_KHR;
   sci.presentMode = VK_PRESENT_MODE_FIFO_KHR;
   sci.clipped = VK_TRUE;
 
@@ -103,15 +119,43 @@ VkSwapchainKHR _create_swapchain(
   return swapchain;
 }
 
+void _init_swapchain(Swapchain& swapchain) {
+  if (swapchain.dyn_detail == nullptr) {
+    SwapchainDynamicDetail dyn_detail {};
+    swapchain.swapchain = _create_swapchain(*swapchain.ctxt,
+      swapchain.swapchain_cfg, swapchain.swapchain, dyn_detail);
+  }
+
+  const Context& ctxt = *swapchain.ctxt;
+  SwapchainDynamicDetail& dyn_detail = *swapchain.dyn_detail;
+  dyn_detail.img_idx = std::make_unique<uint32_t>(~0u);
+
+  VkFenceCreateInfo fci {};
+  fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+
+  VkFence fence;
+  VK_ASSERT << vkCreateFence(ctxt.dev, &fci, nullptr, &fence);
+
+  VkResult acq_res = vkAcquireNextImageKHR(ctxt.dev, swapchain.swapchain, 0,
+    VK_NULL_HANDLE, fence, &*dyn_detail.img_idx);
+  assert(acq_res >= 0, "failed to initiate swapchain image acquisition");
+
+  // Ensure the first image is acquired. It shouldn't take long.
+  VK_ASSERT << vkWaitForFences(ctxt.dev, 1, &fence, VK_TRUE, 1000);
+
+  vkDestroyFence(ctxt.dev, fence, nullptr);
+}
 Swapchain create_swapchain(const Context& ctxt, const SwapchainConfig& cfg) {
   SwapchainDynamicDetail dyn_detail;
   VkSwapchainKHR swapchain =
     _create_swapchain(ctxt, cfg, VK_NULL_HANDLE, dyn_detail);
 
-  return Swapchain {
+  Swapchain out {
     &ctxt, cfg, swapchain,
     std::make_unique<SwapchainDynamicDetail>(std::move(dyn_detail)),
   };
+  _init_swapchain(out);
+  return out;
 }
 void destroy_swapchain(Swapchain& swapchain) {
   const Context& ctxt = *swapchain.ctxt;
@@ -126,39 +170,12 @@ void destroy_swapchain(Swapchain& swapchain) {
   vkDestroySwapchainKHR(ctxt.dev, swapchain.swapchain, nullptr);
 }
 
-Transaction acquire_swapchain_img(Swapchain& swapchain) {
-  if (swapchain.dyn_detail == nullptr) {
-    SwapchainDynamicDetail dyn_detail {};
-    swapchain.swapchain = _create_swapchain(*swapchain.ctxt,
-      swapchain.swapchain_cfg, swapchain.swapchain, dyn_detail);
-  }
-
-  const Context& ctxt = *swapchain.ctxt;
-  SwapchainDynamicDetail& dyn_detail = *swapchain.dyn_detail;
-
-  assert(dyn_detail.img_idx == nullptr,
-    "surface image has already been acquired");
-  dyn_detail.img_idx = std::make_unique<uint32_t>(~0u);
-
-  VkFenceCreateInfo fci {};
-  fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-
-  VkFence fence;
-  VK_ASSERT << vkCreateFence(ctxt.dev, &fci, nullptr, &fence);
-
-  VkResult acq_res = vkAcquireNextImageKHR(ctxt.dev, swapchain.swapchain, 0,
-    VK_NULL_HANDLE, fence, &*dyn_detail.img_idx);
-  assert(acq_res >= 0, "failed to initiate swapchain image acquisition");
-
-  return Transaction { &ctxt, {}, fence };
-}
-
 const Image& get_swapchain_img(const Swapchain& swapchain) {
   assert(swapchain.dyn_detail != nullptr,
     "swapchain recreation is required; call `acquire_swapchain_img` first");
 
   const SwapchainDynamicDetail& dyn_detail = *swapchain.dyn_detail;
-  assert(dyn_detail.img_idx != nullptr,
+  assert(*dyn_detail.img_idx != ~0u,
     "swapchain has not acquired an image for this frame");
 
   return dyn_detail.imgs[*dyn_detail.img_idx];

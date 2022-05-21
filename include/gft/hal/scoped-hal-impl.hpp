@@ -14,6 +14,7 @@ enum ObjectType {
   L_OBJECT_TYPE_BUFFER,
   L_OBJECT_TYPE_IMAGE,
   L_OBJECT_TYPE_DEPTH_IMAGE,
+  L_OBJECT_TYPE_SWAPCHAIN,
   L_OBJECT_TYPE_RENDER_PASS,
   L_OBJECT_TYPE_TASK,
   L_OBJECT_TYPE_INVOCATION,
@@ -32,6 +33,7 @@ void _destroy_obj(ObjectType obj_ty, void* obj) {
   L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_BUFFER, destroy_buf, Buffer);
   L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_IMAGE, destroy_img, Image);
   L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_DEPTH_IMAGE, destroy_depth_img, DepthImage);
+  L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_SWAPCHAIN, destroy_swapchain, Swapchain);
   L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_RENDER_PASS, destroy_pass, RenderPass);
   L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_TASK, destroy_task, Task);
   L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_INVOCATION, destroy_invoke, Invocation);
@@ -48,6 +50,7 @@ const char* _obj_ty2str(ObjectType obj_ty) {
   case L_OBJECT_TYPE_BUFFER: return "buffer";
   case L_OBJECT_TYPE_IMAGE: return "image";
   case L_OBJECT_TYPE_DEPTH_IMAGE: return "depth image";
+  case L_OBJECT_TYPE_SWAPCHAIN: return "swapchain";
   case L_OBJECT_TYPE_RENDER_PASS: return "render pass";
   case L_OBJECT_TYPE_TASK: return "task";
   case L_OBJECT_TYPE_INVOCATION: return "invocation";
@@ -148,6 +151,7 @@ L_DEF_REG_GC(Context, L_OBJECT_TYPE_CONTEXT);
 L_DEF_REG_GC(Buffer, L_OBJECT_TYPE_BUFFER);
 L_DEF_REG_GC(Image, L_OBJECT_TYPE_IMAGE);
 L_DEF_REG_GC(DepthImage, L_OBJECT_TYPE_DEPTH_IMAGE);
+L_DEF_REG_GC(Swapchain, L_OBJECT_TYPE_SWAPCHAIN);
 L_DEF_REG_GC(RenderPass, L_OBJECT_TYPE_RENDER_PASS);
 L_DEF_REG_GC(Task, L_OBJECT_TYPE_TASK);
 L_DEF_REG_GC(Invocation, L_OBJECT_TYPE_INVOCATION);
@@ -169,6 +173,12 @@ void destroy_raii_obj(void* obj) {
 }
 
 #define L_DEF_CTOR_DTOR(ty) \
+  ty ty::borrow(const HAL_IMPL_NAMESPACE::ty& inner) { \
+    ty out {}; \
+    out.inner = (HAL_IMPL_NAMESPACE::ty*)&inner; \
+    out.ownership = L_SCOPED_OBJECT_OWNERSHIP_BORROWED; \
+    return out; \
+  } \
   ty ty::own_by_raii(HAL_IMPL_NAMESPACE::ty&& inner) { \
     ty out {}; \
     out.inner = reg_raii_obj(std::forward<HAL_IMPL_NAMESPACE::ty>(inner)); \
@@ -228,6 +238,18 @@ Image ImageBuilder::build(bool gc) {
 L_DEF_CTOR_DTOR(DepthImage);
 DepthImage DepthImageBuilder::build(bool gc) {
   return L_BUILD_WITH_CFG(DepthImage, create_depth_img);
+}
+
+
+
+L_DEF_CTOR_DTOR(Swapchain);
+Swapchain SwapchainBuilder::build(bool gc) {
+  return L_BUILD_WITH_CFG(Swapchain, create_swapchain);
+}
+Invocation Swapchain::create_present_invoke(bool gc) const {
+  return gc ?
+    Invocation::own_by_gc_frame(HAL_IMPL_NAMESPACE::create_present_invoke(*inner)) :
+    Invocation::own_by_raii(HAL_IMPL_NAMESPACE::create_present_invoke(*inner));
 }
 
 
