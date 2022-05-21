@@ -330,11 +330,17 @@ struct ObjParser {
         // Ignore empty newlines.
         continue;
       } else if (tokenizer.try_end()) {
-        if (mesh.uvs.size() != 0 && mesh.uvs.size() != mesh.poses.size()) {
+        if (mesh.uvs.size() == 0) {
+          log::warn("uv data is not available, filled with zeroes instead");
+          mesh.uvs.resize(mesh.poses.size());
+        } else if (mesh.uvs.size() != mesh.poses.size()) {
           log::warn("uv count mismatches position count; treated as error");
           return false;
         }
-        if (mesh.norms.size() != 0 && mesh.norms.size() != mesh.poses.size()) {
+        if (mesh.norms.size() == 0) {
+          log::warn("normal data is not available, filled with zeroes instead");
+          mesh.norms.resize(mesh.poses.size());
+        } else if (mesh.norms.size() != mesh.poses.size()) {
           log::warn("normal count mismatches position count; treated as error");
           return false;
         }
@@ -357,6 +363,43 @@ Mesh load_obj(const char* path) {
   return mesh;
 }
 
+
+
+struct UniqueVertex {
+  vmath::float3 pos;
+  vmath::float2 uv;
+  vmath::float3 norm;
+
+  friend bool operator<(const UniqueVertex& a, const UniqueVertex& b) {
+    return std::memcmp(&a, &b, sizeof(UniqueVertex)) < 0;
+  }
+};
+IndexedMesh mesh2idxmesh(const Mesh& mesh) {
+  IndexedMesh out{};
+  std::map<UniqueVertex, uint32_t> vert2idx;
+
+  for (size_t i = 0; i < mesh.poses.size(); ++i) {
+    UniqueVertex vert;
+    vert.pos = mesh.poses.at(i);
+    vert.uv = mesh.uvs.at(i);
+    vert.norm = mesh.norms.at(i);
+
+    uint32_t idx;
+    auto it = vert2idx.find(vert);
+    if (it == vert2idx.end()) {
+      idx = vert2idx.size();
+      out.mesh.poses.emplace_back(vert.pos);
+      out.mesh.uvs.emplace_back(vert.uv);
+      out.mesh.norms.emplace_back(vert.norm);
+      vert2idx.insert(it, std::make_pair(std::move(vert), idx));
+    } else {
+      idx = it->second;
+    }
+    out.idxs.emplace_back(idx);
+  }
+
+  return out;
+}
 
 } // namespace mesh
 } // namespace liong

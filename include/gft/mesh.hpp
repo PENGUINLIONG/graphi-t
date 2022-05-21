@@ -17,5 +17,14 @@ struct Mesh {
 extern bool try_parse_obj(const std::string& obj, Mesh& mesh);
 extern Mesh load_obj(const char* path);
 
+
+
+struct IndexedMesh {
+  Mesh mesh;
+  std::vector<uint32_t> idxs;
+};
+
+extern IndexedMesh mesh2idxmesh(const Mesh& mesh);
+
 } // namespace mesh
 } // namespace liong
