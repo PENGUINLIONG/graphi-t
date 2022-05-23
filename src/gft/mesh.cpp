@@ -1,6 +1,8 @@
 // # 3D Mesh utilities
 // @PENGUINLIONG
+#include <cstdint>
 #include <set>
+#include <initializer_list>
 #include "gft/vmath.hpp"
 #include "gft/mesh.hpp"
 #include "gft/assert.hpp"
@@ -378,27 +380,190 @@ IndexedMesh mesh2idxmesh(const Mesh& mesh) {
   IndexedMesh out{};
   std::map<UniqueVertex, uint32_t> vert2idx;
 
-  for (size_t i = 0; i < mesh.poses.size(); ++i) {
-    UniqueVertex vert;
-    vert.pos = mesh.poses.at(i);
-    vert.uv = mesh.uvs.at(i);
-    vert.norm = mesh.norms.at(i);
+  size_t ntri = mesh.poses.size() / 3;
+  if (ntri * 3 != mesh.poses.size()) {
+    log::warn("mesh vertex number is not aligned to 3; trailing vertices are "
+      "ignored because they don't form an actual triangle");
+  }
 
-    uint32_t idx;
-    auto it = vert2idx.find(vert);
-    if (it == vert2idx.end()) {
-      idx = vert2idx.size();
-      out.mesh.poses.emplace_back(vert.pos);
-      out.mesh.uvs.emplace_back(vert.uv);
-      out.mesh.norms.emplace_back(vert.norm);
-      vert2idx.insert(it, std::make_pair(std::move(vert), idx));
-    } else {
-      idx = it->second;
+  for (size_t i = 0; i < ntri; ++i) {
+    uint32_t idxs[3];
+    for (size_t j = 0; j < 3; j) {
+      size_t ivert = i * 3 + j;
+      UniqueVertex vert;
+      vert.pos = mesh.poses.at(ivert);
+      vert.uv = mesh.uvs.at(ivert);
+      vert.norm = mesh.norms.at(ivert);
+
+      uint32_t idx;
+      auto it = vert2idx.find(vert);
+      if (it == vert2idx.end()) {
+        idx = vert2idx.size();
+        out.mesh.poses.emplace_back(vert.pos);
+        out.mesh.uvs.emplace_back(vert.uv);
+        out.mesh.norms.emplace_back(vert.norm);
+        vert2idx.insert(it, std::make_pair(std::move(vert), idx));
+      } else {
+        idx = it->second;
+      }
+      idxs[j] = idx;
     }
-    out.idxs.emplace_back(idx);
+    out.idxs.emplace_back(vmath::uint3 { idxs[0], idxs[1], idxs[2] });
   }
 
   return out;
+}
+
+struct Binner {
+  Aabb aabb;
+  vmath::uint3 grid_res;
+  // `aabb` range divided by `grid_res` except for the exactly `min` vlaues.
+  std::vector<float> grid_lines_x;
+  std::vector<float> grid_lines_y;
+  std::vector<float> grid_lines_z;
+  std::vector<Bin> bins;
+  uint32_t counter;
+
+  static std::vector<float> make_grid_lines(float min, float max, uint32_t n) {
+    float range = max - min;
+    std::vector<float> out;
+    for (uint32_t i = 1; i < n; ++i) {
+      out.emplace_back((i / float(n)) * range + min);
+    }
+    out.emplace_back(max);
+    return out;
+  }
+
+  Binner(const Aabb& aabb, const vmath::uint3& grid_res) :
+    aabb(aabb),
+    grid_res(grid_res),
+    grid_lines_x(make_grid_lines(aabb.min.x, aabb.max.x, grid_res.x)),
+    grid_lines_y(make_grid_lines(aabb.min.y, aabb.max.y, grid_res.y)),
+    grid_lines_z(make_grid_lines(aabb.min.z, aabb.max.z, grid_res.z)),
+    bins()
+  {
+    bins.reserve(grid_res.x * grid_res.y * grid_res.z);
+    for (size_t x = 0; x < grid_res.x; ++x) {
+      for (size_t y = 0; y < grid_res.y; ++y) {
+        for (size_t z = 0; z < grid_res.z; ++z) {
+          vmath::float3 min {
+            grid_lines_x.at(x),
+            grid_lines_y.at(y),
+            grid_lines_y.at(z),
+          };
+          vmath::float3 max {
+            grid_lines_x.at(x + 1),
+            grid_lines_y.at(y + 1),
+            grid_lines_y.at(z + 1),
+          };
+          Aabb aabb2 { min, max };
+
+          Bin bin { aabb2, {} };
+          bins.emplace_back(bin);
+        }
+      }
+    }
+  }
+
+  size_t get_ibin(const std::vector<float>& grid_lines, float x) {
+    size_t i = 1;
+    // The loop breaks when `x` is less than `grid_lines` so `i` ended at any
+    // index of the left-close and right-open interval that contains the point.
+    // But also note that if the loop runs out of range, i.e., `x >= aabb.max`
+    // the index of the farthest bin is naturally assigned to `i`. Given that
+    // non-intersecting triangles are filetered in `bin` any point enclosed
+    // by `aabb` can be uniquely assigned to a bin at boundaries.
+    for (; i < grid_lines.size(); ++i) {
+      if (x < grid_lines.at(i)) { break; }
+    }
+    return i - 1;
+  }
+
+  bool bin(const Aabb& aabb, size_t& iprim) {
+    if (!this->aabb.intersects_with(aabb)) {
+      // The triangle's AABB is not intersecting with the current binner space.
+      // So simply ignore this triangle.
+      return false;
+    }
+
+    size_t imin_x = get_ibin(grid_lines_x, aabb.min.x);
+    size_t imax_x = get_ibin(grid_lines_x, aabb.max.x);
+    size_t imin_y = get_ibin(grid_lines_y, aabb.min.y);
+    size_t imax_y = get_ibin(grid_lines_y, aabb.max.y);
+    size_t imin_z = get_ibin(grid_lines_z, aabb.min.z);
+    size_t imax_z = get_ibin(grid_lines_z, aabb.max.z);
+    // TODO: (penguinliong) Consider the case of a very narrow triangle placed
+    // on the diagonal of the bins looped here. There is a significant room of
+    // optimization for large triangles.
+    for (size_t z = imin_z; z <= imax_z; ++z) {
+      for (size_t y = imin_y; y <= imax_y; ++y) {
+        for (size_t x = imin_x; x <= imax_x; ++x) {
+          size_t i = ((z * grid_res.y + y) * grid_res.x) + x;
+          bins.at(i).iprims.emplace_back(counter);
+        }
+      }
+    }
+    ++counter;
+    return true;
+  }
+
+  BinGrid into_grid() {
+    BinGrid grid {
+      std::move(grid_lines_x),
+      std::move(grid_lines_y),
+      std::move(grid_lines_z),
+      std::move(bins),
+    };
+    return grid;
+  }
+};
+
+BinGrid bin_mesh(
+  const Aabb& aabb,
+  const vmath::uint3& grid_res,
+  const Mesh& mesh
+) {
+  Binner binner(aabb, grid_res);
+  for (size_t i = 0; mesh.poses.size(); i += 3) {
+    Aabb aabb2 {
+      mesh.poses.at(i),
+      mesh.poses.at(i + 2),
+      mesh.poses.at(i + 1),
+    };
+    size_t _;
+    binner.bin(aabb2, _);
+  }
+  return binner.into_grid();
+}
+BinGrid bin_idxmesh(
+  const Aabb& aabb,
+  const vmath::uint3& grid_res,
+  const IndexedMesh& idxmesh
+) {
+  Binner binner(aabb, grid_res);
+  for (const auto& idx : idxmesh.idxs) {
+    Aabb aabb2 {
+      idxmesh.mesh.poses.at(idx.x),
+      idxmesh.mesh.poses.at(idx.y),
+      idxmesh.mesh.poses.at(idx.z),
+    };
+    size_t _;
+    binner.bin(aabb2, _);
+  }
+  return binner.into_grid();
+}
+BinGrid bin_point_cloud(
+  const Aabb& aabb,
+  const vmath::uint3& grid_res,
+  const PointCloud& point_cloud
+) {
+  Binner binner(aabb, grid_res);
+  for (const auto& point : point_cloud.poses) {
+    Aabb aabb2 { point };
+    size_t _;
+    binner.bin(aabb2, _);
+  }
+  return binner.into_grid();
 }
 
 } // namespace mesh
