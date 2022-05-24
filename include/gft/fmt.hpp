@@ -3,7 +3,7 @@
 #pragma once
 #include <cstdint>
 #include "gft/assert.hpp"
-#include "gft/vmath.hpp"
+#include "glm/glm.hpp"
 
 namespace liong {
 
@@ -52,9 +52,9 @@ struct FormatCodec {};
 
 template<>
 struct FormatCodec<L_FORMAT_R8G8B8A8_UNORM_PACK32> {
-  static void encode(const vmath::float4* src, const void* dst, uint32_t npx) {
+  static void encode(const glm::vec4* src, const void* dst, uint32_t npx) {
     for (uint32_t i = 0; i < npx; ++i) {
-      vmath::float4 vec = src[i];
+      glm::vec4 vec = src[i];
       ((uint32_t*)dst)[i] =
         (((uint32_t)(std::min(std::max(vec.x, 0.0f), 1.0f) * 255.0f)) <<  0) |
         (((uint32_t)(std::min(std::max(vec.y, 0.0f), 1.0f) * 255.0f)) <<  8) |
@@ -62,10 +62,10 @@ struct FormatCodec<L_FORMAT_R8G8B8A8_UNORM_PACK32> {
         (((uint32_t)(std::min(std::max(vec.w, 0.0f), 1.0f) * 255.0f)) << 24);
     }
   }
-  static void decode(const void* src, vmath::float4* dst, uint32_t npx) {
+  static void decode(const void* src, glm::vec4* dst, uint32_t npx) {
     for (uint32_t i = 0; i < npx; ++i) {
       uint32_t pack = ((const uint32_t*)src)[i];
-      dst[i] = vmath::float4 {
+      dst[i] = glm::vec4 {
         (float)((pack >>  0) & 0xFF) / 255.0f,
         (float)((pack >>  8) & 0xFF) / 255.0f,
         (float)((pack >> 16) & 0xFF) / 255.0f,
@@ -78,7 +78,7 @@ struct FormatCodec<L_FORMAT_R8G8B8A8_UNORM_PACK32> {
 // NOTE: It doesn't deal with NaN and infinities correctly. Just doesn't care.
 template<>
 struct FormatCodec<L_FORMAT_R16G16B16A16_SFLOAT> {
-  static void encode(const vmath::float4* src, const void* dst, uint32_t npx) {
+  static void encode(const glm::vec4* src, const void* dst, uint32_t npx) {
     auto float2half = [](uint32_t x) {
       uint32_t sign_bit = x >> 31;
       uint32_t exponent = (x >> 23) & 255;
@@ -96,7 +96,7 @@ struct FormatCodec<L_FORMAT_R16G16B16A16_SFLOAT> {
       ((uint16_t*)dst)[i * 4 + 3] = f3;
     }
   }
-  static void decode(const void* src, vmath::float4* dst, uint32_t npx) {
+  static void decode(const void* src, glm::vec4* dst, uint32_t npx) {
     auto half2float = [](uint16_t x) {
       uint32_t sign_bit = x >> 15;
       uint32_t exponent = (x >> 10) & 31;
@@ -112,7 +112,7 @@ struct FormatCodec<L_FORMAT_R16G16B16A16_SFLOAT> {
       uint32_t f1 = half2float(((const uint16_t*)src)[i * 4 + 1]);
       uint32_t f2 = half2float(((const uint16_t*)src)[i * 4 + 2]);
       uint32_t f3 = half2float(((const uint16_t*)src)[i * 4 + 3]);
-      dst[i] = vmath::float4 {
+      dst[i] = glm::vec4 {
         *(const float*)(&f0),
         *(const float*)(&f1),
         *(const float*)(&f2),
@@ -123,14 +123,14 @@ struct FormatCodec<L_FORMAT_R16G16B16A16_SFLOAT> {
 };
 template<>
 struct FormatCodec<L_FORMAT_R32_SFLOAT> {
-  static void encode(const vmath::float4* src, void* dst, uint32_t npx) {
+  static void encode(const glm::vec4* src, void* dst, uint32_t npx) {
     for (uint32_t i = 0; i < npx; ++i) {
       ((float*)dst)[i] = src[i].x;
     }
   }
-  static void decode(const void* src, vmath::float4* dst, uint32_t npx) {
+  static void decode(const void* src, glm::vec4* dst, uint32_t npx) {
     for (uint32_t i = 0; i < npx; ++i) {
-      vmath::float4 vec {
+      glm::vec4 vec {
         ((const float*)src)[i],
         0.0f,
         0.0f,
@@ -143,15 +143,15 @@ struct FormatCodec<L_FORMAT_R32_SFLOAT> {
 
 template<>
 struct FormatCodec<L_FORMAT_R32G32_SFLOAT> {
-  static void encode(const vmath::float4* src, void* dst, uint32_t npx) {
+  static void encode(const glm::vec4* src, void* dst, uint32_t npx) {
     for (uint32_t i = 0; i < npx; ++i) {
       ((float*)dst)[i * 2 + 0] = src[i].x;
       ((float*)dst)[i * 2 + 1] = src[i].y;
     }
   }
-  static void decode(const void* src, vmath::float4* dst, uint32_t npx) {
+  static void decode(const void* src, glm::vec4* dst, uint32_t npx) {
     for (uint32_t i = 0; i < npx; ++i) {
-      vmath::float4 vec {
+      glm::vec4 vec {
         ((const float*)src)[i * 2 + 0],
         ((const float*)src)[i * 2 + 1],
         0.0f,
@@ -164,7 +164,7 @@ struct FormatCodec<L_FORMAT_R32G32_SFLOAT> {
 
 template<>
 struct FormatCodec<L_FORMAT_R32G32B32A32_SFLOAT> {
-  static void encode(const vmath::float4* src, void* dst, uint32_t npx) {
+  static void encode(const glm::vec4* src, void* dst, uint32_t npx) {
     for (uint32_t i = 0; i < npx; ++i) {
       ((float*)dst)[i * 4 + 0] = src[i].x;
       ((float*)dst)[i * 4 + 1] = src[i].y;
@@ -172,9 +172,9 @@ struct FormatCodec<L_FORMAT_R32G32B32A32_SFLOAT> {
       ((float*)dst)[i * 4 + 3] = src[i].w;
     }
   }
-  static void decode(const void* src, vmath::float4* dst, uint32_t npx) {
+  static void decode(const void* src, glm::vec4* dst, uint32_t npx) {
     for (uint32_t i = 0; i < npx; ++i) {
-      vmath::float4 vec {
+      glm::vec4 vec {
         ((const float*)src)[i * 4 + 0],
         ((const float*)src)[i * 4 + 1],
         ((const float*)src)[i * 4 + 2],

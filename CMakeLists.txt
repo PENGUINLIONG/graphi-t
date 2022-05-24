@@ -26,6 +26,13 @@ set(INC_DIRS
     "${PROJECT_SOURCE_DIR}/include"
 )
 
+set(BUILD_STATIC_LIBS ON)
+add_subdirectory(${PROJECT_SOURCE_DIR}/third/glm)
+list(APPEND LINK_LIBS
+    glm
+)
+unset(BUILD_STATIC_LIBS)
+
 find_package(Vulkan)
 add_subdirectory(third/VulkanMemoryAllocator)
 if(NOT Vulkan_FOUND)

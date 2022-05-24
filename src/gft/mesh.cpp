@@ -3,15 +3,13 @@
 #include <cstdint>
 #include <set>
 #include <initializer_list>
-#include "gft/vmath.hpp"
+#include "glm/glm.hpp"
 #include "gft/mesh.hpp"
 #include "gft/assert.hpp"
 #include "gft/log.hpp"
 
 namespace liong {
 namespace mesh {
-
-using namespace vmath;
 
 enum ObjTokenType {
   L_OBJ_TOKEN_TYPE_NEWLINE,
@@ -255,16 +253,16 @@ struct ObjParser {
     Mesh mesh {};
     std::set<std::string> unknown_verbs;
 
-    std::vector<vmath::float3> poses;
-    std::vector<vmath::float2> uvs;
-    std::vector<vmath::float3> norms;
+    std::vector<glm::vec3> poses;
+    std::vector<glm::vec2> uvs;
+    std::vector<glm::vec3> norms;
     uint32_t counter = 0;
 
     while (tokenizer.success) {
       std::string verb;
       if (tokenizer.try_verb(verb)) {
         if (tokenizer.token.token_word == "v") {
-          vmath::float3 pos{};
+          glm::vec3 pos{};
           float w;
           tokenizer.number(pos.x);
           tokenizer.number(pos.y);
@@ -274,7 +272,7 @@ struct ObjParser {
           poses.emplace_back(std::move(pos));
           continue;
         } else if (tokenizer.token.token_word == "vt") {
-          vmath::float2 uv{};
+          glm::vec2 uv{};
           float w;
           tokenizer.number(uv.x);
           tokenizer.try_number(uv.y);
@@ -283,7 +281,7 @@ struct ObjParser {
           uvs.emplace_back(std::move(uv));
           continue;
         } else if (tokenizer.token.token_word == "vn") {
-          vmath::float3 norm{};
+          glm::vec3 norm{};
           tokenizer.number(norm.x);
           tokenizer.number(norm.y);
           tokenizer.number(norm.z);
@@ -368,9 +366,9 @@ Mesh load_obj(const char* path) {
 
 
 struct UniqueVertex {
-  vmath::float3 pos;
-  vmath::float2 uv;
-  vmath::float3 norm;
+  glm::vec3 pos;
+  glm::vec2 uv;
+  glm::vec3 norm;
 
   friend bool operator<(const UniqueVertex& a, const UniqueVertex& b) {
     return std::memcmp(&a, &b, sizeof(UniqueVertex)) < 0;
@@ -380,16 +378,16 @@ IndexedMesh mesh2idxmesh(const Mesh& mesh) {
   IndexedMesh out{};
   std::map<UniqueVertex, uint32_t> vert2idx;
 
-  size_t ntri = mesh.poses.size() / 3;
+  uint32_t ntri = mesh.poses.size() / 3;
   if (ntri * 3 != mesh.poses.size()) {
     log::warn("mesh vertex number is not aligned to 3; trailing vertices are "
       "ignored because they don't form an actual triangle");
   }
 
-  for (size_t i = 0; i < ntri; ++i) {
+  for (uint32_t i = 0; i < ntri; ++i) {
     uint32_t idxs[3];
-    for (size_t j = 0; j < 3; j) {
-      size_t ivert = i * 3 + j;
+    for (uint32_t j = 0; j < 3; j) {
+      uint32_t ivert = i * 3 + j;
       UniqueVertex vert;
       vert.pos = mesh.poses.at(ivert);
       vert.uv = mesh.uvs.at(ivert);
@@ -408,7 +406,7 @@ IndexedMesh mesh2idxmesh(const Mesh& mesh) {
       }
       idxs[j] = idx;
     }
-    out.idxs.emplace_back(vmath::uint3 { idxs[0], idxs[1], idxs[2] });
+    out.idxs.emplace_back(glm::uvec3 { idxs[0], idxs[1], idxs[2] });
   }
 
   return out;
@@ -416,7 +414,7 @@ IndexedMesh mesh2idxmesh(const Mesh& mesh) {
 
 struct Binner {
   Aabb aabb;
-  vmath::uint3 grid_res;
+  glm::uvec3 grid_res;
   // `aabb` range divided by `grid_res` except for the exactly `min` vlaues.
   std::vector<float> grid_lines_x;
   std::vector<float> grid_lines_y;
@@ -434,7 +432,7 @@ struct Binner {
     return out;
   }
 
-  Binner(const Aabb& aabb, const vmath::uint3& grid_res) :
+  Binner(const Aabb& aabb, const glm::uvec3& grid_res) :
     aabb(aabb),
     grid_res(grid_res),
     grid_lines_x(make_grid_lines(aabb.min.x, aabb.max.x, grid_res.x)),
@@ -443,15 +441,15 @@ struct Binner {
     bins()
   {
     bins.reserve(grid_res.x * grid_res.y * grid_res.z);
-    for (size_t x = 0; x < grid_res.x; ++x) {
-      for (size_t y = 0; y < grid_res.y; ++y) {
-        for (size_t z = 0; z < grid_res.z; ++z) {
-          vmath::float3 min {
+    for (uint32_t x = 0; x < grid_res.x; ++x) {
+      for (uint32_t y = 0; y < grid_res.y; ++y) {
+        for (uint32_t z = 0; z < grid_res.z; ++z) {
+          glm::vec3 min {
             grid_lines_x.at(x),
             grid_lines_y.at(y),
             grid_lines_y.at(z),
           };
-          vmath::float3 max {
+          glm::vec3 max {
             grid_lines_x.at(x + 1),
             grid_lines_y.at(y + 1),
             grid_lines_y.at(z + 1),
@@ -518,9 +516,22 @@ struct Binner {
   }
 };
 
+BinGrid bin_point_cloud(
+  const Aabb& aabb,
+  const glm::uvec3& grid_res,
+  const PointCloud& point_cloud
+) {
+  Binner binner(aabb, grid_res);
+  for (const auto& point : point_cloud.poses) {
+    Aabb aabb2 { point };
+    size_t _;
+    binner.bin(aabb2, _);
+  }
+  return binner.into_grid();
+}
 BinGrid bin_mesh(
   const Aabb& aabb,
-  const vmath::uint3& grid_res,
+  const glm::uvec3& grid_res,
   const Mesh& mesh
 ) {
   Binner binner(aabb, grid_res);
@@ -537,7 +548,7 @@ BinGrid bin_mesh(
 }
 BinGrid bin_idxmesh(
   const Aabb& aabb,
-  const vmath::uint3& grid_res,
+  const glm::uvec3& grid_res,
   const IndexedMesh& idxmesh
 ) {
   Binner binner(aabb, grid_res);
@@ -552,18 +563,11 @@ BinGrid bin_idxmesh(
   }
   return binner.into_grid();
 }
-BinGrid bin_point_cloud(
-  const Aabb& aabb,
-  const vmath::uint3& grid_res,
-  const PointCloud& point_cloud
-) {
-  Binner binner(aabb, grid_res);
-  for (const auto& point : point_cloud.poses) {
-    Aabb aabb2 { point };
-    size_t _;
-    binner.bin(aabb2, _);
+
+void compact_mesh(BinGrid& grid) {
+  for (Bin& bin : grid.bins) {
+    std::vector<uint32_t> idxs;
   }
-  return binner.into_grid();
 }
 
 } // namespace mesh
