@@ -95,10 +95,16 @@ def make_ty_binary_op(ty, ncomp, op):
     out = []
     if ncomp == 2:
         out += [f"inline {vty} operator{op}(const {vty}& a, const {vty}& b) {{ return {vty} {{ a.x {op} b.x, a.y {op} b.y }}; }}"]
+        out += [f"inline {vty} operator{op}({ty} a, const {vty}& b) {{ return {vty} {{ a {op} b.x, a {op} b.y }}; }}"]
+        out += [f"inline {vty} operator{op}(const {vty}& a, {ty} b) {{ return {vty} {{ a.x {op} b, a.y {op} b }}; }}"]
     if ncomp == 3:
         out += [f"inline {vty} operator{op}(const {vty}& a, const {vty}& b) {{ return {vty} {{ a.x {op} b.x, a.y {op} b.y, a.z {op} b.z }}; }}"]
+        out += [f"inline {vty} operator{op}({ty} a, const {vty}& b) {{ return {vty} {{ a {op} b.x, a {op} b.y, a {op} b.z }}; }}"]
+        out += [f"inline {vty} operator{op}(const {vty}& a, {ty} b) {{ return {vty} {{ a.x {op} b, a.y {op} b, a.z {op} b }}; }}"]
     if ncomp == 4:
         out += [f"inline {vty} operator{op}(const {vty}& a, const {vty}& b) {{ return {vty} {{ a.x {op} b.x, a.y {op} b.y, a.z {op} b.z, a.w {op} b.w }}; }}"]
+        out += [f"inline {vty} operator{op}({ty} a, const {vty}& b) {{ return {vty} {{ a {op} b.x, a {op} b.y, a {op} b.z, a {op} b.w }}; }}"]
+        out += [f"inline {vty} operator{op}(const {vty}& a, {ty} b) {{ return {vty} {{ a.x {op} b, a.y {op} b, a.z {op} b, a.w {op} b }}; }}"]
     return out
 
 def make_ty_unary_intrinsic(ty, ncomp, name, op):
@@ -117,10 +123,16 @@ def make_ty_binary_intrinsic(ty, ncomp, name, op):
     out = []
     if ncomp == 2:
         out += [f"inline {vty} {name}(const {vty}& a, const {vty}& b) {{ return {vty} {{ {op}(a.x, b.x), {op}(a.y, b.y) }}; }}"]
+        out += [f"inline {vty} {name}({ty} a, const {vty}& b) {{ return {vty} {{ {op}(a, b.x), {op}(a, b.y) }}; }}"]
+        out += [f"inline {vty} {name}(const {vty}& a, {ty} b) {{ return {vty} {{ {op}(a.x, b), {op}(a.y, b) }}; }}"]
     if ncomp == 3:
         out += [f"inline {vty} {name}(const {vty}& a, const {vty}& b) {{ return {vty} {{ {op}(a.x, b.x), {op}(a.y, b.y), {op}(a.z, b.z) }}; }}"]
+        out += [f"inline {vty} {name}({ty} a, const {vty}& b) {{ return {vty} {{ {op}(a, b.x), {op}(a, b.y), {op}(a, b.z) }}; }}"]
+        out += [f"inline {vty} {name}(const {vty}& a, {ty} b) {{ return {vty} {{ {op}(a.x, b), {op}(a.y, b), {op}(a.z, b) }}; }}"]
     if ncomp == 4:
         out += [f"inline {vty} {name}(const {vty}& a, const {vty}& b) {{ return {vty} {{ {op}(a.x, b.x), {op}(a.y, b.y), {op}(a.z, b.z), {op}(a.w, b.w) }}; }}"]
+        out += [f"inline {vty} {name}({ty} a, const {vty}& b) {{ return {vty} {{ {op}(a, b.x), {op}(a, b.y), {op}(a, b.z), {op}(a, b.w) }}; }}"]
+        out += [f"inline {vty} {name}(const {vty}& a, {ty} b) {{ return {vty} {{ {op}(a.x, b), {op}(a.y, b), {op}(a.z, b), {op}(a.w, b) }}; }}"]
     return out
 
 def make_ty_ops(ty, ncomp):
@@ -180,7 +192,7 @@ def make_ty_defs():
 
 OUT_FILE = '\n'.join(make_ty_defs())
 
-with open("include/vmath.hpp", "w") as f:
+with open("include/gft/vmath.hpp", "w") as f:
     f.write('\n'.join([
         "// Vector math utilities.",
         "#pragma once",
