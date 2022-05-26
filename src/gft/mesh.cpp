@@ -11,6 +11,8 @@
 namespace liong {
 namespace mesh {
 
+using namespace geom;
+
 enum ObjTokenType {
   L_OBJ_TOKEN_TYPE_NEWLINE,
   L_OBJ_TOKEN_TYPE_VERB,
@@ -50,7 +52,8 @@ struct ObjTokenizer {
         // It's already been parsing an multi-char token, can be a verb,
         // interger or a real number.
         bool should_break_token = pos == end;
-        if (pos != end) {
+
+        if (!should_break_token) {
           const char c = *pos;
           should_break_token |= c == ' ' || c == '\t' || c == '\r' ||
             c == '\n' || c == '/' || c == '#';
@@ -75,6 +78,7 @@ struct ObjTokenizer {
           }
           is_in_token = false;
           return true;
+
         }
 
         const char c = *pos;
@@ -132,7 +136,7 @@ struct ObjTokenizer {
 
         char c = *pos;
 
-        if (c == '\n') {
+        if (c == '\r' || c == '\n') {
           // Newlines.
           ++pos;
           token.token_ty = L_OBJ_TOKEN_TYPE_NEWLINE;
@@ -151,7 +155,9 @@ struct ObjTokenizer {
         }
 
         // Ignore white spaces.
-        while (c == ' ' || c == '\t' || c == '\r') { ++pos; c = *pos; }
+        while (c == ' ' || c == '\t') {
+          ++pos; c = *pos;
+        }
 
         if (c == '-' || (c >= '0' && c <= '9')) {
           token_ty = L_OBJ_TOKEN_TYPE_INTEGER;
@@ -233,10 +239,10 @@ struct ObjTokenizer {
     }
     return false;
   }
-  void newline() {
-    success &= try_newline();
-  }
   bool try_end() {
+    if (pos == end) {
+      return true;
+    }
     if (token.token_ty == L_OBJ_TOKEN_TYPE_END) {
       next();
       return true;
@@ -247,6 +253,7 @@ struct ObjTokenizer {
 
 struct ObjParser {
   ObjTokenizer tokenizer;
+  std::string verb;
   ObjParser(const char* beg, const char* end) : tokenizer(beg, end) {}
 
   bool try_parse(Mesh& out) {
@@ -259,7 +266,6 @@ struct ObjParser {
     uint32_t counter = 0;
 
     while (tokenizer.success) {
-      std::string verb;
       if (tokenizer.try_verb(verb)) {
         if (tokenizer.token.token_word == "v") {
           glm::vec3 pos{};
@@ -268,7 +274,7 @@ struct ObjParser {
           tokenizer.number(pos.y);
           tokenizer.number(pos.z);
           tokenizer.try_number(w);
-          tokenizer.newline();
+          tokenizer.try_newline();
           poses.emplace_back(std::move(pos));
           continue;
         } else if (tokenizer.token.token_word == "vt") {
@@ -277,7 +283,7 @@ struct ObjParser {
           tokenizer.number(uv.x);
           tokenizer.try_number(uv.y);
           tokenizer.try_number(w);
-          tokenizer.newline();
+          tokenizer.try_newline();
           uvs.emplace_back(std::move(uv));
           continue;
         } else if (tokenizer.token.token_word == "vn") {
@@ -285,7 +291,7 @@ struct ObjParser {
           tokenizer.number(norm.x);
           tokenizer.number(norm.y);
           tokenizer.number(norm.z);
-          tokenizer.newline();
+          tokenizer.try_newline();
           norms.emplace_back(std::move(norm));
           continue;
         } else if (tokenizer.token.token_word == "f") {
@@ -306,7 +312,7 @@ struct ObjParser {
               }
             }
           }
-          tokenizer.newline();
+          tokenizer.try_newline();
           continue;
         }
 
@@ -386,7 +392,7 @@ IndexedMesh mesh2idxmesh(const Mesh& mesh) {
 
   for (uint32_t i = 0; i < ntri; ++i) {
     uint32_t idxs[3];
-    for (uint32_t j = 0; j < 3; j) {
+    for (uint32_t j = 0; j < 3; ++j) {
       uint32_t ivert = i * 3 + j;
       UniqueVertex vert;
       vert.pos = mesh.poses.at(ivert);
@@ -478,7 +484,7 @@ struct Binner {
   }
 
   bool bin(const Aabb& aabb, size_t& iprim) {
-    if (!this->aabb.intersects_with(aabb)) {
+    if (!intersect_aabb(this->aabb, aabb)) {
       // The triangle's AABB is not intersecting with the current binner space.
       // So simply ignore this triangle.
       return false;
@@ -536,11 +542,12 @@ BinGrid bin_mesh(
 ) {
   Binner binner(aabb, grid_res);
   for (size_t i = 0; mesh.poses.size(); i += 3) {
-    Aabb aabb2 {
+    glm::vec3 points[3] {
       mesh.poses.at(i),
       mesh.poses.at(i + 2),
       mesh.poses.at(i + 1),
     };
+    Aabb aabb2 = Aabb::from_points(points, 3);
     size_t _;
     binner.bin(aabb2, _);
   }
@@ -553,11 +560,12 @@ BinGrid bin_idxmesh(
 ) {
   Binner binner(aabb, grid_res);
   for (const auto& idx : idxmesh.idxs) {
-    Aabb aabb2 {
+    glm::vec3 points[3] {
       idxmesh.mesh.poses.at(idx.x),
       idxmesh.mesh.poses.at(idx.y),
       idxmesh.mesh.poses.at(idx.z),
     };
+    Aabb aabb2 = Aabb::from_points(points, 3);
     size_t _;
     binner.bin(aabb2, _);
   }
