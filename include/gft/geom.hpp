@@ -39,6 +39,25 @@ struct Aabb {
   ) {
     return Aabb { center - 0.5f * size, center + 0.5f * size };
   }
+  static constexpr Aabb from_points(const glm::vec3* points, size_t npoint) {
+    Aabb out {};
+    glm::vec3 min {
+      std::numeric_limits<float>::infinity(),
+      std::numeric_limits<float>::infinity(),
+      std::numeric_limits<float>::infinity(),
+    };
+    glm::vec3 max {
+      -std::numeric_limits<float>::infinity(),
+      -std::numeric_limits<float>::infinity(),
+      -std::numeric_limits<float>::infinity()
+    };
+    for (size_t i = 0; i < npoint; ++i) {
+      const glm::vec3& point = points[i];
+      min = glm::min(point, min);
+      max = glm::max(point, max);
+    }
+    return Aabb::from_min_max(min, max);
+  }
 };
 struct Sphere {
   glm::vec3 p;
