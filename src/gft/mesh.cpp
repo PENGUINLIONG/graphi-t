@@ -358,6 +358,8 @@ struct ObjParser {
   }
 };
 
+
+
 bool try_parse_obj(const std::string& obj, Mesh& mesh) {
   ObjParser parser(obj.data(), obj.data() + obj.size());
   return parser.try_parse(mesh);
@@ -371,6 +373,43 @@ Mesh load_obj(const char* path) {
 
 
 
+Mesh Mesh::from_tris(const Triangle* tris, size_t ntri) {
+  Mesh out {};
+  out.poses.reserve(ntri * 3);
+  out.uvs.resize(ntri * 3);
+  out.norms.resize(ntri * 3);
+
+  for (size_t i = 0; i < ntri; ++i) {
+    const Triangle& tri = tris[i];
+    out.poses.emplace_back(tri.a);
+    out.poses.emplace_back(tri.b);
+    out.poses.emplace_back(tri.c);
+  }
+  return out;
+}
+std::vector<Triangle> Mesh::to_tris() const {
+  std::vector<Triangle> out {};
+  size_t ntri = poses.size() / 3;
+  assert(ntri * 3 == poses.size());
+  out.reserve(ntri);
+  for (size_t i = 0; i < poses.size(); i += 3) {
+    Triangle tri {
+      poses.at(i),
+      poses.at(i + 1),
+      poses.at(i + 2),
+    };
+    out.emplace_back(std::move(tri));
+  }
+  return out;
+}
+
+
+Aabb Mesh::aabb() const {
+  return Aabb::from_points(poses.data(), poses.size());
+}
+
+
+
 struct UniqueVertex {
   glm::vec3 pos;
   glm::vec2 uv;
@@ -380,7 +419,7 @@ struct UniqueVertex {
     return std::memcmp(&a, &b, sizeof(UniqueVertex)) < 0;
   }
 };
-IndexedMesh mesh2idxmesh(const Mesh& mesh) {
+IndexedMesh IndexedMesh::from_mesh(const Mesh& mesh) {
   IndexedMesh out{};
   std::map<UniqueVertex, uint32_t> vert2idx;
 
@@ -447,19 +486,21 @@ struct Binner {
     bins()
   {
     bins.reserve(grid_res.x * grid_res.y * grid_res.z);
-    for (uint32_t x = 0; x < grid_res.x; ++x) {
+    for (uint32_t z = 0; z < grid_res.z; ++z) {
+      float z_min = grid_lines_z.at(z);
+      float z_max = z + 1 == grid_res.z ?
+        aabb.max.z : grid_lines_z.at(z + 1);
       for (uint32_t y = 0; y < grid_res.y; ++y) {
-        for (uint32_t z = 0; z < grid_res.z; ++z) {
-          glm::vec3 min {
-            grid_lines_x.at(x),
-            grid_lines_y.at(y),
-            grid_lines_y.at(z),
-          };
-          glm::vec3 max {
-            grid_lines_x.at(x + 1),
-            grid_lines_y.at(y + 1),
-            grid_lines_y.at(z + 1),
-          };
+        float y_min = grid_lines_y.at(y);
+        float y_max = y + 1 == grid_res.y ?
+          aabb.max.y : grid_lines_y.at(y + 1);
+        for (uint32_t x = 0; x < grid_res.x; ++x) {
+          float x_min = grid_lines_x.at(x);
+          float x_max = x + 1 == grid_res.x ?
+            aabb.max.x : grid_lines_x.at(x + 1);
+
+          glm::vec3 min(x_min, y_min, z_min);
+          glm::vec3 max(x_max, y_max, z_max);
           Aabb aabb2 { min, max };
 
           Bin bin { aabb2, {} };
@@ -541,7 +582,7 @@ BinGrid bin_mesh(
   const Mesh& mesh
 ) {
   Binner binner(aabb, grid_res);
-  for (size_t i = 0; mesh.poses.size(); i += 3) {
+  for (size_t i = 0; i < mesh.poses.size(); i += 3) {
     glm::vec3 points[3] {
       mesh.poses.at(i),
       mesh.poses.at(i + 2),

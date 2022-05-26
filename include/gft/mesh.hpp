@@ -13,6 +13,11 @@ struct Mesh {
   std::vector<glm::vec3> poses;
   std::vector<glm::vec2> uvs;
   std::vector<glm::vec3> norms;
+
+  static Mesh from_tris(const geom::Triangle* tris, size_t ntri);
+  std::vector<geom::Triangle> to_tris() const;
+
+  geom::Aabb aabb() const;
 };
 
 extern bool try_parse_obj(const std::string& obj, Mesh& mesh);
@@ -23,9 +28,11 @@ extern Mesh load_obj(const char* path);
 struct IndexedMesh {
   Mesh mesh;
   std::vector<glm::uvec3> idxs;
-};
 
-extern IndexedMesh mesh2idxmesh(const Mesh& mesh);
+  static IndexedMesh from_mesh(const Mesh& mesh);
+
+  inline geom::Aabb aabb() const { return mesh.aabb(); }
+};
 
 
 
