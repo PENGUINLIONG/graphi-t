@@ -152,6 +152,29 @@ Task create_graph_task(
   VkShaderModule frag_shader_mod =
     _create_shader_mod(ctxt, cfg.frag_code, cfg.frag_code_size);
 
+  VkPrimitiveTopology topo;
+  VkPolygonMode poly_mode;
+  switch (cfg.topo) {
+  case L_TOPOLOGY_POINT:
+    topo = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+    poly_mode = VK_POLYGON_MODE_FILL;
+    break;
+  case L_TOPOLOGY_LINE:
+    topo = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+    poly_mode = VK_POLYGON_MODE_FILL;
+    break;
+  case L_TOPOLOGY_TRIANGLE:
+    topo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    poly_mode = VK_POLYGON_MODE_FILL;
+    break;
+  case L_TOPOLOGY_TRIANGLE_WIREFRAME:
+    topo = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+    poly_mode = VK_POLYGON_MODE_LINE;
+    break;
+  default:
+    panic("unexpected topology (", cfg.topo, ")");
+  }
+
   VkPipelineShaderStageCreateInfo psscis[2] {};
   {
     VkPipelineShaderStageCreateInfo& pssci = psscis[0];
@@ -209,19 +232,7 @@ Task create_graph_task(
 
   VkPipelineInputAssemblyStateCreateInfo piasci {};
   piasci.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-  switch (cfg.topo) {
-  case L_TOPOLOGY_POINT:
-    piasci.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-    break;
-  case L_TOPOLOGY_LINE:
-    piasci.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-    break;
-  case L_TOPOLOGY_TRIANGLE:
-    piasci.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    break;
-  default:
-    panic("unexpected topology (", cfg.topo, ")");
-  }
+  piasci.topology = topo;
   piasci.primitiveRestartEnable = VK_FALSE;
 
   VkViewport viewport {};
