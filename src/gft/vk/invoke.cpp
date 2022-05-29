@@ -1338,14 +1338,15 @@ std::vector<VkFence> _record_invoke_impl(
     log::debug("render pass invocation '", invoke.label, "' began");
 
     for (size_t i = 0; i < pass_detail.subinvokes.size(); ++i) {
-      if (i > 0) {
-        sc = subinvokes[i]->bake_detail ?
-          VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS :
-          VK_SUBPASS_CONTENTS_INLINE;
-        vkCmdNextSubpass(cmdbuf, sc);
-        log::debug("render pass invocation '", invoke.label, "' switched to a "
-          "next subpass");
-      }
+      // FIXME: (penguinliong) Multi-subpass is not supported. (How to implement this?)
+      //if (i > 0) {
+      //  sc = subinvokes[i]->bake_detail ?
+      //    VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS :
+      //    VK_SUBPASS_CONTENTS_INLINE;
+      //  vkCmdNextSubpass(cmdbuf, sc);
+      //  log::debug("render pass invocation '", invoke.label, "' switched to a "
+      //    "next subpass");
+      //}
 
       const Invocation* subinvoke = pass_detail.subinvokes[i];
       assert(subinvoke != nullptr, "null subinvocation is not allowed");
