@@ -15,6 +15,8 @@
 namespace liong {
 namespace vk {
 
+uint32_t api_ver = VK_API_VERSION_1_0;
+
 VkSurfaceKHR _create_surf_windows(const ContextWindowsConfig& cfg) {
 #if VK_KHR_win32_surface
   assert(cfg.dev_idx < physdevs.size(),
@@ -359,7 +361,7 @@ Context _create_ctxt(
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 4.0f, VK_COMPARE_OP_LESS);
 
   VmaAllocatorCreateInfo allocatorInfo = {};
-  allocatorInfo.vulkanApiVersion = VK_API_VERSION_1_0;
+  allocatorInfo.vulkanApiVersion = api_ver;
   allocatorInfo.physicalDevice = physdev;
   allocatorInfo.device = dev;
   allocatorInfo.instance = inst;

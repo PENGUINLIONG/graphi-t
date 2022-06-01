@@ -652,6 +652,10 @@ struct SwapchainBuilder {
     inner.fmt = fmt;
     return *this;
   }
+  inline Self& cspace(fmt::ColorSpace cspace) {
+    inner.cspace = cspace;
+    return *this;
+  }
 
   Swapchain build(bool gc = true);
 };

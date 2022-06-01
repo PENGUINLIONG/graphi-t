@@ -822,9 +822,11 @@ VkCommandBuffer _get_cmdbuf(
   SubmitType submit_ty
 ) {
   if (submit_ty == L_SUBMIT_TYPE_ANY) {
-    assert(!transact.submit_details.empty(), "cannot infer submit type for "
-      "submit-type-independent command");
-    submit_ty = transact.submit_details.back().submit_ty;
+    if (transact.submit_details.empty()) {
+      submit_ty = transact.ctxt->submit_details.begin()->first;
+    } else {
+      submit_ty = transact.submit_details.back().submit_ty;
+    }
   }
   const auto& submit_detail = transact.ctxt->submit_details.at(submit_ty);
   auto queue = submit_detail.queue;

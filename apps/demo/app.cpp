@@ -2,6 +2,7 @@
 #include "gft/vk.hpp"
 #include "gft/glslang.hpp"
 #include "gft/renderdoc.hpp"
+#undef assert
 
 using namespace liong;
 using namespace vk;

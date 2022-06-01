@@ -97,6 +97,7 @@ struct PhysicalDeviceStub {
   std::string desc;
 };
 
+extern uint32_t api_ver;
 extern VkInstance inst;
 extern std::vector<VkPhysicalDevice> physdevs;
 extern std::vector<std::string> physdev_descs;
