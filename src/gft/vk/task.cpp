@@ -217,6 +217,7 @@ Task create_graph_task(
     piasci.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
     break;
   case L_TOPOLOGY_TRIANGLE:
+  case L_TOPOLOGY_TRIANGLE_WIREFRAME:
     piasci.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
     break;
   default:
@@ -245,7 +246,14 @@ Task create_graph_task(
   prsci.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
   prsci.cullMode = VK_CULL_MODE_NONE;
   prsci.frontFace = VK_FRONT_FACE_CLOCKWISE;
-  prsci.polygonMode = VK_POLYGON_MODE_FILL;
+  switch (cfg.topo) {
+  case L_TOPOLOGY_TRIANGLE_WIREFRAME:
+    prsci.polygonMode = VK_POLYGON_MODE_LINE;
+    break;
+  default:
+    prsci.polygonMode = VK_POLYGON_MODE_FILL;
+    break;
+  }
   prsci.lineWidth = 1.0f;
 
   VkPipelineMultisampleStateCreateInfo pmsci {};
