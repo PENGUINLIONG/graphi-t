@@ -58,14 +58,24 @@ extern BinGrid bin_point_cloud(
   const glm::uvec3& grid_res,
   const PointCloud& point_cloud
 );
+
 extern BinGrid bin_mesh(
   const geom::Aabb& aabb,
   const glm::uvec3& grid_res,
   const Mesh& mesh
 );
+extern BinGrid bin_mesh(
+  const glm::vec3& grid_interval,
+  const Mesh& mesh
+);
+
 extern BinGrid bin_idxmesh(
   const geom::Aabb& aabb,
   const glm::uvec3& grid_res,
+  const IndexedMesh& idxmesh
+);
+extern BinGrid bin_idxmesh(
+  const glm::vec3& grid_interval,
   const IndexedMesh& idxmesh
 );
 

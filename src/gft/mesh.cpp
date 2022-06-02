@@ -487,17 +487,14 @@ struct Binner {
   {
     bins.reserve(grid_res.x * grid_res.y * grid_res.z);
     for (uint32_t z = 0; z < grid_res.z; ++z) {
-      float z_min = grid_lines_z.at(z);
-      float z_max = z + 1 == grid_res.z ?
-        aabb.max.z : grid_lines_z.at(z + 1);
+      float z_min = z == 0 ? aabb.min.z : grid_lines_z.at(z - 1);
+      float z_max = grid_lines_z.at(z);
       for (uint32_t y = 0; y < grid_res.y; ++y) {
-        float y_min = grid_lines_y.at(y);
-        float y_max = y + 1 == grid_res.y ?
-          aabb.max.y : grid_lines_y.at(y + 1);
+        float y_min = y == 0 ? aabb.min.y : grid_lines_y.at(y - 1);
+        float y_max = grid_lines_y.at(y);
         for (uint32_t x = 0; x < grid_res.x; ++x) {
-          float x_min = grid_lines_x.at(x);
-          float x_max = x + 1 == grid_res.x ?
-            aabb.max.x : grid_lines_x.at(x + 1);
+          float x_min = x == 0 ? aabb.min.x : grid_lines_x.at(x - 1);
+          float x_max = grid_lines_x.at(x);
 
           glm::vec3 min(x_min, y_min, z_min);
           glm::vec3 max(x_max, y_max, z_max);
@@ -576,6 +573,7 @@ BinGrid bin_point_cloud(
   }
   return binner.into_grid();
 }
+
 BinGrid bin_mesh(
   const Aabb& aabb,
   const glm::uvec3& grid_res,
@@ -594,6 +592,18 @@ BinGrid bin_mesh(
   }
   return binner.into_grid();
 }
+BinGrid bin_mesh(
+  const glm::vec3& grid_interval,
+  const Mesh& mesh
+) {
+  Aabb aabb = mesh.aabb();
+  glm::uvec3 grid_res = glm::ceil(aabb.size() / grid_interval);
+  aabb = Aabb::from_center_size(
+    aabb.center(),
+    glm::vec3(grid_res) * grid_interval);
+  return bin_mesh(aabb, grid_res, mesh);
+}
+
 BinGrid bin_idxmesh(
   const Aabb& aabb,
   const glm::uvec3& grid_res,
@@ -612,6 +622,18 @@ BinGrid bin_idxmesh(
   }
   return binner.into_grid();
 }
+BinGrid bin_idxmesh(
+  const glm::vec3& grid_interval,
+  const IndexedMesh& idxmesh
+) {
+  Aabb aabb = idxmesh.aabb();
+  glm::uvec3 grid_res = glm::ceil(aabb.size() / grid_interval);
+  aabb = Aabb::from_center_size(
+    aabb.center(),
+    glm::vec3(grid_res) * grid_interval);
+  return bin_idxmesh(aabb, grid_res, idxmesh);
+}
+
 
 void compact_mesh(BinGrid& grid) {
   for (Bin& bin : grid.bins) {
