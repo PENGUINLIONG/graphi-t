@@ -91,16 +91,7 @@ inline VkColorSpaceKHR cspace2vk(fmt::ColorSpace cspace) {
 }
 
 
-
-struct PhysicalDeviceStub {
-  VkPhysicalDevice physdev;
-  std::string desc;
-};
-
-extern uint32_t api_ver;
-extern VkInstance inst;
-extern std::vector<VkPhysicalDevice> physdevs;
-extern std::vector<std::string> physdev_descs;
+extern void initialize(uint32_t api_ver, VkInstance inst);
 
 
 
@@ -142,6 +133,7 @@ struct Context {
   std::map<ImageSampler, VkSampler> img_samplers;
   std::map<DepthImageSampler, VkSampler> depth_img_samplers;
   VmaAllocator allocator;
+  bool owned;
 };
 
 

@@ -30,6 +30,8 @@ namespace HAL_IMPL_NAMESPACE {
 
 // Initialize the implementation of the HAL.
 L_IMPL_FN void initialize();
+// Finalize the implementation.
+L_IMPL_FN void finalize();
 
 // Generate Human-readable string to describe the properties and capabilities
 // of the device at index `idx`. If there is no device at `idx`, an empty string
