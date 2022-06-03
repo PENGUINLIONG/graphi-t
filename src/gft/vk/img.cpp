@@ -140,7 +140,7 @@ void map_img_mem(
   size_t& row_pitch
 ) {
   unimplemented();
-  assert(map_access != 0, "memory map access must be read, write or both");
+  L_ASSERT(map_access != 0, "memory map access must be read, write or both");
 
   VkImageSubresource is {};
   is.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -156,7 +156,7 @@ void map_img_mem(
   row_pitch = sl.rowPitch;
 
   auto& dyn_detail = (ImageDynamicDetail&)(img.img->dyn_detail);
-  assert(dyn_detail.layout == VK_IMAGE_LAYOUT_PREINITIALIZED,
+  L_ASSERT(dyn_detail.layout == VK_IMAGE_LAYOUT_PREINITIALIZED,
     "linear image cannot be initialized after other use");
   dyn_detail.access = map_access == L_MEMORY_ACCESS_READ_BIT ?
     VK_ACCESS_HOST_READ_BIT : VK_ACCESS_HOST_WRITE_BIT;

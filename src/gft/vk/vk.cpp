@@ -145,7 +145,7 @@ void finalize() {
   inst_ = nullptr;
 }
 std::string desc_dev(uint32_t idx) {
-  assert(inst_ != nullptr);
+  L_ASSERT(inst_ != nullptr);
   const auto& physdev_descs = inst_->physdev_descs;
   return idx < physdev_descs.size() ? physdev_descs[idx] : std::string {};
 }

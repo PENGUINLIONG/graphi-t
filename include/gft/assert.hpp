@@ -2,40 +2,48 @@
 // @PENGUINLIONG
 #pragma once
 #include "gft/util.hpp"
-#undef assert
 
 namespace liong {
 
 class AssertionFailedException : public std::exception {
+  const char* file;
+  uint32_t line;
   std::string msg;
+
 public:
-  inline AssertionFailedException(const std::string& msg) :
-    msg(msg) {}
+  inline AssertionFailedException(
+    const char* file,
+    uint32_t line,
+    const std::string& msg
+  ) : file(file), line(line), msg(msg) {}
 
   const char* what() const noexcept override {
     return msg.c_str();
   }
 };
 
-template<typename ... TArgs>
-inline void assert(bool pred, const TArgs& ... args) {
-#ifndef NDEBUG
-  if (!pred) {
-    throw AssertionFailedException(util::format(args ...));
+#ifdef NDEBUG
+// Release configs.
+#define L_ASSERT(pred, ...)
+#else
+// Debug configs.
+#define L_ASSERT(pred, ...) \
+  if (!(pred)) { \
+    throw liong::AssertionFailedException(__FILE__, __LINE__, util::format(__VA_ARGS__)); \
   }
 #endif
-}
 
 template<typename ... TArgs>
 [[noreturn]] inline void panic(const TArgs& ... args) {
-  assert<TArgs ...>(false, args ...);
+  L_ASSERT(false, args ...);
 }
 template<typename ... TArgs>
 [[noreturn]] inline void unreachable(const TArgs& ... args) {
-  assert<const char*, TArgs ...>(false, "reached unreachable code: ", args ...);
+  L_ASSERT(false, "reached unreachable code: ", args ...);
 }
 [[noreturn]] inline void unimplemented() {
-  assert<const char*>(false, "reached unimplemented path");
+  L_ASSERT(false, "reached unimplemented code");
 }
+
 
 } // namespace liong

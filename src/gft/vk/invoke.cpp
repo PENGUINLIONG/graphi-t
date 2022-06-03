@@ -47,7 +47,7 @@ void _update_desc_set(
   wdss.reserve(rsc_views.size());
 
   auto push_dbi = [&](const ResourceView& rsc_view) {
-    assert(rsc_view.rsc_view_ty == L_RESOURCE_VIEW_TYPE_BUFFER);
+    L_ASSERT(rsc_view.rsc_view_ty == L_RESOURCE_VIEW_TYPE_BUFFER);
     const BufferView& buf_view = rsc_view.buf_view;
 
     VkDescriptorBufferInfo dbi {};
@@ -131,7 +131,7 @@ VkFramebuffer _create_framebuf(
 ) {
   const RenderPassConfig& pass_cfg = pass.pass_cfg;
 
-  assert(pass_cfg.attm_cfgs.size() == attms.size(),
+  L_ASSERT(pass_cfg.attm_cfgs.size() == attms.size(),
     "number of provided attachments mismatches render pass requirement");
   std::vector<VkImageView> attm_img_views;
 
@@ -147,8 +147,8 @@ VkFramebuffer _create_framebuf(
     {
       const Image& img = *attm.img_view.img;
       const ImageConfig& img_cfg = img.img_cfg;
-      assert(attm.rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE);
-      assert(img_cfg.width == width && img_cfg.height == height,
+      L_ASSERT(attm.rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE);
+      L_ASSERT(img_cfg.width == width && img_cfg.height == height,
         "color attachment size mismatches framebuffer size");
       attm_img_views.emplace_back(img.img_view);
       break;
@@ -157,8 +157,8 @@ VkFramebuffer _create_framebuf(
     {
       const DepthImage& depth_img = *attm.depth_img_view.depth_img;
       const DepthImageConfig& depth_img_cfg = depth_img.depth_img_cfg;
-      assert(attm.rsc_view_ty == L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE);
-      assert(depth_img_cfg.width == width && depth_img_cfg.height == height,
+      L_ASSERT(attm.rsc_view_ty == L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE);
+      L_ASSERT(depth_img_cfg.width == width && depth_img_cfg.height == height,
         "depth attachment size mismatches framebuffer size");
       attm_img_views.emplace_back(depth_img.img_view);
       break;
@@ -201,7 +201,7 @@ void _collect_task_invoke_transit(
   const std::vector<ResourceType> rsc_tys,
   InvocationTransitionDetail& transit_detail
 ) {
-  assert(rsc_views.size() == rsc_tys.size());
+  L_ASSERT(rsc_views.size() == rsc_tys.size());
 
   auto& buf_transit = transit_detail.buf_transit;
   auto& img_transit = transit_detail.img_transit;
@@ -253,7 +253,7 @@ void _merge_subinvoke_transits(
   InvocationTransitionDetail& transit_detail
 ) {
   for (const auto& subinvoke : subinvokes) {
-    assert(subinvoke != nullptr);
+    L_ASSERT(subinvoke != nullptr);
     for (const auto& pair : subinvoke->transit_detail.buf_transit) {
       transit_detail.buf_transit.emplace_back(pair);
     }
@@ -436,8 +436,8 @@ Invocation create_comp_invoke(
   const Task& task,
   const ComputeInvocationConfig& cfg
 ) {
-  assert(task.rsc_tys.size() == cfg.rsc_views.size());
-  assert(task.submit_ty == L_SUBMIT_TYPE_COMPUTE);
+  L_ASSERT(task.rsc_tys.size() == cfg.rsc_views.size());
+  L_ASSERT(task.submit_ty == L_SUBMIT_TYPE_COMPUTE);
   const Context& ctxt = *task.ctxt;
 
   Invocation out {};
@@ -472,8 +472,8 @@ Invocation create_graph_invoke(
   const Task& task,
   const GraphicsInvocationConfig& cfg
 ) {
-  assert(task.rsc_tys.size() == cfg.rsc_views.size());
-  assert(task.submit_ty == L_SUBMIT_TYPE_GRAPHICS);
+  L_ASSERT(task.rsc_tys.size() == cfg.rsc_views.size());
+  L_ASSERT(task.submit_ty == L_SUBMIT_TYPE_GRAPHICS);
   const Context& ctxt = *task.ctxt;
 
   Invocation out {};
@@ -567,7 +567,7 @@ Invocation create_pass_invoke(
 
   for (size_t i = 0; i < cfg.invokes.size(); ++i) {
     const Invocation& invoke = *cfg.invokes[i];
-    assert(invoke.graph_detail != nullptr,
+    L_ASSERT(invoke.graph_detail != nullptr,
       "render pass invocation constituent must be graphics task invocation");
   }
 
@@ -578,14 +578,14 @@ Invocation create_pass_invoke(
   return out;
 }
 Invocation create_present_invoke(const Swapchain& swapchain) {
-  assert(swapchain.dyn_detail != nullptr,
+  L_ASSERT(swapchain.dyn_detail != nullptr,
     "swapchain need to be recreated with `acquire_swapchain_img`");
 
   const Context& ctxt = *swapchain.ctxt;
   SwapchainDynamicDetail& dyn_detail =
     (SwapchainDynamicDetail&)*swapchain.dyn_detail;
 
-  assert(dyn_detail.img_idx != nullptr,
+  L_ASSERT(dyn_detail.img_idx != nullptr,
     "swapchain has not acquired an image to present for the current frame");
 
   Invocation out {};
@@ -607,7 +607,7 @@ Invocation create_composite_invoke(
   const Context& ctxt,
   const CompositeInvocationConfig& cfg
 ) {
-  assert(cfg.invokes.size() > 0);
+  L_ASSERT(cfg.invokes.size() > 0);
 
   Invocation out {};
   out.label = cfg.label;
@@ -1176,11 +1176,11 @@ std::vector<VkFence> _record_invoke_impl(
   TransactionLike& transact,
   const Invocation& invoke
 ) {
-  assert(!transact.is_frozen, "invocations cannot be recorded while the "
+  L_ASSERT(!transact.is_frozen, "invocations cannot be recorded while the "
     "transaction is frozen");
 
   if (invoke.present_detail) {
-    assert(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY,
+    L_ASSERT(transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY,
       "present invocation cannot be baked");
 
     const InvocationPresentDetail& present_detail = *invoke.present_detail;
@@ -1208,7 +1208,7 @@ std::vector<VkFence> _record_invoke_impl(
     pi.pResults = &present_res;
     if (transact.submit_details.size() != 0) {
       const auto& last_submit = transact.submit_details.back();
-      assert(!last_submit.is_submitted);
+      L_ASSERT(!last_submit.is_submitted);
 
       _end_cmdbuf(last_submit);
       _submit_cmdbuf(transact, present_fence);
@@ -1350,7 +1350,7 @@ std::vector<VkFence> _record_invoke_impl(
       //}
 
       const Invocation* subinvoke = pass_detail.subinvokes[i];
-      assert(subinvoke != nullptr, "null subinvocation is not allowed");
+      L_ASSERT(subinvoke != nullptr, "null subinvocation is not allowed");
       std::vector<VkFence> fences = _record_invoke_impl(transact, *subinvoke);
       if (!fences.empty()) { return fences; }
     }
@@ -1365,7 +1365,7 @@ std::vector<VkFence> _record_invoke_impl(
 
     for (size_t i = 0; i < composite_detail.subinvokes.size(); ++i) {
       const Invocation* subinvoke = composite_detail.subinvokes[i];
-      assert(subinvoke != nullptr, "null subinvocation is not allowed");
+      L_ASSERT(subinvoke != nullptr, "null subinvocation is not allowed");
       std::vector<VkFence> fences = _record_invoke_impl(transact, *subinvoke);
       if (!fences.empty()) { return fences; }
     }
@@ -1428,12 +1428,12 @@ void bake_invoke(Invocation& invoke) {
 
   TransactionLike transact(*invoke.ctxt, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
   std::vector<VkFence> fences = _record_invoke(transact, invoke);
-  assert(fences.empty());
+  L_ASSERT(fences.empty());
 
-  assert(transact.submit_details.size() == 1);
+  L_ASSERT(transact.submit_details.size() == 1);
   const TransactionSubmitDetail& submit_detail = transact.submit_details[0];
-  assert(submit_detail.submit_ty == invoke.submit_ty);
-  assert(submit_detail.signal_sema == VK_NULL_HANDLE);
+  L_ASSERT(submit_detail.submit_ty == invoke.submit_ty);
+  L_ASSERT(submit_detail.signal_sema == VK_NULL_HANDLE);
 
   InvocationBakingDetail bake_detail {};
   bake_detail.cmd_pool = submit_detail.cmd_pool;

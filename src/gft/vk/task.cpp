@@ -92,7 +92,7 @@ Task create_comp_task(
   const Context& ctxt,
   const ComputeTaskConfig& cfg
 ) {
-  assert(cfg.workgrp_size.x * cfg.workgrp_size.y * cfg.workgrp_size.z != 0,
+  L_ASSERT(cfg.workgrp_size.x * cfg.workgrp_size.y * cfg.workgrp_size.z != 0,
     "workgroup size cannot be zero");
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   VkDescriptorSetLayout desc_set_layout = _create_desc_set_layout(ctxt,

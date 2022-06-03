@@ -367,7 +367,7 @@ bool try_parse_obj(const std::string& obj, Mesh& mesh) {
 Mesh load_obj(const char* path) {
   auto txt = util::load_text(path);
   Mesh mesh{};
-  assert(try_parse_obj(txt, mesh));
+  L_ASSERT(try_parse_obj(txt, mesh));
   return mesh;
 }
 
@@ -390,7 +390,7 @@ Mesh Mesh::from_tris(const Triangle* tris, size_t ntri) {
 std::vector<Triangle> Mesh::to_tris() const {
   std::vector<Triangle> out {};
   size_t ntri = poses.size() / 3;
-  assert(ntri * 3 == poses.size());
+  L_ASSERT(ntri * 3 == poses.size());
   out.reserve(ntri);
   for (size_t i = 0; i < poses.size(); i += 3) {
     Triangle tri {

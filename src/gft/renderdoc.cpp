@@ -213,7 +213,7 @@ void initialize() {
 
 bool is_captureing = false;
 void begin_capture() {
-  assert(!is_captureing, "cannot begin capture session inside another");
+  L_ASSERT(!is_captureing, "cannot begin capture session inside another");
   is_captureing = true;
   if (ctxt == nullptr) {
     if (is_first_call) {
@@ -227,7 +227,7 @@ void begin_capture() {
   }
 }
 void end_capture() {
-  assert(is_captureing, "cannot end a capture out of any session");
+  L_ASSERT(is_captureing, "cannot end a capture out of any session");
   is_captureing = false;
   if (ctxt == nullptr) {
     if (is_first_call) {

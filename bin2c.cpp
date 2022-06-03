@@ -6,7 +6,7 @@
 using namespace liong;
 
 int main(int argc, const char** argv) {
-  assert(argc == 3);
+  L_ASSERT(argc == 3);
 
   auto src_path = argv[1];
   std::vector<uint8_t> buf;

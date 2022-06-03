@@ -1,6 +1,7 @@
 #include <set>
 #include "gft/vk.hpp"
 #include "gft/log.hpp"
+#include "gft/assert.hpp"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -19,7 +20,7 @@ uint32_t api_ver = VK_API_VERSION_1_0;
 
 VkSurfaceKHR _create_surf_windows(const ContextWindowsConfig& cfg) {
 #if VK_KHR_win32_surface
-  assert(cfg.dev_idx < physdevs.size(),
+  L_ASSERT(cfg.dev_idx < physdevs.size(),
     "wanted vulkan device does not exists (#", cfg.dev_idx, " of ",
       physdevs.size(), " available devices)");
   auto physdev = physdevs[cfg.dev_idx];
@@ -30,7 +31,7 @@ VkSurfaceKHR _create_surf_windows(const ContextWindowsConfig& cfg) {
   wsci.hwnd = (HWND)cfg.hwnd;
 
   VkSurfaceKHR surf;
-  VK_ASSERT << vkCreateWin32SurfaceKHR(inst, &wsci, nullptr, &surf);
+  VK_ASSERT << vkCreateWin32SurfaceKHR(inst_, &wsci, nullptr, &surf);
 
   log::debug("created windows surface '", cfg.label, "'");
   return surf;
@@ -42,7 +43,7 @@ VkSurfaceKHR _create_surf_windows(const ContextWindowsConfig& cfg) {
 
 VkSurfaceKHR _create_surf_android(const ContextAndroidConfig& cfg) {
 #if VK_KHR_android_surface
-  assert(cfg.dev_idx < physdevs.size(),
+  L_ASSERT(cfg.dev_idx < physdevs.size(),
     "wanted vulkan device does not exists (#", cfg.dev_idx, " of ",
       physdevs.size(), " available devices)");
   auto physdev = physdevs[cfg.dev_idx];
@@ -94,7 +95,7 @@ Context _create_ctxt(
   uint32_t dev_idx,
   VkSurfaceKHR surf
 ) {
-  assert(dev_idx < physdevs.size(),
+  L_ASSERT(dev_idx < physdevs.size(),
     "wanted vulkan device does not exists (#", dev_idx, " of ",
       physdevs.size(), " available devices)");
   auto physdev = physdevs[dev_idx];
@@ -157,7 +158,7 @@ Context _create_ctxt(
     }
     it->second.emplace_back(QueueFamilyTrait { i, queue_flags });
   }
-  assert(!qfam_props.empty(),
+  L_ASSERT(!qfam_props.empty(),
     "cannot find any queue family on device #", dev_idx);
 
   struct SubmitTypeQueueRequirement {

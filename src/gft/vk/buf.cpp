@@ -82,7 +82,7 @@ void map_buf_mem(
   MemoryAccess map_access,
   void*& mapped
 ) {
-  assert(map_access != 0, "memory map access must be read, write or both");
+  L_ASSERT(map_access != 0, "memory map access must be read, write or both");
 
   VK_ASSERT << vmaMapMemory(buf.buf->ctxt->allocator, buf.buf->alloc, &mapped);
 

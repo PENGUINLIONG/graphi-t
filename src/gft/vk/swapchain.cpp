@@ -43,7 +43,7 @@ VkSwapchainKHR _create_swapchain(
       break;
     }
   }
-  assert(found, "surface format is not supported by the underlying platform");
+  L_ASSERT(found, "surface format is not supported by the underlying platform");
 
   VkSwapchainCreateInfoKHR sci {};
   sci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -73,7 +73,7 @@ VkSwapchainKHR _create_swapchain(
   {
     uint32_t nimg2;
     VK_ASSERT << vkGetSwapchainImagesKHR(ctxt.dev, swapchain, &nimg2, nullptr);
-    assert(nimg == nimg2, "expected ", nimg, "swapchain images, but actually "
+    L_ASSERT(nimg == nimg2, "expected ", nimg, "swapchain images, but actually "
       "get ", nimg2, " images");
     imgs.resize(nimg2);
     VK_ASSERT << vkGetSwapchainImagesKHR(ctxt.dev, swapchain, &nimg2, imgs.data());
@@ -139,7 +139,7 @@ void _init_swapchain(Swapchain& swapchain) {
 
   VkResult acq_res = vkAcquireNextImageKHR(ctxt.dev, swapchain.swapchain, 0,
     VK_NULL_HANDLE, fence, &*dyn_detail.img_idx);
-  assert(acq_res >= 0, "failed to initiate swapchain image acquisition");
+  L_ASSERT(acq_res >= 0, "failed to initiate swapchain image acquisition");
 
   // Ensure the first image is acquired. It shouldn't take long.
   VK_ASSERT << vkWaitForFences(ctxt.dev, 1, &fence, VK_TRUE, 1000);
@@ -172,11 +172,11 @@ void destroy_swapchain(Swapchain& swapchain) {
 }
 
 const Image& get_swapchain_img(const Swapchain& swapchain) {
-  assert(swapchain.dyn_detail != nullptr,
+  L_ASSERT(swapchain.dyn_detail != nullptr,
     "swapchain recreation is required; call `acquire_swapchain_img` first");
 
   const SwapchainDynamicDetail& dyn_detail = *swapchain.dyn_detail;
-  assert(*dyn_detail.img_idx != ~0u,
+  L_ASSERT(*dyn_detail.img_idx != ~0u,
     "swapchain has not acquired an image for this frame");
 
   return dyn_detail.imgs[*dyn_detail.img_idx];
