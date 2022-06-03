@@ -20,10 +20,10 @@ uint32_t api_ver = VK_API_VERSION_1_0;
 
 VkSurfaceKHR _create_surf_windows(const ContextWindowsConfig& cfg) {
 #if VK_KHR_win32_surface
-  L_ASSERT(cfg.dev_idx < physdevs.size(),
+  L_ASSERT(cfg.dev_idx < get_inst().physdev_details.size(),
     "wanted vulkan device does not exists (#", cfg.dev_idx, " of ",
-      physdevs.size(), " available devices)");
-  auto physdev = physdevs[cfg.dev_idx];
+    get_inst().physdev_details.size(), " available devices)");
+  auto physdev = get_inst().physdev_details.at(cfg.dev_idx);
 
   VkWin32SurfaceCreateInfoKHR wsci {};
   wsci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
@@ -31,7 +31,7 @@ VkSurfaceKHR _create_surf_windows(const ContextWindowsConfig& cfg) {
   wsci.hwnd = (HWND)cfg.hwnd;
 
   VkSurfaceKHR surf;
-  VK_ASSERT << vkCreateWin32SurfaceKHR(inst_, &wsci, nullptr, &surf);
+  VK_ASSERT << vkCreateWin32SurfaceKHR(get_inst().inst, &wsci, nullptr, &surf);
 
   log::debug("created windows surface '", cfg.label, "'");
   return surf;
@@ -53,7 +53,7 @@ VkSurfaceKHR _create_surf_android(const ContextAndroidConfig& cfg) {
   asci.window = (struct ANativeWindow* const)cfg.native_wnd;
 
   VkSurfaceKHR surf;
-  VK_ASSERT << vkCreateAndroidSurfaceKHR(inst, &asci, nullptr, &surf);
+  VK_ASSERT << vkCreateAndroidSurfaceKHR(INST->inst, &asci, nullptr, &surf);
 
   log::debug("created android surface '", cfg.label, "'");
   return surf;
@@ -95,10 +95,10 @@ Context _create_ctxt(
   uint32_t dev_idx,
   VkSurfaceKHR surf
 ) {
-  L_ASSERT(dev_idx < physdevs.size(),
+  L_ASSERT(dev_idx < get_inst().physdev_details.size(),
     "wanted vulkan device does not exists (#", dev_idx, " of ",
-      physdevs.size(), " available devices)");
-  auto physdev = physdevs[dev_idx];
+    get_inst().physdev_details.size(), " available devices)");
+  auto physdev = get_inst().physdev_details.at(dev_idx).physdev;
 
   VkPhysicalDeviceFeatures feat;
   vkGetPhysicalDeviceFeatures(physdev, &feat);
@@ -365,13 +365,13 @@ Context _create_ctxt(
   allocatorInfo.vulkanApiVersion = api_ver;
   allocatorInfo.physicalDevice = physdev;
   allocatorInfo.device = dev;
-  allocatorInfo.instance = inst;
+  allocatorInfo.instance = get_inst().inst;
 
   VmaAllocator allocator;
   VK_ASSERT << vmaCreateAllocator(&allocatorInfo, &allocator);
 
   log::debug("created vulkan context '", label, "' on device #", dev_idx, ": ",
-    physdev_descs[dev_idx]);
+    get_inst().physdev_details.at(dev_idx).desc);
   return Context {
     label, dev, surf, physdev, std::move(physdev_prop),
     std::move(submit_details), img_samplers, depth_img_samplers, allocator
@@ -380,22 +380,19 @@ Context _create_ctxt(
 }
 
 Context create_ctxt(const ContextConfig& cfg) {
-  if (inst == VK_NULL_HANDLE) { initialize(); }
   return _create_ctxt(cfg.label, cfg.dev_idx, VK_NULL_HANDLE);
 }
 Context create_ctxt_windows(const ContextWindowsConfig& cfg) {
-  if (inst == VK_NULL_HANDLE) { initialize(); }
   VkSurfaceKHR surf = _create_surf_windows(cfg);
   return _create_ctxt(cfg.label, cfg.dev_idx, surf);
 }
 Context create_ctxt_android(const ContextAndroidConfig& cfg) {
-  if (inst == VK_NULL_HANDLE) { initialize(); }
   VkSurfaceKHR surf = _create_surf_android(cfg);
   return _create_ctxt(cfg.label, cfg.dev_idx, surf);
 }
 void destroy_ctxt(Context& ctxt) {
   if (ctxt.surf != VK_NULL_HANDLE) {
-    vkDestroySurfaceKHR(inst, ctxt.surf, nullptr);
+    vkDestroySurfaceKHR(get_inst().inst, ctxt.surf, nullptr);
   }
   if (ctxt.dev != VK_NULL_HANDLE) {
     for (const auto& samp : ctxt.img_samplers) {
