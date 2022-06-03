@@ -271,8 +271,9 @@ VkPipeline create_graph_pipe(
   VkDevice dev,
   VkPipelineLayout pipe_layout,
   VkRenderPass pass,
+  uint32_t width,
+  uint32_t height,
   const VkPipelineInputAssemblyStateCreateInfo& piasci,
-  const VkPipelineViewportStateCreateInfo& pvsci,
   const VkPipelineRasterizationStateCreateInfo& prsci,
   const std::array<VkPipelineShaderStageCreateInfo, 2> psscis
 ) {
@@ -291,6 +292,23 @@ VkPipeline create_graph_pipe(
   pvisci.pVertexBindingDescriptions = &vibd;
   pvisci.vertexAttributeDescriptionCount = 1;
   pvisci.pVertexAttributeDescriptions = &viad;
+
+  VkViewport viewport {};
+  viewport.x = 0;
+  viewport.y = 0;
+  viewport.width = width;
+  viewport.height = height;
+  viewport.minDepth = 0.0f;
+  viewport.maxDepth = 1.0f;
+  VkRect2D scissor {};
+  scissor.offset = {};
+  scissor.extent = { width, height };
+  VkPipelineViewportStateCreateInfo pvsci {};
+  pvsci.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
+  pvsci.viewportCount = 1;
+  pvsci.pViewports = &viewport;
+  pvsci.scissorCount = 1;
+  pvsci.pScissors = &scissor;
 
   // TODO: (penguinliong) Support multiple attachments?
   VkPipelineMultisampleStateCreateInfo pmsci {};

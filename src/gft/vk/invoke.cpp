@@ -1333,7 +1333,8 @@ std::vector<VkFence> _record_invoke_impl(
     rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     rpbi.renderPass = pass.pass;
     rpbi.framebuffer = pass_detail.framebuf;
-    rpbi.renderArea.extent = pass.viewport.extent;
+    rpbi.renderArea.extent.width = pass.width;
+    rpbi.renderArea.extent.height = pass.height;
     rpbi.clearValueCount = (uint32_t)pass.clear_values.size();
     rpbi.pClearValues = pass.clear_values.data();
     vkCmdBeginRenderPass(cmdbuf, &rpbi, sc);

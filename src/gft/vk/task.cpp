@@ -139,23 +139,6 @@ Task create_graph_task(
   }
   piasci.primitiveRestartEnable = VK_FALSE;
 
-  VkViewport viewport {};
-  viewport.x = 0;
-  viewport.y = 0;
-  viewport.width = (float)pass.viewport.extent.width;
-  viewport.height = (float)pass.viewport.extent.height;
-  viewport.minDepth = 0.0f;
-  viewport.maxDepth = 1.0f;
-  VkRect2D scissor {};
-  scissor.offset = pass.viewport.offset;
-  scissor.extent = pass.viewport.extent;
-  VkPipelineViewportStateCreateInfo pvsci {};
-  pvsci.sType = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-  pvsci.viewportCount = 1;
-  pvsci.pViewports = &viewport;
-  pvsci.scissorCount = 1;
-  pvsci.pScissors = &scissor;
-
   VkPipelineRasterizationStateCreateInfo prsci {};
   prsci.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
   prsci.cullMode = VK_CULL_MODE_NONE;
@@ -187,7 +170,7 @@ Task create_graph_task(
   }
 
   VkPipeline pipe = sys::create_graph_pipe(ctxt.dev, pipe_layout, pass.pass,
-    piasci, pvsci, prsci, psscis);
+    pass.width, pass.height, piasci, prsci, psscis);
 
   sys::destroy_shader_mod(ctxt.dev, vert_shader_mod);
   sys::destroy_shader_mod(ctxt.dev, frag_shader_mod);

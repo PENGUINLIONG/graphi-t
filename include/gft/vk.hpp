@@ -224,7 +224,8 @@ struct Swapchain {
 
 struct RenderPass {
   const Context* ctxt;
-  VkRect2D viewport;
+  uint32_t width;
+  uint32_t height;
   VkRenderPass pass;
   RenderPassConfig pass_cfg;
   std::vector<VkClearValue> clear_values;
