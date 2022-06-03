@@ -399,10 +399,6 @@ struct GraphicsTaskBuilder {
     inner.topo = topo;
     return *this;
   }
-  inline Self& vert_input(fmt::Format fmt, VertexInputRate rate) {
-    inner.vert_inputs.emplace_back(VertexInput { fmt, rate });
-    return *this;
-  }
   inline Self& rsc(const ResourceType& rsc_ty) {
     inner.rsc_tys.emplace_back(rsc_ty);
     return *this;
@@ -415,13 +411,6 @@ struct GraphicsTaskBuilder {
   template<typename T>
   inline Self& frag(const std::vector<T>& buf) {
     return frag(buf.data(), buf.size() * sizeof(T));
-  }
-
-  inline Self& per_vert_input(fmt::Format fmt) {
-    return vert_input(fmt, L_VERTEX_INPUT_RATE_VERTEX);
-  }
-  inline Self& per_inst_input(fmt::Format fmt) {
-    return vert_input(fmt, L_VERTEX_INPUT_RATE_INSTANCE);
   }
 
   Task build(bool gc = true);

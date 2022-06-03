@@ -81,7 +81,6 @@ extern VkPipeline create_graph_pipe(
   VkDevice dev,
   VkPipelineLayout pipe_layout,
   VkRenderPass pass,
-  const VkPipelineVertexInputStateCreateInfo& pvisci,
   const VkPipelineInputAssemblyStateCreateInfo& piasci,
   const VkPipelineViewportStateCreateInfo& pvsci,
   const VkPipelineRasterizationStateCreateInfo& prsci,

@@ -121,45 +121,6 @@ Task create_graph_task(
   VkShaderModule frag_shader_mod = sys::create_shader_mod(ctxt.dev,
     (const uint32_t*)cfg.frag_code, cfg.frag_code_size);
 
-  VkVertexInputBindingDescription vibd {};
-  std::vector<VkVertexInputAttributeDescription> viads;
-  size_t base_offset = 0;
-  for (auto i = 0; i < cfg.vert_inputs.size(); ++i) {
-    auto& vert_input = cfg.vert_inputs[i];
-    size_t fmt_size = fmt::get_fmt_size(vert_input.fmt);
-
-    vibd.binding = 0;
-    vibd.stride = 0; // Will be assigned later.
-    switch (cfg.vert_inputs[i].rate) {
-    case L_VERTEX_INPUT_RATE_VERTEX:
-      vibd.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-      break;
-    case L_VERTEX_INPUT_RATE_INSTANCE:
-      vibd.inputRate = VK_VERTEX_INPUT_RATE_INSTANCE;
-      panic("instanced draw is currently unsupported");
-      break;
-    default:
-      panic("unexpected vertex input rate");
-    }
-
-    VkVertexInputAttributeDescription viad {};
-    viad.location = i;
-    viad.binding = 0;
-    viad.format = fmt2vk(vert_input.fmt, fmt::L_COLOR_SPACE_LINEAR);
-    viad.offset = (uint32_t)base_offset;
-    viads.emplace_back(std::move(viad));
-
-    base_offset += fmt_size;
-  }
-  vibd.stride = (uint32_t)base_offset;
-
-  VkPipelineVertexInputStateCreateInfo pvisci {};
-  pvisci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-  pvisci.vertexBindingDescriptionCount = 1;
-  pvisci.pVertexBindingDescriptions = &vibd;
-  pvisci.vertexAttributeDescriptionCount = (uint32_t)viads.size();
-  pvisci.pVertexAttributeDescriptions = viads.data();
-
   VkPipelineInputAssemblyStateCreateInfo piasci {};
   piasci.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
   switch (cfg.topo) {
@@ -226,7 +187,7 @@ Task create_graph_task(
   }
 
   VkPipeline pipe = sys::create_graph_pipe(ctxt.dev, pipe_layout, pass.pass,
-    pvisci, piasci, pvsci, prsci, psscis);
+    piasci, pvsci, prsci, psscis);
 
   sys::destroy_shader_mod(ctxt.dev, vert_shader_mod);
   sys::destroy_shader_mod(ctxt.dev, frag_shader_mod);

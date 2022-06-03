@@ -271,16 +271,39 @@ VkPipeline create_graph_pipe(
   VkDevice dev,
   VkPipelineLayout pipe_layout,
   VkRenderPass pass,
-  const VkPipelineVertexInputStateCreateInfo& pvisci,
   const VkPipelineInputAssemblyStateCreateInfo& piasci,
   const VkPipelineViewportStateCreateInfo& pvsci,
   const VkPipelineRasterizationStateCreateInfo& prsci,
   const std::array<VkPipelineShaderStageCreateInfo, 2> psscis
 ) {
+  VkVertexInputBindingDescription vibd {};
+  vibd.binding = 0;
+  vibd.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
+  vibd.stride = 16;
+  VkVertexInputAttributeDescription viad {};
+  viad.location = 0;
+  viad.binding = 0;
+  viad.format = VK_FORMAT_R32G32B32A32_SFLOAT;
+  viad.offset = 0;
+  VkPipelineVertexInputStateCreateInfo pvisci {};
+  pvisci.sType = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
+  pvisci.vertexBindingDescriptionCount = 1;
+  pvisci.pVertexBindingDescriptions = &vibd;
+  pvisci.vertexAttributeDescriptionCount = 1;
+  pvisci.pVertexAttributeDescriptions = &viad;
+
   // TODO: (penguinliong) Support multiple attachments?
   VkPipelineMultisampleStateCreateInfo pmsci {};
   pmsci.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
   pmsci.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+  VkPipelineDepthStencilStateCreateInfo pdssci {};
+  pdssci.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+  pdssci.depthTestEnable = VK_TRUE;
+  pdssci.depthWriteEnable = VK_TRUE;
+  pdssci.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+  pdssci.minDepthBounds = 0.0f;
+  pdssci.maxDepthBounds = 1.0f;
 
   std::array<VkPipelineColorBlendAttachmentState, 1> pcbass {};
   {
@@ -292,15 +315,6 @@ VkPipeline create_graph_pipe(
       VK_COLOR_COMPONENT_B_BIT |
       VK_COLOR_COMPONENT_A_BIT;
   }
-
-  VkPipelineDepthStencilStateCreateInfo pdssci {};
-  pdssci.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
-  pdssci.depthTestEnable = VK_TRUE;
-  pdssci.depthWriteEnable = VK_TRUE;
-  pdssci.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
-  pdssci.minDepthBounds = 0.0f;
-  pdssci.maxDepthBounds = 1.0f;
-
   VkPipelineColorBlendStateCreateInfo pcbsci {};
   pcbsci.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
   pcbsci.attachmentCount = (uint32_t)pcbass.size();
