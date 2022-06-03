@@ -5,6 +5,7 @@
 
 namespace liong {
 namespace vk {
+namespace sys {
 
 // VkInstance
 VkInstance create_inst(uint32_t api_ver) {
@@ -186,6 +187,6 @@ void destroy_sampler(VkDevice dev, VkSampler sampler) {
 }
 
 
-
+} // namespace sys
 } // namespace vk
 } // namespace liong

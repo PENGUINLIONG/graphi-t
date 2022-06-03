@@ -79,8 +79,8 @@ void desc_physdev_mem_prop(
 
 
 InstancePhysicalDeviceDetail make_physdev_detail(VkPhysicalDevice physdev) {
-  auto prop = get_physdev_prop(physdev);
-  auto mem_prop = get_physdev_mem_prop(physdev);
+  auto prop = sys::get_physdev_prop(physdev);
+  auto mem_prop = sys::get_physdev_mem_prop(physdev);
 
   std::stringstream ss {};
   desc_physdev_prop(ss, prop);
@@ -90,9 +90,9 @@ InstancePhysicalDeviceDetail make_physdev_detail(VkPhysicalDevice physdev) {
   out.physdev = physdev;
   out.prop = prop;
   out.mem_prop = mem_prop;
-  out.feat = get_physdev_feat(physdev);
-  out.qfam_props = collect_qfam_props(physdev);
-  out.ext_props = collect_physdev_ext_props(physdev);
+  out.feat = sys::get_physdev_feat(physdev);
+  out.qfam_props = sys::collect_qfam_props(physdev);
+  out.ext_props = sys::collect_physdev_ext_props(physdev);
   out.desc = ss.str();
   return out;
 };
@@ -100,7 +100,7 @@ InstancePhysicalDeviceDetail make_physdev_detail(VkPhysicalDevice physdev) {
 std::vector<InstancePhysicalDeviceDetail> collect_physdev_details(
   VkInstance inst
 ) {
-  std::vector<VkPhysicalDevice> physdevs = collect_physdevs(inst);
+  std::vector<VkPhysicalDevice> physdevs = sys::collect_physdevs(inst);
   std::vector<InstancePhysicalDeviceDetail> out {};
   out.reserve(physdevs.size());
   for (const auto& physdev : physdevs) {
@@ -129,7 +129,7 @@ void initialize() {
     return;
   }
 
-  VkInstance inst = create_inst(VK_API_VERSION_1_0);
+  VkInstance inst = sys::create_inst(VK_API_VERSION_1_0);
   std::vector<InstancePhysicalDeviceDetail> physdev_details =
     collect_physdev_details(inst);
 
@@ -143,7 +143,7 @@ void initialize() {
 }
 void finalize() {
   if (INST != nullptr) {
-    destroy_inst(INST->inst);
+    sys::destroy_inst(INST->inst);
     INST = nullptr;
     log::info("vulkan backend finalized");
   }

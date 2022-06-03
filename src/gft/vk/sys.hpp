@@ -5,6 +5,7 @@
 
 namespace liong {
 namespace vk {
+namespace sys {
 
 // VkInstance
 extern VkInstance create_inst(uint32_t api_ver);
@@ -30,7 +31,7 @@ extern VkDevice create_dev(
   const VkPhysicalDeviceFeatures& enabled_feat
 );
 extern void destroy_dev(VkDevice dev);
-VkQueue get_dev_queue(uint32_t qfam_idx, uint32_t queue_idx);
+VkQueue get_dev_queue(VkDevice dev, uint32_t qfam_idx, uint32_t queue_idx);
 
 // VkSampler
 extern VkSampler create_sampler(
@@ -42,5 +43,6 @@ extern VkSampler create_sampler(
 );
 extern void destroy_sampler(VkDevice dev, VkSampler sampler);
 
+} // namespace sys
 } // namespace vk
 } // namespace liong

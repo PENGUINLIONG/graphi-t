@@ -226,15 +226,14 @@ Context _create_ctxt(
     }
   }
 
-  std::vector<const char*> dev_ext_names;
-  dev_ext_names.reserve(physdev_detail.ext_props.size());
+  std::vector<const char*> dev_exts;
+  dev_exts.reserve(physdev_detail.ext_props.size());
   for (const auto& dev_ext : physdev_detail.ext_props) {
-    dev_ext_names.emplace_back(dev_ext.first.c_str());
+    dev_exts.emplace_back(dev_ext.first.c_str());
   }
-  log::debug("enabled device extensions: ", util::join(", ", dev_ext_names));
+  log::debug("enabled device extensions: ", util::join(", ", dev_exts));
 
-  VkDevice dev =
-    create_dev(physdev_detail.physdev, dqcis, dev_ext_names, feat);
+  VkDevice dev = sys::create_dev(physdev_detail.physdev, dqcis, dev_exts, feat);
 
   std::map<SubmitType, ContextSubmitDetail> submit_details;
   for (const auto& pair : queue_allocs) {
@@ -245,25 +244,25 @@ Context _create_ctxt(
 
     ContextSubmitDetail submit_detail {};
     submit_detail.qfam_idx = qfam_idx;
-    submit_detail.queue = get_dev_queue(qfam_idx, 0);
+    submit_detail.queue = sys::get_dev_queue(dev, qfam_idx, 0);
     submit_details.insert(std::make_pair<SubmitType, ContextSubmitDetail>(
       std::move(submit_ty), std::move(submit_detail)));
   }
 
   std::map<ImageSampler, VkSampler> img_samplers {};
-  img_samplers[L_IMAGE_SAMPLER_LINEAR] = create_sampler(dev,
+  img_samplers[L_IMAGE_SAMPLER_LINEAR] = sys::create_sampler(dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, VK_COMPARE_OP_NEVER);
-  img_samplers[L_IMAGE_SAMPLER_NEAREST] = create_sampler(dev,
+  img_samplers[L_IMAGE_SAMPLER_NEAREST] = sys::create_sampler(dev,
     VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, 0.0f, VK_COMPARE_OP_NEVER);
-  img_samplers[L_IMAGE_SAMPLER_ANISOTROPY_4] = create_sampler(dev,
+  img_samplers[L_IMAGE_SAMPLER_ANISOTROPY_4] = sys::create_sampler(dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 4.0f, VK_COMPARE_OP_NEVER);
 
   std::map<DepthImageSampler, VkSampler> depth_img_samplers {};
-  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_LINEAR] = create_sampler(dev,
+  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_LINEAR] = sys::create_sampler(dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, VK_COMPARE_OP_LESS);
-  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_NEAREST] = create_sampler(dev,
+  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_NEAREST] = sys::create_sampler(dev,
     VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, 0.0f, VK_COMPARE_OP_LESS);
-  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_ANISOTROPY_4] = create_sampler(dev,
+  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_ANISOTROPY_4] = sys::create_sampler(dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 4.0f, VK_COMPARE_OP_LESS);
 
   VmaAllocatorCreateInfo allocatorInfo = {};
@@ -301,13 +300,13 @@ void destroy_ctxt(Context& ctxt) {
   }
   if (ctxt.dev != VK_NULL_HANDLE) {
     for (const auto& samp : ctxt.img_samplers) {
-      destroy_sampler(ctxt.dev, samp.second);
+      sys::destroy_sampler(ctxt.dev, samp.second);
     }
     for (const auto& samp : ctxt.depth_img_samplers) {
-      destroy_sampler(ctxt.dev, samp.second);
+      sys::destroy_sampler(ctxt.dev, samp.second);
     }
     vmaDestroyAllocator(ctxt.allocator);
-    destroy_dev(ctxt.dev);
+    sys::destroy_dev(ctxt.dev);
     log::debug("destroyed vulkan context '", ctxt.label, "'");
   }
   ctxt = {};
