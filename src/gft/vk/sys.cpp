@@ -75,9 +75,34 @@ std::vector<VkPhysicalDevice> collect_physdevs(VkInstance inst) {
   VK_ASSERT << vkEnumeratePhysicalDevices(inst, &nphysdev, physdevs.data());
   return physdevs;
 }
+
+std::map<std::string, uint32_t> collect_physdev_ext_props(
+  VkPhysicalDevice physdev
+) {
+  uint32_t ndev_ext = 0;
+  VK_ASSERT << vkEnumerateDeviceExtensionProperties(physdev, nullptr, &ndev_ext,
+    nullptr);
+  std::vector<VkExtensionProperties> dev_exts;
+  dev_exts.resize(ndev_ext);
+  VK_ASSERT << vkEnumerateDeviceExtensionProperties(physdev, nullptr, &ndev_ext,
+    dev_exts.data());
+
+  std::map<std::string, uint32_t> out {};
+  for (const auto& dev_ext : dev_exts) {
+    std::string name = dev_ext.extensionName;
+    uint32_t ver = dev_ext.specVersion;
+    out.emplace(std::make_pair(std::move(name), ver));
+  }
+  return out;
+}
 VkPhysicalDeviceProperties get_physdev_prop(VkPhysicalDevice physdev) {
   VkPhysicalDeviceProperties out;
   vkGetPhysicalDeviceProperties(physdev, &out);
+  return out;
+}
+VkPhysicalDeviceMemoryProperties get_physdev_mem_prop(VkPhysicalDevice physdev) {
+  VkPhysicalDeviceMemoryProperties out;
+  vkGetPhysicalDeviceMemoryProperties(physdev, &out);
   return out;
 }
 VkPhysicalDeviceFeatures get_physdev_feat(VkPhysicalDevice physdev) {
@@ -85,7 +110,9 @@ VkPhysicalDeviceFeatures get_physdev_feat(VkPhysicalDevice physdev) {
   vkGetPhysicalDeviceFeatures(physdev, &out);
   return out;
 }
-std::vector<VkQueueFamilyProperties> collect_qfam_props(VkPhysicalDevice physdev) {
+std::vector<VkQueueFamilyProperties> collect_qfam_props(
+  VkPhysicalDevice physdev
+) {
   uint32_t nqfam_prop;
   vkGetPhysicalDeviceQueueFamilyProperties(physdev, &nqfam_prop, nullptr);
   std::vector<VkQueueFamilyProperties> qfam_props;
@@ -97,6 +124,33 @@ std::vector<VkQueueFamilyProperties> collect_qfam_props(VkPhysicalDevice physdev
 
 
 // VkDevice
+VkDevice create_dev(
+  VkPhysicalDevice physdev,
+  const std::vector<VkDeviceQueueCreateInfo> dqcis,
+  const std::vector<const char*> enabled_ext_names,
+  const VkPhysicalDeviceFeatures& enabled_feat
+) {
+  VkDeviceCreateInfo dci {};
+  dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
+  dci.pEnabledFeatures = &enabled_feat;
+  dci.queueCreateInfoCount = (uint32_t)dqcis.size();
+  dci.pQueueCreateInfos = dqcis.data();
+  dci.enabledExtensionCount = (uint32_t)enabled_ext_names.size();
+  dci.ppEnabledExtensionNames = enabled_ext_names.data();
+
+  VkDevice dev;
+  VK_ASSERT << vkCreateDevice(physdev, &dci, nullptr, &dev);
+  return dev;
+}
+void destroy_dev(VkDevice dev) {
+  vkDestroyDevice(dev, nullptr);
+}
+VkQueue get_dev_queue(VkDevice dev, uint32_t qfam_idx, uint32_t queue_idx) {
+  VkQueue queue;
+  vkGetDeviceQueue(dev, qfam_idx, queue_idx, &queue);
+  return queue;
+}
+
 
 // VkSampler
 VkSampler create_sampler(

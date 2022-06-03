@@ -94,7 +94,9 @@ struct InstancePhysicalDeviceDetail {
   VkPhysicalDevice physdev;
   VkPhysicalDeviceProperties prop;
   VkPhysicalDeviceFeatures feat;
+  VkPhysicalDeviceMemoryProperties mem_prop;
   std::vector<VkQueueFamilyProperties> qfam_props;
+  std::map<std::string, uint32_t> ext_props;
   std::string desc;
 };
 struct Instance {

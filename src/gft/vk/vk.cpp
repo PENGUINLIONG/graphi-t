@@ -1,5 +1,6 @@
 #include <map>
 #include <algorithm>
+#include <sstream>
 #define VMA_IMPLEMENTATION
 #include "gft/vk.hpp" // Defines `HAL_IMPL_NAMESPACE`.
 #include "gft/assert.hpp"
@@ -13,9 +14,10 @@ namespace vk {
 
 std::unique_ptr<Instance> INST;
 
-InstancePhysicalDeviceDetail make_physdev_detail(VkPhysicalDevice physdev) {
-  auto prop = get_physdev_prop(physdev);
-
+void desc_physdev_prop(
+  std::stringstream& ss,
+  const VkPhysicalDeviceProperties& prop
+) {
   const char* dev_ty_lit;
   switch (prop.deviceType) {
   case VK_PHYSICAL_DEVICE_TYPE_OTHER: dev_ty_lit = "Other"; break;
@@ -25,16 +27,73 @@ InstancePhysicalDeviceDetail make_physdev_detail(VkPhysicalDevice physdev) {
   case VK_PHYSICAL_DEVICE_TYPE_CPU: dev_ty_lit = "CPU"; break;
   default: dev_ty_lit = "Unknown"; break;
   }
-  auto desc = util::format(prop.deviceName, " (", dev_ty_lit, ", ",
+  ss << util::format(prop.deviceName, " (", dev_ty_lit, ", ",
     VK_VERSION_MAJOR(prop.apiVersion), ".",
     VK_VERSION_MINOR(prop.apiVersion), ")");
+}
+void desc_physdev_mem_prop(
+  std::stringstream& ss,
+  VkPhysicalDeviceMemoryProperties mem_prop
+) {
+  for (size_t i = 0; i < mem_prop.memoryHeapCount; ++i) {
+    const VkMemoryHeap& heap = mem_prop.memoryHeaps[i];
+    static const std::array<const char*, 1> flag_lits {
+      "DEVICE_LOCAL",
+    };
+    std::vector<std::string> flags {};
+    for (uint32_t j = 0; j < sizeof(heap.flags) * 8; ++j) {
+      if (((heap.flags >> j) & 1) == 0) { continue; }
+      if (j < flag_lits.size()) {
+        flags.emplace_back(flag_lits[j]);
+      } else {
+        flags.emplace_back(util::format("(1 << ", j, ")"));
+      }
+    }
+    std::string all_flags = flags.empty() ? "0" : util::join(" | ", flags);
+    ss << "  memory heap #" << i << ": " << all_flags << std::endl;
+  }
+  for (size_t i = 0; i < mem_prop.memoryTypeCount; ++i) {
+    const VkMemoryType& ty = mem_prop.memoryTypes[i];
+    static const std::array<const char*, 6> flag_lits {
+      "DEVICE_LOCAL",
+      "HOST_VISIBLE",
+      "HOST_COHERENT",
+      "HOST_CACHED",
+      "LAZILY_ALLOCATED",
+      "PROTECTED",
+    };
+    std::vector<std::string> flags {};
+    for (uint32_t j = 0; j < sizeof(ty.propertyFlags) * 8; ++j) {
+      if (((ty.propertyFlags >> j) & 1) == 0) { continue; }
+      if (j < flag_lits.size()) {
+        flags.emplace_back(flag_lits[j]);
+      } else {
+        flags.emplace_back(util::format("(1 << ", j, ")"));
+      }
+    }
+    std::string all_flags = flags.empty() ? "0" : util::join(" | ", flags);
+    ss << "  memory type #" << i << " on heap #" << ty.heapIndex << ": " << all_flags;
+  }
+}
+
+
+
+InstancePhysicalDeviceDetail make_physdev_detail(VkPhysicalDevice physdev) {
+  auto prop = get_physdev_prop(physdev);
+  auto mem_prop = get_physdev_mem_prop(physdev);
+
+  std::stringstream ss {};
+  desc_physdev_prop(ss, prop);
+  desc_physdev_mem_prop(ss, mem_prop);
 
   InstancePhysicalDeviceDetail out {};
   out.physdev = physdev;
   out.prop = prop;
+  out.mem_prop = mem_prop;
   out.feat = get_physdev_feat(physdev);
   out.qfam_props = collect_qfam_props(physdev);
-  out.desc = std::move(desc);
+  out.ext_props = collect_physdev_ext_props(physdev);
+  out.desc = ss.str();
   return out;
 };
 

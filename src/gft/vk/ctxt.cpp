@@ -226,30 +226,15 @@ Context _create_ctxt(
     }
   }
 
-  uint32_t ndev_ext = 0;
-  VK_ASSERT << vkEnumerateDeviceExtensionProperties(physdev, nullptr, &ndev_ext, nullptr);
-
-  std::vector<VkExtensionProperties> dev_exts;
-  dev_exts.resize(ndev_ext);
-  VK_ASSERT << vkEnumerateDeviceExtensionProperties(physdev, nullptr, &ndev_ext, dev_exts.data());
-
   std::vector<const char*> dev_ext_names;
-  dev_ext_names.reserve(ndev_ext);
-  for (const auto& dev_ext : dev_exts) {
-    dev_ext_names.emplace_back(dev_ext.extensionName);
+  dev_ext_names.reserve(physdev_detail.ext_props.size());
+  for (const auto& dev_ext : physdev_detail.ext_props) {
+    dev_ext_names.emplace_back(dev_ext.first.c_str());
   }
   log::debug("enabled device extensions: ", util::join(", ", dev_ext_names));
 
-  VkDeviceCreateInfo dci {};
-  dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-  dci.pEnabledFeatures = &feat;
-  dci.queueCreateInfoCount = static_cast<uint32_t>(dqcis.size());
-  dci.pQueueCreateInfos = dqcis.data();
-  dci.enabledExtensionCount = (uint32_t)dev_ext_names.size();
-  dci.ppEnabledExtensionNames = dev_ext_names.data();
-
-  VkDevice dev;
-  VK_ASSERT << vkCreateDevice(physdev, &dci, nullptr, &dev);
+  VkDevice dev =
+    create_dev(physdev_detail.physdev, dqcis, dev_ext_names, feat);
 
   std::map<SubmitType, ContextSubmitDetail> submit_details;
   for (const auto& pair : queue_allocs) {
@@ -258,56 +243,11 @@ Context _create_ctxt(
 
     if (qfam_idx == VK_QUEUE_FAMILY_IGNORED) { continue; }
 
-    VkQueue queue;
-    vkGetDeviceQueue(dev, qfam_idx, 0, &queue);
-
     ContextSubmitDetail submit_detail {};
     submit_detail.qfam_idx = qfam_idx;
-    submit_detail.queue = queue;
+    submit_detail.queue = get_dev_queue(qfam_idx, 0);
     submit_details.insert(std::make_pair<SubmitType, ContextSubmitDetail>(
       std::move(submit_ty), std::move(submit_detail)));
-  }
-
-  VkPhysicalDeviceMemoryProperties mem_prop;
-  vkGetPhysicalDeviceMemoryProperties(physdev, &mem_prop);
-  for (size_t i = 0; i < mem_prop.memoryHeapCount; ++i) {
-    const VkMemoryHeap& heap = mem_prop.memoryHeaps[i];
-    static const std::array<const char*, 1> flag_lits {
-      "DEVICE_LOCAL",
-    };
-    std::vector<std::string> flags {};
-    for (uint32_t j = 0; j < sizeof(heap.flags) * 8; ++j) {
-      if (((heap.flags >> j) & 1) == 0) { continue; }
-      if (j < flag_lits.size()) {
-        flags.emplace_back(flag_lits[j]);
-      } else {
-        flags.emplace_back(util::format("(1 << ", j, ")"));
-      }
-    }
-    std::string all_flags = flags.empty() ? "0" : util::join(" | ", flags);
-    log::debug("memory heap #", i, ": ", all_flags);
-  }
-  for (size_t i = 0; i < mem_prop.memoryTypeCount; ++i) {
-    const VkMemoryType& ty = mem_prop.memoryTypes[i];
-    static const std::array<const char*, 6> flag_lits {
-      "DEVICE_LOCAL",
-      "HOST_VISIBLE",
-      "HOST_COHERENT",
-      "HOST_CACHED",
-      "LAZILY_ALLOCATED",
-      "PROTECTED",
-    };
-    std::vector<std::string> flags {};
-    for (uint32_t j = 0; j < sizeof(ty.propertyFlags) * 8; ++j) {
-      if (((ty.propertyFlags >> j) & 1) == 0) { continue; }
-      if (j < flag_lits.size()) {
-        flags.emplace_back(flag_lits[j]);
-      } else {
-        flags.emplace_back(util::format("(1 << ", j, ")"));
-      }
-    }
-    std::string all_flags = flags.empty() ? "0" : util::join(" | ", flags);
-    log::debug("memory type #", i, " on heap #", ty.heapIndex, ": ", all_flags);
   }
 
   std::map<ImageSampler, VkSampler> img_samplers {};
@@ -367,7 +307,7 @@ void destroy_ctxt(Context& ctxt) {
       destroy_sampler(ctxt.dev, samp.second);
     }
     vmaDestroyAllocator(ctxt.allocator);
-    vkDestroyDevice(ctxt.dev, nullptr);
+    destroy_dev(ctxt.dev);
     log::debug("destroyed vulkan context '", ctxt.label, "'");
   }
   ctxt = {};
