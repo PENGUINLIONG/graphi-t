@@ -10,9 +10,11 @@ VkSwapchainKHR _create_swapchain(
   VkSwapchainKHR old_swapchain,
   SwapchainDynamicDetail& dyn_detail
 ) {
+  auto physdev = ctxt.physdev();
+
   VkSurfaceCapabilitiesKHR sc {};
   VK_ASSERT <<
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(ctxt.physdev, ctxt.surf, &sc);
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physdev, ctxt.surf, &sc);
   log::debug("current surface image size is (", sc.currentExtent.width, ", ",
     sc.currentExtent.height, ")");
 
@@ -28,10 +30,12 @@ VkSwapchainKHR _create_swapchain(
   }
 
   uint32_t nsurf_fmt = 0;
-  VK_ASSERT << vkGetPhysicalDeviceSurfaceFormatsKHR(ctxt.physdev, ctxt.surf, &nsurf_fmt, nullptr);
+  VK_ASSERT << vkGetPhysicalDeviceSurfaceFormatsKHR(physdev,
+    ctxt.surf, &nsurf_fmt, nullptr);
   std::vector<VkSurfaceFormatKHR> surf_fmts;
   surf_fmts.resize(nsurf_fmt);
-  VK_ASSERT << vkGetPhysicalDeviceSurfaceFormatsKHR(ctxt.physdev, ctxt.surf, &nsurf_fmt, surf_fmts.data());
+  VK_ASSERT << vkGetPhysicalDeviceSurfaceFormatsKHR(physdev,
+    ctxt.surf, &nsurf_fmt, surf_fmts.data());
 
   VkFormat fmt = fmt2vk(cfg.fmt, fmt::L_COLOR_SPACE_LINEAR);
   VkColorSpaceKHR cspace = cspace2vk(cfg.cspace);

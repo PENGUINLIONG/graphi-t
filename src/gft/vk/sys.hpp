@@ -6,11 +6,31 @@
 namespace liong {
 namespace vk {
 
+// VkInstance
 extern VkInstance create_inst(uint32_t api_ver);
 extern void destroy_inst(VkInstance inst);
 
+// VkPhysicalDevice
 extern std::vector<VkPhysicalDevice> collect_physdevs(VkInstance inst);
-extern VkPhysicalDeviceProperties get_physdev_prop(const VkPhysicalDevice& physdev);
+extern VkPhysicalDeviceProperties get_physdev_prop(VkPhysicalDevice physdev);
+extern VkPhysicalDeviceFeatures get_physdev_feat(VkPhysicalDevice physdev);
+extern std::vector<VkQueueFamilyProperties> collect_qfam_props(
+  VkPhysicalDevice physdev
+);
+
+// VkDevice
+extern VkDevice create_dev();
+extern void destroy_dev();
+
+// VkSampler
+extern VkSampler create_sampler(
+  VkDevice dev,
+  VkFilter filter,
+  VkSamplerMipmapMode mip_mode,
+  float max_aniso,
+  VkCompareOp cmp_op
+);
+extern void destroy_sampler(VkDevice dev, VkSampler sampler);
 
 } // namespace vk
 } // namespace liong

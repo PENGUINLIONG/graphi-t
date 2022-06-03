@@ -14,10 +14,10 @@ namespace vk {
 std::unique_ptr<Instance> INST;
 
 InstancePhysicalDeviceDetail make_physdev_detail(VkPhysicalDevice physdev) {
-  VkPhysicalDeviceProperties physdev_prop = get_physdev_prop(physdev);
+  auto prop = get_physdev_prop(physdev);
 
   const char* dev_ty_lit;
-  switch (physdev_prop.deviceType) {
+  switch (prop.deviceType) {
   case VK_PHYSICAL_DEVICE_TYPE_OTHER: dev_ty_lit = "Other"; break;
   case VK_PHYSICAL_DEVICE_TYPE_INTEGRATED_GPU: dev_ty_lit = "Integrated GPU"; break;
   case VK_PHYSICAL_DEVICE_TYPE_DISCRETE_GPU: dev_ty_lit = "Discrete GPU"; break;
@@ -25,13 +25,15 @@ InstancePhysicalDeviceDetail make_physdev_detail(VkPhysicalDevice physdev) {
   case VK_PHYSICAL_DEVICE_TYPE_CPU: dev_ty_lit = "CPU"; break;
   default: dev_ty_lit = "Unknown"; break;
   }
-  auto desc = util::format(physdev_prop.deviceName, " (", dev_ty_lit, ", ",
-    VK_VERSION_MAJOR(physdev_prop.apiVersion), ".",
-    VK_VERSION_MINOR(physdev_prop.apiVersion), ")");
+  auto desc = util::format(prop.deviceName, " (", dev_ty_lit, ", ",
+    VK_VERSION_MAJOR(prop.apiVersion), ".",
+    VK_VERSION_MINOR(prop.apiVersion), ")");
 
   InstancePhysicalDeviceDetail out {};
   out.physdev = physdev;
-  out.physdev_prop = std::move(physdev_prop);
+  out.prop = prop;
+  out.feat = get_physdev_feat(physdev);
+  out.qfam_props = collect_qfam_props(physdev);
   out.desc = std::move(desc);
   return out;
 };

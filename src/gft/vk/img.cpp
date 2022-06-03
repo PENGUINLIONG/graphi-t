@@ -59,8 +59,8 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
 
   // Check whether the device support our use case.
   VkImageFormatProperties ifp;
-  VK_ASSERT << vkGetPhysicalDeviceImageFormatProperties(ctxt.physdev, fmt,
-    img_ty, VK_IMAGE_TILING_OPTIMAL, usage, 0, &ifp);
+  VK_ASSERT << vkGetPhysicalDeviceImageFormatProperties(ctxt.physdev(),
+    fmt, img_ty, VK_IMAGE_TILING_OPTIMAL, usage, 0, &ifp);
 
   VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
 

@@ -34,7 +34,7 @@ DepthImage create_depth_img(
 
   // Check whether the device support our use case.
   VkImageFormatProperties ifp;
-  VK_ASSERT << vkGetPhysicalDeviceImageFormatProperties(ctxt.physdev, fmt,
+  VK_ASSERT << vkGetPhysicalDeviceImageFormatProperties(ctxt.physdev(), fmt,
     VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL, usage, 0, &ifp);
 
   VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;

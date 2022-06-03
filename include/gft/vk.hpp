@@ -92,7 +92,9 @@ inline VkColorSpaceKHR cspace2vk(fmt::ColorSpace cspace) {
 
 struct InstancePhysicalDeviceDetail {
   VkPhysicalDevice physdev;
-  VkPhysicalDeviceProperties physdev_prop;
+  VkPhysicalDeviceProperties prop;
+  VkPhysicalDeviceFeatures feat;
+  std::vector<VkQueueFamilyProperties> qfam_props;
   std::string desc;
 };
 struct Instance {
@@ -136,14 +138,23 @@ struct ContextSubmitDetail {
 };
 struct Context {
   std::string label;
+  uint32_t iphysdev;
   VkDevice dev;
   VkSurfaceKHR surf;
-  VkPhysicalDevice physdev;
-  VkPhysicalDeviceProperties physdev_prop;
   std::map<SubmitType, ContextSubmitDetail> submit_details;
   std::map<ImageSampler, VkSampler> img_samplers;
   std::map<DepthImageSampler, VkSampler> depth_img_samplers;
   VmaAllocator allocator;
+
+  inline VkPhysicalDevice physdev() const {
+    return get_inst().physdev_details.at(iphysdev).physdev;
+  }
+  inline const VkPhysicalDeviceProperties& physdev_prop() const {
+    return get_inst().physdev_details.at(iphysdev).prop;
+  }
+  inline const VkPhysicalDeviceFeatures& physdev_feat() const {
+    return get_inst().physdev_details.at(iphysdev).feat;
+  }
 };
 
 

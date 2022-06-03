@@ -2,6 +2,7 @@
 #include "gft/vk.hpp"
 #include "gft/log.hpp"
 #include "gft/assert.hpp"
+#include "sys.hpp"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -15,8 +16,6 @@
 
 namespace liong {
 namespace vk {
-
-uint32_t api_ver = VK_API_VERSION_1_0;
 
 VkSurfaceKHR _create_surf_windows(const ContextWindowsConfig& cfg) {
 #if VK_KHR_win32_surface
@@ -62,62 +61,28 @@ VkSurfaceKHR _create_surf_android(const ContextAndroidConfig& cfg) {
   return VK_NULL_HANDLE;
 #endif // VK_KHR_android_surface
 }
-VkSampler _create_sampler(
-  VkDevice dev,
-  VkFilter filter,
-  VkSamplerMipmapMode mip_mode,
-  float max_aniso,
-  VkCompareOp cmp_op
-) {
-  VkSamplerCreateInfo sci {};
-  sci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-  sci.magFilter = filter;
-  sci.minFilter = filter;
-  sci.mipmapMode = mip_mode;
-  sci.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  sci.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  sci.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  if (max_aniso > 1.0f) {
-    sci.anisotropyEnable = VK_TRUE;
-    sci.maxAnisotropy = max_aniso;
-  }
-  if (cmp_op != VK_COMPARE_OP_NEVER) {
-    sci.compareEnable = VK_TRUE;
-    sci.compareOp = cmp_op;
-  }
-
-  VkSampler sampler;
-  VK_ASSERT << vkCreateSampler(dev, &sci, nullptr, &sampler);
-  return sampler;
-}
 Context _create_ctxt(
   const std::string& label,
   uint32_t dev_idx,
   VkSurfaceKHR surf
 ) {
-  L_ASSERT(dev_idx < get_inst().physdev_details.size(),
+  const Instance& inst = get_inst();
+
+  L_ASSERT(dev_idx < inst.physdev_details.size(),
     "wanted vulkan device does not exists (#", dev_idx, " of ",
-    get_inst().physdev_details.size(), " available devices)");
-  auto physdev = get_inst().physdev_details.at(dev_idx).physdev;
+    inst.physdev_details.size(), " available devices)");
+  const InstancePhysicalDeviceDetail& physdev_detail =
+    inst.physdev_details.at(dev_idx);
 
-  VkPhysicalDeviceFeatures feat;
-  vkGetPhysicalDeviceFeatures(physdev, &feat);
+  VkPhysicalDevice physdev = physdev_detail.physdev;
+  const auto& prop = physdev_detail.prop;
+  const auto& feat = physdev_detail.feat;
+  const auto& qfam_props = physdev_detail.qfam_props;
 
-  VkPhysicalDeviceProperties physdev_prop;
-  vkGetPhysicalDeviceProperties(physdev, &physdev_prop);
-
-  if (physdev_prop.limits.timestampComputeAndGraphics == VK_FALSE) {
+  if (prop.limits.timestampComputeAndGraphics == VK_FALSE) {
     log::warn("context '", label, "' device does not support timestamps, "
       "the following command won't be available: WRITE_TIMESTAMP");
   }
-
-  // Collect queue families and use as few queues as possible (for less sync).
-  uint32_t nqfam_prop;
-  vkGetPhysicalDeviceQueueFamilyProperties(physdev, &nqfam_prop, nullptr);
-  std::vector<VkQueueFamilyProperties> qfam_props;
-  qfam_props.resize(nqfam_prop);
-  vkGetPhysicalDeviceQueueFamilyProperties(physdev,
-    &nqfam_prop, qfam_props.data());
 
   struct QueueFamilyTrait {
     uint32_t qfam_idx;
@@ -346,34 +311,34 @@ Context _create_ctxt(
   }
 
   std::map<ImageSampler, VkSampler> img_samplers {};
-  img_samplers[L_IMAGE_SAMPLER_LINEAR] = _create_sampler(dev,
+  img_samplers[L_IMAGE_SAMPLER_LINEAR] = create_sampler(dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, VK_COMPARE_OP_NEVER);
-  img_samplers[L_IMAGE_SAMPLER_NEAREST] = _create_sampler(dev,
+  img_samplers[L_IMAGE_SAMPLER_NEAREST] = create_sampler(dev,
     VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, 0.0f, VK_COMPARE_OP_NEVER);
-  img_samplers[L_IMAGE_SAMPLER_ANISOTROPY_4] = _create_sampler(dev,
+  img_samplers[L_IMAGE_SAMPLER_ANISOTROPY_4] = create_sampler(dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 4.0f, VK_COMPARE_OP_NEVER);
 
   std::map<DepthImageSampler, VkSampler> depth_img_samplers {};
-  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_LINEAR] = _create_sampler(dev,
+  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_LINEAR] = create_sampler(dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, VK_COMPARE_OP_LESS);
-  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_NEAREST] = _create_sampler(dev,
+  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_NEAREST] = create_sampler(dev,
     VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, 0.0f, VK_COMPARE_OP_LESS);
-  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_ANISOTROPY_4] = _create_sampler(dev,
+  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_ANISOTROPY_4] = create_sampler(dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 4.0f, VK_COMPARE_OP_LESS);
 
   VmaAllocatorCreateInfo allocatorInfo = {};
-  allocatorInfo.vulkanApiVersion = api_ver;
+  allocatorInfo.vulkanApiVersion = inst.api_ver;
   allocatorInfo.physicalDevice = physdev;
   allocatorInfo.device = dev;
-  allocatorInfo.instance = get_inst().inst;
+  allocatorInfo.instance = inst.inst;
 
   VmaAllocator allocator;
   VK_ASSERT << vmaCreateAllocator(&allocatorInfo, &allocator);
 
   log::debug("created vulkan context '", label, "' on device #", dev_idx, ": ",
-    get_inst().physdev_details.at(dev_idx).desc);
+    inst.physdev_details.at(dev_idx).desc);
   return Context {
-    label, dev, surf, physdev, std::move(physdev_prop),
+    label, dev_idx, dev, surf,
     std::move(submit_details), img_samplers, depth_img_samplers, allocator
   };
 
@@ -396,10 +361,10 @@ void destroy_ctxt(Context& ctxt) {
   }
   if (ctxt.dev != VK_NULL_HANDLE) {
     for (const auto& samp : ctxt.img_samplers) {
-      vkDestroySampler(ctxt.dev, samp.second, nullptr);
+      destroy_sampler(ctxt.dev, samp.second);
     }
     for (const auto& samp : ctxt.depth_img_samplers) {
-      vkDestroySampler(ctxt.dev, samp.second, nullptr);
+      destroy_sampler(ctxt.dev, samp.second);
     }
     vmaDestroyAllocator(ctxt.allocator);
     vkDestroyDevice(ctxt.dev, nullptr);

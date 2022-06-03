@@ -678,7 +678,7 @@ double get_invoke_time_us(const Invocation& invoke) {
   VK_ASSERT << vkGetQueryPoolResults(invoke.ctxt->dev, invoke.query_pool,
     0, 2, sizeof(uint64_t) * 2, &t, sizeof(uint64_t),
     VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT); // Wait till ready.
-  double ns_per_tick = invoke.ctxt->physdev_prop.limits.timestampPeriod;
+  double ns_per_tick = invoke.ctxt->physdev_prop().limits.timestampPeriod;
   return (t[1] - t[0]) * ns_per_tick / 1000.0;
 }
 
