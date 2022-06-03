@@ -232,18 +232,20 @@ struct RenderPass {
 
 
 
+struct TaskResourceDetail {
+  VkDescriptorSetLayout desc_set_layout;
+  VkPipelineLayout pipe_layout;
+  std::vector<ResourceType> rsc_tys;
+  std::vector<VkDescriptorPoolSize> desc_pool_sizes;
+};
 struct Task {
   std::string label;
   SubmitType submit_ty;
   const Context* ctxt;
-  const RenderPass* pass;
-  VkDescriptorSetLayout desc_set_layout;
-  VkPipelineLayout pipe_layout;
+  const RenderPass* pass; // Only for graphics task.
   VkPipeline pipe;
-  std::vector<ResourceType> rsc_tys;
-  std::vector<VkShaderModule> shader_mods;
-  std::vector<VkDescriptorPoolSize> desc_pool_sizes;
-  DispatchSize workgrp_size;
+  DispatchSize workgrp_size; // Only for compute task.
+  TaskResourceDetail rsc_detail;
 };
 
 

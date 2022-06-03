@@ -43,6 +43,53 @@ extern VkSampler create_sampler(
 );
 extern void destroy_sampler(VkDevice dev, VkSampler sampler);
 
+// VkDescriptorSetLayout
+extern VkDescriptorSetLayout create_desc_set_layout(
+  VkDevice dev,
+  const std::vector<VkDescriptorSetLayoutBinding>& dslbs
+);
+extern void destroy_desc_set_layout(
+  VkDevice dev,
+  VkDescriptorSetLayout desc_set_layout
+);
+
+// VkPipelineLayout
+extern VkPipelineLayout create_pipe_layout(
+  VkDevice dev,
+  VkDescriptorSetLayout desc_set_layout
+);
+extern void destroy_pipe_layout(
+  VkDevice dev,
+  VkPipelineLayout pipe_layout
+);
+
+// VkShaderModule
+extern VkShaderModule create_shader_mod(
+  VkDevice dev,
+  const uint32_t* spv,
+  size_t spv_size
+);
+extern void destroy_shader_mod(VkDevice dev, VkShaderModule shader_mod);
+
+// VkPipeline
+extern VkPipeline create_comp_pipe(
+  VkDevice dev,
+  VkPipelineLayout pipe_layout,
+  const VkPipelineShaderStageCreateInfo& pssci
+);
+extern VkPipeline create_graph_pipe(
+  VkDevice dev,
+  VkPipelineLayout pipe_layout,
+  VkRenderPass pass,
+  const VkPipelineVertexInputStateCreateInfo& pvisci,
+  const VkPipelineInputAssemblyStateCreateInfo& piasci,
+  const VkPipelineViewportStateCreateInfo& pvsci,
+  const VkPipelineRasterizationStateCreateInfo& prsci,
+  const std::array<VkPipelineShaderStageCreateInfo, 2> psscis
+);
+extern void destroy_pipe(VkDevice dev, VkPipeline pipe);
+
+
 } // namespace sys
 } // namespace vk
 } // namespace liong

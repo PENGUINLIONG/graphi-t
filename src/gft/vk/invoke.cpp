@@ -436,7 +436,7 @@ Invocation create_comp_invoke(
   const Task& task,
   const ComputeInvocationConfig& cfg
 ) {
-  L_ASSERT(task.rsc_tys.size() == cfg.rsc_views.size());
+  L_ASSERT(task.rsc_detail.rsc_tys.size() == cfg.rsc_views.size());
   L_ASSERT(task.submit_ty == L_SUBMIT_TYPE_COMPUTE);
   const Context& ctxt = *task.ctxt;
 
@@ -448,17 +448,17 @@ Invocation create_comp_invoke(
     _create_query_pool(ctxt, VK_QUERY_TYPE_TIMESTAMP, 2) : VK_NULL_HANDLE;
 
   InvocationTransitionDetail transit_detail {};
-  _collect_task_invoke_transit(cfg.rsc_views, task.rsc_tys, transit_detail);
+  _collect_task_invoke_transit(cfg.rsc_views, task.rsc_detail.rsc_tys, transit_detail);
   out.transit_detail = std::move(transit_detail);
 
   InvocationComputeDetail comp_detail {};
   comp_detail.task = &task;
   comp_detail.bind_pt = VK_PIPELINE_BIND_POINT_COMPUTE;
-  if (task.desc_pool_sizes.size() > 0) {
-    comp_detail.desc_pool = _create_desc_pool(ctxt, task.desc_pool_sizes);
+  if (task.rsc_detail.desc_pool_sizes.size() > 0) {
+    comp_detail.desc_pool = _create_desc_pool(ctxt, task.rsc_detail.desc_pool_sizes);
     comp_detail.desc_set =
-      _alloc_desc_set(ctxt, comp_detail.desc_pool, task.desc_set_layout);
-    _update_desc_set(ctxt, comp_detail.desc_set, task.rsc_tys, cfg.rsc_views);
+      _alloc_desc_set(ctxt, comp_detail.desc_pool, task.rsc_detail.desc_set_layout);
+    _update_desc_set(ctxt, comp_detail.desc_set, task.rsc_detail.rsc_tys, cfg.rsc_views);
   }
   comp_detail.workgrp_count = cfg.workgrp_count;
 
@@ -472,7 +472,7 @@ Invocation create_graph_invoke(
   const Task& task,
   const GraphicsInvocationConfig& cfg
 ) {
-  L_ASSERT(task.rsc_tys.size() == cfg.rsc_views.size());
+  L_ASSERT(task.rsc_detail.rsc_tys.size() == cfg.rsc_views.size());
   L_ASSERT(task.submit_ty == L_SUBMIT_TYPE_GRAPHICS);
   const Context& ctxt = *task.ctxt;
 
@@ -484,7 +484,7 @@ Invocation create_graph_invoke(
     _create_query_pool(ctxt, VK_QUERY_TYPE_TIMESTAMP, 2) : VK_NULL_HANDLE;
 
   InvocationTransitionDetail transit_detail {};
-  _collect_task_invoke_transit(cfg.rsc_views, task.rsc_tys, transit_detail);
+  _collect_task_invoke_transit(cfg.rsc_views, task.rsc_detail.rsc_tys, transit_detail);
   for (size_t i = 0; i < cfg.vert_bufs.size(); ++i) {
     transit_detail.reg(cfg.vert_bufs[i], L_BUFFER_USAGE_VERTEX_BIT);
   }
@@ -506,11 +506,11 @@ Invocation create_graph_invoke(
   InvocationGraphicsDetail graph_detail {};
   graph_detail.task = &task;
   graph_detail.bind_pt = VK_PIPELINE_BIND_POINT_GRAPHICS;
-  if (task.desc_pool_sizes.size() > 0) {
-    graph_detail.desc_pool = _create_desc_pool(ctxt, task.desc_pool_sizes);
+  if (task.rsc_detail.desc_pool_sizes.size() > 0) {
+    graph_detail.desc_pool = _create_desc_pool(ctxt, task.rsc_detail.desc_pool_sizes);
     graph_detail.desc_set =
-      _alloc_desc_set(ctxt, graph_detail.desc_pool, task.desc_set_layout);
-    _update_desc_set(ctxt, graph_detail.desc_set, task.rsc_tys, cfg.rsc_views);
+      _alloc_desc_set(ctxt, graph_detail.desc_pool, task.rsc_detail.desc_set_layout);
+    _update_desc_set(ctxt, graph_detail.desc_set, task.rsc_detail.rsc_tys, cfg.rsc_views);
   }
   graph_detail.vert_bufs = std::move(vert_bufs);
   graph_detail.vert_buf_offsets = std::move(vert_buf_offsets);
@@ -1286,8 +1286,8 @@ std::vector<VkFence> _record_invoke_impl(
 
     vkCmdBindPipeline(cmdbuf, comp_detail.bind_pt, task.pipe);
     if (comp_detail.desc_set != VK_NULL_HANDLE) {
-      vkCmdBindDescriptorSets(cmdbuf, comp_detail.bind_pt, task.pipe_layout,
-        0, 1, &comp_detail.desc_set, 0, nullptr);
+      vkCmdBindDescriptorSets(cmdbuf, comp_detail.bind_pt,
+        task.rsc_detail.pipe_layout, 0, 1, &comp_detail.desc_set, 0, nullptr);
     }
     vkCmdDispatch(cmdbuf, workgrp_count.x, workgrp_count.y, workgrp_count.z);
     log::debug("applied compute invocation '", invoke.label, "'");
@@ -1298,8 +1298,8 @@ std::vector<VkFence> _record_invoke_impl(
 
     vkCmdBindPipeline(cmdbuf, graph_detail.bind_pt, task.pipe);
     if (graph_detail.desc_set != VK_NULL_HANDLE) {
-      vkCmdBindDescriptorSets(cmdbuf, graph_detail.bind_pt, task.pipe_layout,
-        0, 1, &graph_detail.desc_set, 0, nullptr);
+      vkCmdBindDescriptorSets(cmdbuf, graph_detail.bind_pt,
+        task.rsc_detail.pipe_layout, 0, 1, &graph_detail.desc_set, 0, nullptr);
     }
     // TODO: (penguinliong) Vertex, index buffer transition.
     vkCmdBindVertexBuffers(cmdbuf, 0, (uint32_t)graph_detail.vert_bufs.size(),

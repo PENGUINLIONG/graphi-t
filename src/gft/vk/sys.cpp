@@ -187,6 +187,158 @@ void destroy_sampler(VkDevice dev, VkSampler sampler) {
 }
 
 
+// VkDescriptorSetLayout
+VkDescriptorSetLayout create_desc_set_layout(
+  VkDevice dev,
+  const std::vector<VkDescriptorSetLayoutBinding>& dslbs
+) {
+  VkDescriptorSetLayoutCreateInfo dslci {};
+  dslci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
+  dslci.bindingCount = (uint32_t)dslbs.size();
+  dslci.pBindings = dslbs.data();
+
+  VkDescriptorSetLayout desc_set_layout;
+  VK_ASSERT <<
+    vkCreateDescriptorSetLayout(dev, &dslci, nullptr, &desc_set_layout);
+
+  return desc_set_layout;
+}
+void destroy_desc_set_layout(
+  VkDevice dev,
+  VkDescriptorSetLayout desc_set_layout
+) {
+  vkDestroyDescriptorSetLayout(dev, desc_set_layout, nullptr);
+}
+
+
+// VkPipelineLayout
+VkPipelineLayout create_pipe_layout(
+  VkDevice dev,
+  VkDescriptorSetLayout desc_set_layout
+) {
+  VkPipelineLayoutCreateInfo plci {};
+  plci.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
+  plci.setLayoutCount = 1;
+  plci.pSetLayouts = &desc_set_layout;
+
+  VkPipelineLayout pipe_layout;
+  VK_ASSERT << vkCreatePipelineLayout(dev, &plci, nullptr, &pipe_layout);
+  return pipe_layout;
+}
+void destroy_pipe_layout(VkDevice dev, VkPipelineLayout pipe_layout) {
+  vkDestroyPipelineLayout(dev, pipe_layout, nullptr);
+}
+
+
+// VkShaderModule
+VkShaderModule create_shader_mod(
+  VkDevice dev,
+  const uint32_t* spv,
+  size_t spv_size
+) {
+  VkShaderModuleCreateInfo smci {};
+  smci.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
+  smci.pCode = spv;
+  smci.codeSize = spv_size;
+
+  VkShaderModule shader_mod;
+  VK_ASSERT << vkCreateShaderModule(dev, &smci, nullptr, &shader_mod);
+  return shader_mod;
+}
+void destroy_shader_mod(VkDevice dev, VkShaderModule shader_mod) {
+  vkDestroyShaderModule(dev, shader_mod, nullptr);
+}
+
+
+
+// VkPipeline
+VkPipeline create_comp_pipe(
+  VkDevice dev,
+  VkPipelineLayout pipe_layout,
+  const VkPipelineShaderStageCreateInfo& pssci
+) {
+  VkComputePipelineCreateInfo cpci {};
+  cpci.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO;
+  cpci.stage = pssci;
+  cpci.layout = pipe_layout;
+
+  VkPipeline pipe;
+  VK_ASSERT << vkCreateComputePipelines(dev, VK_NULL_HANDLE, 1, &cpci,
+    nullptr, &pipe);
+  return pipe;
+}
+VkPipeline create_graph_pipe(
+  VkDevice dev,
+  VkPipelineLayout pipe_layout,
+  VkRenderPass pass,
+  const VkPipelineVertexInputStateCreateInfo& pvisci,
+  const VkPipelineInputAssemblyStateCreateInfo& piasci,
+  const VkPipelineViewportStateCreateInfo& pvsci,
+  const VkPipelineRasterizationStateCreateInfo& prsci,
+  const std::array<VkPipelineShaderStageCreateInfo, 2> psscis
+) {
+  // TODO: (penguinliong) Support multiple attachments?
+  VkPipelineMultisampleStateCreateInfo pmsci {};
+  pmsci.sType = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
+  pmsci.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
+
+  std::array<VkPipelineColorBlendAttachmentState, 1> pcbass {};
+  {
+    VkPipelineColorBlendAttachmentState& pcbas = pcbass[0];
+    pcbas.blendEnable = VK_FALSE;
+    pcbas.colorWriteMask =
+      VK_COLOR_COMPONENT_R_BIT |
+      VK_COLOR_COMPONENT_G_BIT |
+      VK_COLOR_COMPONENT_B_BIT |
+      VK_COLOR_COMPONENT_A_BIT;
+  }
+
+  VkPipelineDepthStencilStateCreateInfo pdssci {};
+  pdssci.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
+  pdssci.depthTestEnable = VK_TRUE;
+  pdssci.depthWriteEnable = VK_TRUE;
+  pdssci.depthCompareOp = VK_COMPARE_OP_LESS_OR_EQUAL;
+  pdssci.minDepthBounds = 0.0f;
+  pdssci.maxDepthBounds = 1.0f;
+
+  VkPipelineColorBlendStateCreateInfo pcbsci {};
+  pcbsci.sType = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
+  pcbsci.attachmentCount = (uint32_t)pcbass.size();
+  pcbsci.pAttachments = pcbass.data();
+
+  VkPipelineDynamicStateCreateInfo pdsci {};
+  pdsci.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+  pdsci.dynamicStateCount = 0;
+  pdsci.pDynamicStates = nullptr;
+
+  VkGraphicsPipelineCreateInfo gpci {};
+  gpci.sType = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
+  gpci.stageCount = psscis.size();
+  gpci.pStages = psscis.data();
+  gpci.pVertexInputState = &pvisci;
+  gpci.pInputAssemblyState = &piasci;
+  gpci.pTessellationState = nullptr;
+  gpci.pViewportState = &pvsci;
+  gpci.pRasterizationState = &prsci;
+  gpci.pMultisampleState = &pmsci;
+  gpci.pDepthStencilState = &pdssci;
+  gpci.pColorBlendState = &pcbsci;
+  gpci.pDynamicState = &pdsci;
+  gpci.layout = pipe_layout;
+  gpci.renderPass = pass;
+  gpci.subpass = 0;
+
+  VkPipeline pipe;
+  VK_ASSERT << vkCreateGraphicsPipelines(dev, VK_NULL_HANDLE, 1, &gpci,
+    nullptr, &pipe);
+  return pipe;
+}
+void destroy_pipe(VkDevice dev, VkPipeline pipe) {
+  vkDestroyPipeline(dev, pipe, nullptr);
+}
+
+
+
 } // namespace sys
 } // namespace vk
 } // namespace liong
