@@ -83,9 +83,9 @@ void parse_args(int argc, const char** argv) {
   while (i < argc || iarg_entry >= 0) {
     if (iarg_entry >= 0) {
       auto& parse_cfg = arg_cfg.parse_cfgs[iarg_entry];
-      assert(parse_cfg.parser(argv + i, parse_cfg.dst), "unable to parse "
+      L_ASSERT(parse_cfg.parser(argv + i, parse_cfg.dst), "unable to parse "
         "argument");
-      assert((argc - i >= parse_cfg.narg), "no enough argument segments");
+      L_ASSERT((argc - i >= parse_cfg.narg), "no enough argument segments");
       i += parse_cfg.narg;
       iarg_entry = -1;
     } else {

@@ -90,17 +90,23 @@ inline VkColorSpaceKHR cspace2vk(fmt::ColorSpace cspace) {
   }
 }
 
-
-
-struct PhysicalDeviceStub {
+struct InstancePhysicalDeviceDetail {
   VkPhysicalDevice physdev;
+  VkPhysicalDeviceProperties prop;
+  VkPhysicalDeviceFeatures feat;
+  VkPhysicalDeviceMemoryProperties mem_prop;
+  std::vector<VkQueueFamilyProperties> qfam_props;
+  std::map<std::string, uint32_t> ext_props;
   std::string desc;
 };
-
-extern uint32_t api_ver;
-extern VkInstance inst;
-extern std::vector<VkPhysicalDevice> physdevs;
-extern std::vector<std::string> physdev_descs;
+struct Instance {
+  uint32_t api_ver;
+  VkInstance inst;
+  std::vector<InstancePhysicalDeviceDetail> physdev_details;
+  bool is_imported;
+};
+extern void initialize(uint32_t api_ver, VkInstance inst);
+extern const Instance& get_inst();
 
 
 
@@ -134,14 +140,23 @@ struct ContextSubmitDetail {
 };
 struct Context {
   std::string label;
+  uint32_t iphysdev;
   VkDevice dev;
   VkSurfaceKHR surf;
-  VkPhysicalDevice physdev;
-  VkPhysicalDeviceProperties physdev_prop;
   std::map<SubmitType, ContextSubmitDetail> submit_details;
   std::map<ImageSampler, VkSampler> img_samplers;
   std::map<DepthImageSampler, VkSampler> depth_img_samplers;
   VmaAllocator allocator;
+
+  inline VkPhysicalDevice physdev() const {
+    return get_inst().physdev_details.at(iphysdev).physdev;
+  }
+  inline const VkPhysicalDeviceProperties& physdev_prop() const {
+    return get_inst().physdev_details.at(iphysdev).prop;
+  }
+  inline const VkPhysicalDeviceFeatures& physdev_feat() const {
+    return get_inst().physdev_details.at(iphysdev).feat;
+  }
 };
 
 
@@ -209,7 +224,8 @@ struct Swapchain {
 
 struct RenderPass {
   const Context* ctxt;
-  VkRect2D viewport;
+  uint32_t width;
+  uint32_t height;
   VkRenderPass pass;
   RenderPassConfig pass_cfg;
   std::vector<VkClearValue> clear_values;
@@ -217,18 +233,20 @@ struct RenderPass {
 
 
 
+struct TaskResourceDetail {
+  VkDescriptorSetLayout desc_set_layout;
+  VkPipelineLayout pipe_layout;
+  std::vector<ResourceType> rsc_tys;
+  std::vector<VkDescriptorPoolSize> desc_pool_sizes;
+};
 struct Task {
   std::string label;
   SubmitType submit_ty;
   const Context* ctxt;
-  const RenderPass* pass;
-  VkDescriptorSetLayout desc_set_layout;
-  VkPipelineLayout pipe_layout;
+  const RenderPass* pass; // Only for graphics task.
   VkPipeline pipe;
-  std::vector<ResourceType> rsc_tys;
-  std::vector<VkShaderModule> shader_mods;
-  std::vector<VkDescriptorPoolSize> desc_pool_sizes;
-  DispatchSize workgrp_size;
+  DispatchSize workgrp_size; // Only for compute task.
+  TaskResourceDetail rsc_detail;
 };
 
 

@@ -9,7 +9,7 @@ namespace util {
 
 std::vector<uint8_t> load_file(const char* path) {
   std::ifstream f(path, std::ios::ate | std::ios::binary | std::ios::in);
-  assert(f.is_open(), "unable to open file: ", path);
+  L_ASSERT(f.is_open(), "unable to open file: ", path);
   size_t size = f.tellg();
   f.seekg(std::ios::beg);
   std::vector<uint8_t> buf;
@@ -20,7 +20,7 @@ std::vector<uint8_t> load_file(const char* path) {
 }
 std::string load_text(const char* path) {
   std::ifstream f(path, std::ios::ate | std::ios::binary | std::ios::in);
-  assert(f.is_open(), "unable to open file: ", path);
+  L_ASSERT(f.is_open(), "unable to open file: ", path);
   size_t size = f.tellg();
   f.seekg(std::ios::beg);
   std::string buf;
@@ -32,13 +32,13 @@ std::string load_text(const char* path) {
 }
 void save_file(const char* path, const void* data, size_t size) {
   std::ofstream f(path, std::ios::trunc | std::ios::out | std::ios::binary);
-  assert(f.is_open(), "unable to open file: ", path);
+  L_ASSERT(f.is_open(), "unable to open file: ", path);
   f.write((const char*)data, size);
   f.close();
 }
 void save_text(const char* path, const std::string& txt) {
   std::ofstream f(path, std::ios::trunc | std::ios::out);
-  assert(f.is_open(), "unable to open file: ", path);
+  L_ASSERT(f.is_open(), "unable to open file: ", path);
   f.write(txt.c_str(), txt.size());
   f.close();
 }
@@ -167,12 +167,12 @@ std::string trim(const std::string& str) {
 
 
 DataStream& DataStream::skip(size_t n) {
-  assert(size >= offset + n);
+  L_ASSERT(size >= offset + n);
   offset += n;
   return *this;
 }
 void DataStream::extract_data(void* out, size_t size) {
-  assert(size_remain() >= size);
+  L_ASSERT(size_remain() >= size);
   const void* buf = (const uint8_t*)data() + offset;
   offset += size;
   std::memcpy(out, buf, size);

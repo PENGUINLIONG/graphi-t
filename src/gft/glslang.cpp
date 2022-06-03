@@ -18,7 +18,7 @@ void _initialize(bool silent) {
     return;
   }
 
-  assert(::glslang::InitializeProcess(), "cannot initialize glslang");
+  L_ASSERT(::glslang::InitializeProcess(), "cannot initialize glslang");
   ::glslang::Version glslang_ver = ::glslang::GetVersion();
   log::info("glslang version: ", glslang_ver.major, ".",
     glslang_ver.minor, ".", glslang_ver.patch);
@@ -245,11 +245,11 @@ public:
     // Collect uniform block size.
     {
       uint32_t nubo = program->getNumUniformBlocks();
-      assert(nubo <= 1, "a pipeline can only bind to one uniform block");
+      L_ASSERT(nubo <= 1, "a pipeline can only bind to one uniform block");
       if (nubo != 0) {
         auto ubo = program->getUniformBlock(0);
-        assert(ubo.getBinding() == 0, "uniform block binding point must be 0");
-        assert(ubo.size != 0, "unexpected zero-sized uniform block");
+        L_ASSERT(ubo.getBinding() == 0, "uniform block binding point must be 0");
+        L_ASSERT(ubo.size != 0, "unexpected zero-sized uniform block");
         ubo_size = ubo.size;
       } else {
         ubo_size = 0;
@@ -258,10 +258,10 @@ public:
 
     // Make sure there is exactly one fragment output.
     if (is_graph_pipe) {
-      assert(program->getNumPipeOutputs() == 1, "must have exactly one "
+      L_ASSERT(program->getNumPipeOutputs() == 1, "must have exactly one "
         "fragment output");
       const auto output = program->getPipeOutput(0);
-      assert(output.index == 0, "fragment output must be bound to location 0");
+      L_ASSERT(output.index == 0, "fragment output must be bound to location 0");
     }
   }
 };
@@ -365,11 +365,11 @@ public:
     // Collect uniform block size.
     {
       uint32_t nubo = program->getNumUniformBlocks();
-      assert(nubo <= 1, "a pipeline can only bind to one uniform block");
+      L_ASSERT(nubo <= 1, "a pipeline can only bind to one uniform block");
       if (nubo != 0) {
         auto ubo = program->getUniformBlock(0);
-        assert(ubo.getBinding(), "uniform block binding point must be 0");
-        assert(ubo.size != 0, "unexpected zero-sized uniform block");
+        L_ASSERT(ubo.getBinding(), "uniform block binding point must be 0");
+        L_ASSERT(ubo.size != 0, "unexpected zero-sized uniform block");
         ubo_size = ubo.size;
       } else {
         ubo_size = 0;
@@ -378,10 +378,10 @@ public:
 
     // Make sure there is exactly one fragment output.
     if (is_graph_pipe) {
-      assert(program->getNumPipeOutputs() == 1,
+      L_ASSERT(program->getNumPipeOutputs() == 1,
         "must have exactly one fragment output");
       const auto output = program->getPipeOutput(0);
-      assert(output.index == 0,
+      L_ASSERT(output.index == 0,
         "fragment output must be bound to location 0");
     }
   }

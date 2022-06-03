@@ -37,7 +37,7 @@ Window create_window(uint32_t width, uint32_t height) {
   wnd_cls.hbrBackground = NULL;
   wnd_cls.lpszMenuName = NULL;
   wnd_cls.lpszClassName = WINDOW_CLASS_NAME;
-  assert(RegisterClass(&wnd_cls), "cannot register window class");
+  L_ASSERT(RegisterClass(&wnd_cls), "cannot register window class");
 
   RECT rect = { 0, 0, width, height };
   DWORD style = WS_OVERLAPPEDWINDOW;
@@ -48,7 +48,7 @@ Window create_window(uint32_t width, uint32_t height) {
     DEFAULT_WINDOW_X, DEFAULT_WINDOW_Y,
     rect.right - rect.left, rect.bottom - rect.top,
     NULL, NULL, hinst, NULL);
-  assert(hwnd != NULL, "cannot create window");
+  L_ASSERT(hwnd != NULL, "cannot create window");
 
   ShowWindow(hwnd, SW_SHOW);
 

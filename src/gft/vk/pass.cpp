@@ -53,7 +53,8 @@ VkRenderPass _create_pass(
     }
     case L_ATTACHMENT_TYPE_DEPTH:
     {
-      assert(!sar.has_depth_attm, "subpass can only have one depth attachment");
+      L_ASSERT(!sar.has_depth_attm,
+        "subpass can only have one depth attachment");
       ar.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
       ad.format = depth_fmt2vk(attm_cfg.depth_fmt);
       ad.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
@@ -127,7 +128,7 @@ RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg) {
   }
 
   log::debug("created render pass '", cfg.label, "'");
-  return RenderPass { &ctxt, viewport, pass, cfg, clear_values };
+  return RenderPass { &ctxt, cfg.width, cfg.height, pass, cfg, clear_values };
 }
 void destroy_pass(RenderPass& pass) {
   vkDestroyRenderPass(pass.ctxt->dev, pass.pass, nullptr);

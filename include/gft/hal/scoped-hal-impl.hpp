@@ -109,8 +109,8 @@ struct ObjectPool {
     gc_stack.emplace_back(label);
   }
   inline void pop_frame(const std::string& label) {
-    assert(gc_stack.size() > 1);
-    assert(gc_stack.back().label == label,
+    L_ASSERT(gc_stack.size() > 1);
+    L_ASSERT(gc_stack.back().label == label,
       "gc frame label mismatched (expected=", gc_stack.back().label,
       "; actual=", label, ")");
     gc_stack.pop_back();
@@ -212,7 +212,7 @@ L_DEF_CTOR_DTOR(Context);
 
 L_DEF_CTOR_DTOR(Buffer);
 BufferBuilder& BufferBuilder::streaming_with(const void* data, size_t size) {
-  assert(inner.size == size || inner.size == 0,
+  L_ASSERT(inner.size == size || inner.size == 0,
     "buffer streaming must cover the entire range");
   streaming_data = data;
   streaming_data_size = size;

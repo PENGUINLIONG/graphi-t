@@ -30,6 +30,8 @@ namespace HAL_IMPL_NAMESPACE {
 
 // Initialize the implementation of the HAL.
 L_IMPL_FN void initialize();
+// Finalize the implementation.
+L_IMPL_FN void finalize();
 
 // Generate Human-readable string to describe the properties and capabilities
 // of the device at index `idx`. If there is no device at `idx`, an empty string
@@ -396,14 +398,6 @@ enum Topology {
   L_TOPOLOGY_TRIANGLE = 3,
   L_TOPOLOGY_TRIANGLE_WIREFRAME = 4,
 };
-enum VertexInputRate {
-  L_VERTEX_INPUT_RATE_VERTEX,
-  L_VERTEX_INPUT_RATE_INSTANCE,
-};
-struct VertexInput {
-  fmt::Format fmt;
-  VertexInputRate rate;
-};
 struct GraphicsTaskConfig {
   // Human-readable label of the task.
   std::string label;
@@ -425,8 +419,6 @@ struct GraphicsTaskConfig {
   size_t frag_code_size;
   // Topology of vertex inputs to be assembled.
   Topology topo;
-  // Vertex vertex input specifications.
-  std::vector<VertexInput> vert_inputs;
   // Resources to be allocated.
   std::vector<ResourceType> rsc_tys;
 };

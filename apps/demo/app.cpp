@@ -2,7 +2,6 @@
 #include "gft/vk.hpp"
 #include "gft/glslang.hpp"
 #include "gft/renderdoc.hpp"
-#undef assert
 
 using namespace liong;
 using namespace vk;
@@ -41,7 +40,7 @@ void copy_buf2host(
     liong::log::warn("zero-sized copy is ignored");
     return;
   }
-  liong::assert(src.size >= size, "src buffer size is too small");
+  L_ASSERT(src.size >= size, "src buffer size is too small");
   scoped::MappedBuffer mapped(src, L_MEMORY_ACCESS_READ_BIT);
   std::memcpy(dst, (const void*)mapped, size);
 }
@@ -54,7 +53,7 @@ void copy_host2buf(
     liong::log::warn("zero-sized copy is ignored");
     return;
   }
-  liong::assert(dst.size >= size, "dst buffser size is too small");
+  L_ASSERT(dst.size >= size, "dst buffser size is too small");
   scoped::MappedBuffer mapped(dst, L_MEMORY_ACCESS_WRITE_BIT);
   std::memcpy((void*)mapped, mapped, size);
 }
@@ -195,7 +194,7 @@ void guarded_main2() {
     glslang::compile_graph_hlsl(vert_glsl, "vert", vert_glsl, "frag");
   dbg_dump_spv_art("out", art);
 
-  liong::assert(art.ubo_size == 4 * sizeof(float),
+  L_ASSERT(art.ubo_size == 4 * sizeof(float),
     "unexpected ubo size; should be 16, but is ", art.ubo_size);
 
   ContextConfig ctxt_cfg { "ctxt", 0 };

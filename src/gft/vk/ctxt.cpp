@@ -1,6 +1,8 @@
 #include <set>
 #include "gft/vk.hpp"
 #include "gft/log.hpp"
+#include "gft/assert.hpp"
+#include "sys.hpp"
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -15,14 +17,12 @@
 namespace liong {
 namespace vk {
 
-uint32_t api_ver = VK_API_VERSION_1_0;
-
 VkSurfaceKHR _create_surf_windows(const ContextWindowsConfig& cfg) {
 #if VK_KHR_win32_surface
-  assert(cfg.dev_idx < physdevs.size(),
+  L_ASSERT(cfg.dev_idx < get_inst().physdev_details.size(),
     "wanted vulkan device does not exists (#", cfg.dev_idx, " of ",
-      physdevs.size(), " available devices)");
-  auto physdev = physdevs[cfg.dev_idx];
+    get_inst().physdev_details.size(), " available devices)");
+  auto physdev = get_inst().physdev_details.at(cfg.dev_idx);
 
   VkWin32SurfaceCreateInfoKHR wsci {};
   wsci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
@@ -30,7 +30,7 @@ VkSurfaceKHR _create_surf_windows(const ContextWindowsConfig& cfg) {
   wsci.hwnd = (HWND)cfg.hwnd;
 
   VkSurfaceKHR surf;
-  VK_ASSERT << vkCreateWin32SurfaceKHR(inst, &wsci, nullptr, &surf);
+  VK_ASSERT << vkCreateWin32SurfaceKHR(get_inst().inst, &wsci, nullptr, &surf);
 
   log::debug("created windows surface '", cfg.label, "'");
   return surf;
@@ -42,7 +42,7 @@ VkSurfaceKHR _create_surf_windows(const ContextWindowsConfig& cfg) {
 
 VkSurfaceKHR _create_surf_android(const ContextAndroidConfig& cfg) {
 #if VK_KHR_android_surface
-  assert(cfg.dev_idx < physdevs.size(),
+  L_ASSERT(cfg.dev_idx < physdevs.size(),
     "wanted vulkan device does not exists (#", cfg.dev_idx, " of ",
       physdevs.size(), " available devices)");
   auto physdev = physdevs[cfg.dev_idx];
@@ -52,7 +52,7 @@ VkSurfaceKHR _create_surf_android(const ContextAndroidConfig& cfg) {
   asci.window = (struct ANativeWindow* const)cfg.native_wnd;
 
   VkSurfaceKHR surf;
-  VK_ASSERT << vkCreateAndroidSurfaceKHR(inst, &asci, nullptr, &surf);
+  VK_ASSERT << vkCreateAndroidSurfaceKHR(INST->inst, &asci, nullptr, &surf);
 
   log::debug("created android surface '", cfg.label, "'");
   return surf;
@@ -61,62 +61,28 @@ VkSurfaceKHR _create_surf_android(const ContextAndroidConfig& cfg) {
   return VK_NULL_HANDLE;
 #endif // VK_KHR_android_surface
 }
-VkSampler _create_sampler(
-  VkDevice dev,
-  VkFilter filter,
-  VkSamplerMipmapMode mip_mode,
-  float max_aniso,
-  VkCompareOp cmp_op
-) {
-  VkSamplerCreateInfo sci {};
-  sci.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
-  sci.magFilter = filter;
-  sci.minFilter = filter;
-  sci.mipmapMode = mip_mode;
-  sci.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  sci.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  sci.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
-  if (max_aniso > 1.0f) {
-    sci.anisotropyEnable = VK_TRUE;
-    sci.maxAnisotropy = max_aniso;
-  }
-  if (cmp_op != VK_COMPARE_OP_NEVER) {
-    sci.compareEnable = VK_TRUE;
-    sci.compareOp = cmp_op;
-  }
-
-  VkSampler sampler;
-  VK_ASSERT << vkCreateSampler(dev, &sci, nullptr, &sampler);
-  return sampler;
-}
 Context _create_ctxt(
   const std::string& label,
   uint32_t dev_idx,
   VkSurfaceKHR surf
 ) {
-  assert(dev_idx < physdevs.size(),
+  const Instance& inst = get_inst();
+
+  L_ASSERT(dev_idx < inst.physdev_details.size(),
     "wanted vulkan device does not exists (#", dev_idx, " of ",
-      physdevs.size(), " available devices)");
-  auto physdev = physdevs[dev_idx];
+    inst.physdev_details.size(), " available devices)");
+  const InstancePhysicalDeviceDetail& physdev_detail =
+    inst.physdev_details.at(dev_idx);
 
-  VkPhysicalDeviceFeatures feat;
-  vkGetPhysicalDeviceFeatures(physdev, &feat);
+  VkPhysicalDevice physdev = physdev_detail.physdev;
+  const auto& prop = physdev_detail.prop;
+  const auto& feat = physdev_detail.feat;
+  const auto& qfam_props = physdev_detail.qfam_props;
 
-  VkPhysicalDeviceProperties physdev_prop;
-  vkGetPhysicalDeviceProperties(physdev, &physdev_prop);
-
-  if (physdev_prop.limits.timestampComputeAndGraphics == VK_FALSE) {
+  if (prop.limits.timestampComputeAndGraphics == VK_FALSE) {
     log::warn("context '", label, "' device does not support timestamps, "
       "the following command won't be available: WRITE_TIMESTAMP");
   }
-
-  // Collect queue families and use as few queues as possible (for less sync).
-  uint32_t nqfam_prop;
-  vkGetPhysicalDeviceQueueFamilyProperties(physdev, &nqfam_prop, nullptr);
-  std::vector<VkQueueFamilyProperties> qfam_props;
-  qfam_props.resize(nqfam_prop);
-  vkGetPhysicalDeviceQueueFamilyProperties(physdev,
-    &nqfam_prop, qfam_props.data());
 
   struct QueueFamilyTrait {
     uint32_t qfam_idx;
@@ -157,7 +123,7 @@ Context _create_ctxt(
     }
     it->second.emplace_back(QueueFamilyTrait { i, queue_flags });
   }
-  assert(!qfam_props.empty(),
+  L_ASSERT(!qfam_props.empty(),
     "cannot find any queue family on device #", dev_idx);
 
   struct SubmitTypeQueueRequirement {
@@ -260,30 +226,14 @@ Context _create_ctxt(
     }
   }
 
-  uint32_t ndev_ext = 0;
-  VK_ASSERT << vkEnumerateDeviceExtensionProperties(physdev, nullptr, &ndev_ext, nullptr);
-
-  std::vector<VkExtensionProperties> dev_exts;
-  dev_exts.resize(ndev_ext);
-  VK_ASSERT << vkEnumerateDeviceExtensionProperties(physdev, nullptr, &ndev_ext, dev_exts.data());
-
-  std::vector<const char*> dev_ext_names;
-  dev_ext_names.reserve(ndev_ext);
-  for (const auto& dev_ext : dev_exts) {
-    dev_ext_names.emplace_back(dev_ext.extensionName);
+  std::vector<const char*> dev_exts;
+  dev_exts.reserve(physdev_detail.ext_props.size());
+  for (const auto& dev_ext : physdev_detail.ext_props) {
+    dev_exts.emplace_back(dev_ext.first.c_str());
   }
-  log::debug("enabled device extensions: ", util::join(", ", dev_ext_names));
+  log::debug("enabled device extensions: ", util::join(", ", dev_exts));
 
-  VkDeviceCreateInfo dci {};
-  dci.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
-  dci.pEnabledFeatures = &feat;
-  dci.queueCreateInfoCount = static_cast<uint32_t>(dqcis.size());
-  dci.pQueueCreateInfos = dqcis.data();
-  dci.enabledExtensionCount = (uint32_t)dev_ext_names.size();
-  dci.ppEnabledExtensionNames = dev_ext_names.data();
-
-  VkDevice dev;
-  VK_ASSERT << vkCreateDevice(physdev, &dci, nullptr, &dev);
+  VkDevice dev = sys::create_dev(physdev_detail.physdev, dqcis, dev_exts, feat);
 
   std::map<SubmitType, ContextSubmitDetail> submit_details;
   for (const auto& pair : queue_allocs) {
@@ -292,119 +242,71 @@ Context _create_ctxt(
 
     if (qfam_idx == VK_QUEUE_FAMILY_IGNORED) { continue; }
 
-    VkQueue queue;
-    vkGetDeviceQueue(dev, qfam_idx, 0, &queue);
-
     ContextSubmitDetail submit_detail {};
     submit_detail.qfam_idx = qfam_idx;
-    submit_detail.queue = queue;
+    submit_detail.queue = sys::get_dev_queue(dev, qfam_idx, 0);
     submit_details.insert(std::make_pair<SubmitType, ContextSubmitDetail>(
       std::move(submit_ty), std::move(submit_detail)));
   }
 
-  VkPhysicalDeviceMemoryProperties mem_prop;
-  vkGetPhysicalDeviceMemoryProperties(physdev, &mem_prop);
-  for (size_t i = 0; i < mem_prop.memoryHeapCount; ++i) {
-    const VkMemoryHeap& heap = mem_prop.memoryHeaps[i];
-    static const std::array<const char*, 1> flag_lits {
-      "DEVICE_LOCAL",
-    };
-    std::vector<std::string> flags {};
-    for (uint32_t j = 0; j < sizeof(heap.flags) * 8; ++j) {
-      if (((heap.flags >> j) & 1) == 0) { continue; }
-      if (j < flag_lits.size()) {
-        flags.emplace_back(flag_lits[j]);
-      } else {
-        flags.emplace_back(util::format("(1 << ", j, ")"));
-      }
-    }
-    std::string all_flags = flags.empty() ? "0" : util::join(" | ", flags);
-    log::debug("memory heap #", i, ": ", all_flags);
-  }
-  for (size_t i = 0; i < mem_prop.memoryTypeCount; ++i) {
-    const VkMemoryType& ty = mem_prop.memoryTypes[i];
-    static const std::array<const char*, 6> flag_lits {
-      "DEVICE_LOCAL",
-      "HOST_VISIBLE",
-      "HOST_COHERENT",
-      "HOST_CACHED",
-      "LAZILY_ALLOCATED",
-      "PROTECTED",
-    };
-    std::vector<std::string> flags {};
-    for (uint32_t j = 0; j < sizeof(ty.propertyFlags) * 8; ++j) {
-      if (((ty.propertyFlags >> j) & 1) == 0) { continue; }
-      if (j < flag_lits.size()) {
-        flags.emplace_back(flag_lits[j]);
-      } else {
-        flags.emplace_back(util::format("(1 << ", j, ")"));
-      }
-    }
-    std::string all_flags = flags.empty() ? "0" : util::join(" | ", flags);
-    log::debug("memory type #", i, " on heap #", ty.heapIndex, ": ", all_flags);
-  }
-
   std::map<ImageSampler, VkSampler> img_samplers {};
-  img_samplers[L_IMAGE_SAMPLER_LINEAR] = _create_sampler(dev,
+  img_samplers[L_IMAGE_SAMPLER_LINEAR] = sys::create_sampler(dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, VK_COMPARE_OP_NEVER);
-  img_samplers[L_IMAGE_SAMPLER_NEAREST] = _create_sampler(dev,
+  img_samplers[L_IMAGE_SAMPLER_NEAREST] = sys::create_sampler(dev,
     VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, 0.0f, VK_COMPARE_OP_NEVER);
-  img_samplers[L_IMAGE_SAMPLER_ANISOTROPY_4] = _create_sampler(dev,
+  img_samplers[L_IMAGE_SAMPLER_ANISOTROPY_4] = sys::create_sampler(dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 4.0f, VK_COMPARE_OP_NEVER);
 
   std::map<DepthImageSampler, VkSampler> depth_img_samplers {};
-  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_LINEAR] = _create_sampler(dev,
+  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_LINEAR] = sys::create_sampler(dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, VK_COMPARE_OP_LESS);
-  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_NEAREST] = _create_sampler(dev,
+  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_NEAREST] = sys::create_sampler(dev,
     VK_FILTER_NEAREST, VK_SAMPLER_MIPMAP_MODE_NEAREST, 0.0f, VK_COMPARE_OP_LESS);
-  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_ANISOTROPY_4] = _create_sampler(dev,
+  depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_ANISOTROPY_4] = sys::create_sampler(dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 4.0f, VK_COMPARE_OP_LESS);
 
   VmaAllocatorCreateInfo allocatorInfo = {};
-  allocatorInfo.vulkanApiVersion = api_ver;
+  allocatorInfo.vulkanApiVersion = inst.api_ver;
   allocatorInfo.physicalDevice = physdev;
   allocatorInfo.device = dev;
-  allocatorInfo.instance = inst;
+  allocatorInfo.instance = inst.inst;
 
   VmaAllocator allocator;
   VK_ASSERT << vmaCreateAllocator(&allocatorInfo, &allocator);
 
   log::debug("created vulkan context '", label, "' on device #", dev_idx, ": ",
-    physdev_descs[dev_idx]);
+    inst.physdev_details.at(dev_idx).desc);
   return Context {
-    label, dev, surf, physdev, std::move(physdev_prop),
+    label, dev_idx, dev, surf,
     std::move(submit_details), img_samplers, depth_img_samplers, allocator
   };
 
 }
 
 Context create_ctxt(const ContextConfig& cfg) {
-  if (inst == VK_NULL_HANDLE) { initialize(); }
   return _create_ctxt(cfg.label, cfg.dev_idx, VK_NULL_HANDLE);
 }
 Context create_ctxt_windows(const ContextWindowsConfig& cfg) {
-  if (inst == VK_NULL_HANDLE) { initialize(); }
   VkSurfaceKHR surf = _create_surf_windows(cfg);
   return _create_ctxt(cfg.label, cfg.dev_idx, surf);
 }
 Context create_ctxt_android(const ContextAndroidConfig& cfg) {
-  if (inst == VK_NULL_HANDLE) { initialize(); }
   VkSurfaceKHR surf = _create_surf_android(cfg);
   return _create_ctxt(cfg.label, cfg.dev_idx, surf);
 }
 void destroy_ctxt(Context& ctxt) {
   if (ctxt.surf != VK_NULL_HANDLE) {
-    vkDestroySurfaceKHR(inst, ctxt.surf, nullptr);
+    vkDestroySurfaceKHR(get_inst().inst, ctxt.surf, nullptr);
   }
   if (ctxt.dev != VK_NULL_HANDLE) {
     for (const auto& samp : ctxt.img_samplers) {
-      vkDestroySampler(ctxt.dev, samp.second, nullptr);
+      sys::destroy_sampler(ctxt.dev, samp.second);
     }
     for (const auto& samp : ctxt.depth_img_samplers) {
-      vkDestroySampler(ctxt.dev, samp.second, nullptr);
+      sys::destroy_sampler(ctxt.dev, samp.second);
     }
     vmaDestroyAllocator(ctxt.allocator);
-    vkDestroyDevice(ctxt.dev, nullptr);
+    sys::destroy_dev(ctxt.dev);
     log::debug("destroyed vulkan context '", ctxt.label, "'");
   }
   ctxt = {};
