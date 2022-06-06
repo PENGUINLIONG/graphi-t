@@ -116,7 +116,7 @@ void initialize(uint32_t api_ver, VkInstance inst) {
   }
 
   Instance out {};
-  out.api_ver = VK_API_VERSION_1_0;
+  out.api_ver = api_ver;
   out.inst = inst;
   out.physdev_details = collect_physdev_details(inst);
   out.is_imported = false;

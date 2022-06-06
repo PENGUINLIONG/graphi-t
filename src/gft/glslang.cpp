@@ -18,7 +18,8 @@ void _initialize(bool silent) {
     return;
   }
 
-  L_ASSERT(::glslang::InitializeProcess(), "cannot initialize glslang");
+  bool res = ::glslang::InitializeProcess();
+  L_ASSERT(res, "cannot initialize glslang");
   ::glslang::Version glslang_ver = ::glslang::GetVersion();
   log::info("glslang version: ", glslang_ver.major, ".",
     glslang_ver.minor, ".", glslang_ver.patch);
