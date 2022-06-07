@@ -514,8 +514,10 @@ Invocation create_graph_invoke(
   }
   graph_detail.vert_bufs = std::move(vert_bufs);
   graph_detail.vert_buf_offsets = std::move(vert_buf_offsets);
-  graph_detail.idx_buf = cfg.idx_buf.buf->buf;
-  graph_detail.idx_buf_offset = cfg.idx_buf.offset;
+  if (cfg.idx_buf.buf != VK_NULL_HANDLE) {
+    graph_detail.idx_buf = cfg.idx_buf.buf->buf;
+    graph_detail.idx_buf_offset = cfg.idx_buf.offset;
+  }
   graph_detail.ninst = cfg.ninst;
   graph_detail.nvert = cfg.nvert;
   graph_detail.idx_ty = cfg.idx_ty;

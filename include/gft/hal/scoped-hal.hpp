@@ -740,12 +740,21 @@ struct BufferBuilder {
   const HAL_IMPL_NAMESPACE::Context& parent;
   BufferConfig inner;
   const void* streaming_data;
-  size_t streaming_data_size;
+  size_t streaming_elem_size;
+  size_t streaming_elem_size_aligned;
+  size_t nstreaming_elem;
 
   BufferBuilder(
     const HAL_IMPL_NAMESPACE::Context& ctxt,
     const std::string& label = ""
-  ) : parent(ctxt), inner(), streaming_data(), streaming_data_size() {
+  ) :
+    parent(ctxt),
+    inner(),
+    streaming_data(),
+    streaming_elem_size(),
+    streaming_elem_size_aligned(),
+    nstreaming_elem()
+  {
     inner.label = label;
     inner.align = 1;
   }
@@ -802,7 +811,15 @@ struct BufferBuilder {
     return size(sizeof(T));
   }
 
-  Self& streaming_with(const void* data, size_t size);
+  Self& streaming_with_aligned(
+    const void* data,
+    size_t elem_size,
+    size_t elem_align,
+    size_t nelem
+  );
+  inline Self& streaming_with(const void* data, size_t size) {
+    return streaming_with_aligned(data, size, 1, 1);
+  }
   template<typename T>
   inline Self& streaming_with(const std::vector<T>& data) {
     return streaming_with(data.data(), data.size() * sizeof(T));
@@ -810,6 +827,10 @@ struct BufferBuilder {
   template<typename T>
   inline Self& streaming_with(const T& data) {
     return streaming_with(&data, sizeof(T));
+  }
+  template<typename T>
+  inline Self& streaming_with_aligned(const std::vector<T>& data, size_t align) {
+    return streaming_with_aligned(data.data(), sizeof(T), align, data.size());
   }
 
   Buffer build(bool gc = true);
@@ -820,8 +841,8 @@ struct BufferBuilder {
 struct RenderPass {
   L_DECLR_SCOPED_OBJ(RenderPass);
 
-  GraphicsTaskBuilder build_graph_task(const std::string& label) const;
-  RenderPassInvocationBuilder build_pass_invoke(const std::string& label) const;
+  GraphicsTaskBuilder build_graph_task(const std::string& label = "") const;
+  RenderPassInvocationBuilder build_pass_invoke(const std::string& label = "") const;
 };
 struct RenderPassBuilder {
   using Self = RenderPassBuilder;
@@ -879,7 +900,7 @@ struct RenderPassBuilder {
     auto access = L_ATTACHMENT_ACCESS_CLEAR | L_ATTACHMENT_ACCESS_STORE;
     return attm((AttachmentAccess)access, fmt);
   }
-  inline Self& load_store_depth_attm(fmt::DepthFormat fmt) {
+  inline Self& load_store_attm(fmt::DepthFormat fmt) {
     auto access = L_ATTACHMENT_ACCESS_LOAD | L_ATTACHMENT_ACCESS_STORE;
     return attm((AttachmentAccess)access, fmt);
   }

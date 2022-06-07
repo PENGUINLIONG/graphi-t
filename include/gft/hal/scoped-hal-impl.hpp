@@ -211,17 +211,38 @@ L_DEF_CTOR_DTOR(Context);
 
 
 L_DEF_CTOR_DTOR(Buffer);
-BufferBuilder& BufferBuilder::streaming_with(const void* data, size_t size) {
-  L_ASSERT(inner.size == size || inner.size == 0,
+BufferBuilder& BufferBuilder::streaming_with_aligned(
+  const void* data,
+  size_t elem_size,
+  size_t elem_align,
+  size_t nelem
+) {
+  if (elem_align == 0) {
+    elem_align = 1;
+  }
+  size_t elem_aligned_size = util::align_up(elem_size, elem_align);
+  L_ASSERT(inner.size == elem_aligned_size * nelem || inner.size == 0,
     "buffer streaming must cover the entire range");
   streaming_data = data;
-  streaming_data_size = size;
-  return streaming().size(size);
+  streaming_elem_size = elem_size;
+  streaming_elem_size_aligned = elem_aligned_size;
+  nstreaming_elem = nelem;
+  return streaming().size(elem_aligned_size * nelem);
 }
 Buffer BufferBuilder::build(bool gc) {
   auto out = L_BUILD_WITH_CFG(Buffer, create_buf);
-  if (streaming_data != nullptr && streaming_data_size > 0) {
-    out.map_write().write(streaming_data, streaming_data_size);
+  if (streaming_data != nullptr && nstreaming_elem > 0) {
+    MappedBuffer mapped = out.map_write();
+    size_t offset_src = 0;
+    size_t offset_dst = 0;
+    for (size_t i = 0; i < nstreaming_elem; ++i) {
+      std::memcpy(
+        ((uint8_t*)mapped) + offset_dst,
+        ((const uint8_t*)streaming_data) + offset_src,
+        streaming_elem_size);
+      offset_src += streaming_elem_size;
+      offset_dst += streaming_elem_size_aligned;
+    }
   }
   return std::move(out);
 }
