@@ -17,6 +17,7 @@ struct Renderer {
   scoped::RenderPass pass;
   scoped::DepthImage zbuf_img;
   scoped::Task lit_task;
+  scoped::Task wireframe_task;
 
   scoped::Image default_tex_img;
 
@@ -39,6 +40,7 @@ struct Renderer {
   void end_frame();
 
   Renderer& draw_mesh(const mesh::Mesh& mesh);
+  Renderer& draw_mesh_wireframe(const mesh::Mesh& mesh, const glm::vec3& color = glm::vec3(1.0f, 1.0f, 0.0f));
   //Renderer& draw_idxmesh(const mesh::IndexedMesh& idxmesh);
 };
 

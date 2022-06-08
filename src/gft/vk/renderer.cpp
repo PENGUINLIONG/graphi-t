@@ -36,6 +36,51 @@ scoped::RenderPass create_pass(
     .build();
   return pass;
 }
+scoped::Task create_wireframe_task(const scoped::RenderPass& pass) {
+  const char* vert_src = R"(
+    #version 460 core
+
+    layout(location=0) in vec3 pos;
+
+    layout(binding=0, std140) uniform Uniform {
+      mat4 model2world;
+      mat4 world2view;
+      vec4 emission;
+    };
+
+    void main() {
+      gl_Position = world2view * model2world * vec4(pos, 1.0);
+    }
+  )";
+  const char* frag_src = R"(
+    #version 460 core
+    precision mediump float;
+
+    layout(location=0) out vec4 scene_color;
+
+    layout(binding=0, std140) uniform Uniform {
+      mat4 model2world;
+      mat4 world2view;
+      vec4 emission;
+    };
+
+    layout(binding=3) uniform sampler2D main_tex;
+
+    void main() {
+      scene_color = emission;
+    }
+  )";
+
+  auto art = glslang::compile_graph(vert_src, "main", frag_src, "main");
+
+  auto wireframe_task = pass.build_graph_task()
+    .vert(art.vert_spv)
+    .frag(art.frag_spv)
+    .rsc(L_RESOURCE_TYPE_UNIFORM_BUFFER)
+    .topo(L_TOPOLOGY_TRIANGLE_WIREFRAME)
+    .build();
+  return wireframe_task;
+}
 scoped::Task create_lit_task(const scoped::RenderPass& pass) {
   const char* vert_src = R"(
     #version 460 core
@@ -153,6 +198,7 @@ Renderer::Renderer(
   pass(create_pass(ctxt, width, height)),
   zbuf_img(create_zbuf(ctxt, width, height)),
   lit_task(create_lit_task(pass)),
+  wireframe_task(create_wireframe_task(pass)),
   default_tex_img(create_default_tex_img(ctxt)),
   width(width),
   height(height),
@@ -223,6 +269,40 @@ Renderer& Renderer::draw_mesh(const mesh::Mesh& mesh) {
     .rsc(uv_buf.view())
     .rsc(norm_buf.view())
     .rsc(default_tex_img.view())
+    .build();
+
+  rpib->invoke(lit_invoke);
+  return *this;
+}
+
+Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh, const glm::vec3& color) {
+  struct Uniform {
+    glm::mat4 model2world;
+    glm::mat4 world2view;
+    glm::vec4 emission;
+  };
+  Uniform u;
+  glm::mat4x4 model2world = glm::scale(glm::mat4x4(1.0f), glm::vec3(1.0f, -1.0f, -1.0f));
+  u.model2world = model2world;
+  glm::mat4x4 camera2view = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 1e-2f, 65534.0f);
+  glm::mat4x4 world2camera = glm::lookAt(-camera_pos, glm::vec3 {}, glm::vec3(0.0f, 1.0f, 0.0f));
+  u.world2view = camera2view * world2camera;
+  u.emission = glm::vec4(color, 1.0f);
+
+  scoped::Buffer uniform_buf = ctxt.build_buf()
+    .uniform()
+    .streaming_with(u)
+    .build();
+
+  scoped::Buffer poses_buf = ctxt.build_buf()
+    .vertex()
+    .streaming_with_aligned(mesh.poses, sizeof(glm::vec4))
+    .build();
+
+  scoped::Invocation lit_invoke = wireframe_task.build_graph_invoke()
+    .vert_buf(poses_buf.view())
+    .nvert(mesh.poses.size())
+    .rsc(uniform_buf.view())
     .build();
 
   rpib->invoke(lit_invoke);

@@ -15,6 +15,9 @@ struct Mesh {
   std::vector<glm::vec3> norms;
 
   static Mesh from_tris(const geom::Triangle* tris, size_t ntri);
+  inline static Mesh from_tris(const std::vector<geom::Triangle>& tris) {
+    return from_tris(tris.data(), tris.size());
+  }
   std::vector<geom::Triangle> to_tris() const;
 
   geom::Aabb aabb() const;
@@ -51,6 +54,14 @@ struct BinGrid {
   std::vector<float> grid_lines_y;
   std::vector<float> grid_lines_z;
   std::vector<Bin> bins;
+
+  inline std::vector<geom::Aabb> to_aabbs() const {
+    std::vector<geom::Aabb> out;
+    for (const auto& bin : bins) {
+      out.emplace_back(bin.aabb);
+    }
+    return out;
+  }
 };
 
 extern BinGrid bin_point_cloud(
