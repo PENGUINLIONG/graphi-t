@@ -670,45 +670,51 @@ BinGrid bin_idxmesh(
 }
 
 
-void compact_mesh(BinGrid& grid) {
-  for (Bin& bin : grid.bins) {
-    std::vector<uint32_t> idxs;
-  }
-}
-
-
-
-struct TetraVert2Idx {
+template<typename TKey, typename TValue = TKey>
+struct Dedup {
   struct Key {
-    glm::vec3 pos;
-
+    TKey key;
     friend bool operator<(const Key& a, const Key& b) {
       return std::memcmp(&a, &b, sizeof(Key)) < 0;
     }
   };
-  std::vector<glm::vec3> verts;
-  std::map<Key, size_t> inner;
+  std::map<Key, size_t> key2idx;
+  std::map<size_t, TValue> idx2val;
 
-  size_t get_idx(const glm::vec3& vert) {
-    Key key { vert };
-    auto it = inner.find(key);
-    if (it == inner.end()) {
-      size_t idx = verts.size();
-      verts.emplace_back(vert);
-      inner.emplace_hint(it, std::make_pair(key, idx));
+  size_t get_idx(const TKey& key) {
+    Key k { key };
+    auto it = key2idx.find(k);
+    if (it == key2idx.end()) {
+      size_t idx = idx2val.size();
+      idx2val.emplace(std::make_pair(idx, TValue { key }));
+      key2idx.emplace_hint(it, std::make_pair(std::move(k), idx));
       return idx;
     } else {
       return it->second;
     }
   }
+  TValue& get_value(size_t idx) {
+    return idx2val.at(idx);
+  }
+
+  std::vector<TValue> take_data() {
+    std::vector<TValue> out {};
+    out.reserve(idx2val.size());
+    for (auto& pair : idx2val) {
+      out.emplace_back(std::move(pair.second));
+    }
+    return out;
+  }
 };
+
 TetrahedralMesh TetrahedralMesh::from_points(float density, const std::vector<glm::vec3>& points) {
   // Bin vertices into a voxel grid.
   PointCloud point_cloud { points };
   glm::vec3 size = geom::Aabb::from_points(points).size() * density;
   float max_edge = std::max(size.x, std::max(size.y, size.z));
   BinGrid grid = bin_point_cloud(glm::vec3(max_edge / (density * 10.0f)), point_cloud);
-  TetraVert2Idx tetra_vert2idx {};
+  Dedup<glm::vec3, TetrahedralVertex> dedup_tetra_vert {};
+  Dedup<glm::uvec4, TetrahedralCell> dedup_tetra_cell {};
 
   // Split voxel bins into tetrahedrons.
   std::vector<TetrahedralInterpolant> interps;
@@ -721,11 +727,15 @@ TetrahedralMesh TetrahedralMesh::from_points(float density, const std::vector<gl
     std::vector<uint32_t> iprims(bin.iprims.begin(), bin.iprims.end());
     for (const auto& tet : tets) {
       TetrahedralInterpolant interp_templ {};
-      interp_templ.itetra_verts = glm::uvec4(
-        tetra_vert2idx.get_idx(tet.a),
-        tetra_vert2idx.get_idx(tet.b),
-        tetra_vert2idx.get_idx(tet.c),
-        tetra_vert2idx.get_idx(tet.d));
+      glm::uvec4 tetra_cell = glm::uvec4(
+        dedup_tetra_vert.get_idx(tet.a),
+        dedup_tetra_vert.get_idx(tet.b),
+        dedup_tetra_vert.get_idx(tet.c),
+        dedup_tetra_vert.get_idx(tet.d));
+      uint32_t itetra_cell = dedup_tetra_cell.get_idx(tetra_cell);
+      interp_templ.itetra_cell = itetra_cell;
+
+      dedup_tetra_vert.get_value(tetra_cell.x).ineighbor_cells.insert(itetra_cell);
 
       for (size_t i = 0; i < iprims.size();) {
         size_t iprim = iprims.at(i);
@@ -746,21 +756,23 @@ TetrahedralMesh TetrahedralMesh::from_points(float density, const std::vector<gl
     tets.clear();
   }
 
-  TetrahedralMesh tetmesh {};
-  tetmesh.interps = std::move(interps);
-  tetmesh.tetra_verts = std::move(tetra_vert2idx.verts);
-  return tetmesh;
+  TetrahedralMesh tetra_mesh {};
+  tetra_mesh.tetra_verts = dedup_tetra_vert.take_data();
+  tetra_mesh.tetra_cells = dedup_tetra_cell.take_data();
+  tetra_mesh.interps = std::move(interps);
+  return tetra_mesh;
 }
 std::vector<glm::vec3> TetrahedralMesh::to_points() const {
   std::vector<glm::vec3> out {};
   out.reserve(interps.size());
   for (size_t i = 0; i < interps.size(); ++i) {
-    auto interp = interps.at(i);
+    const TetrahedralInterpolant& interp = interps.at(i);
+    const TetrahedralCell& tetra_cell = tetra_cells.at(interp.itetra_cell);
     glm::vec3 vert =
-      tetra_verts.at(interp.itetra_verts.x) * interp.tetra_weights.x +
-      tetra_verts.at(interp.itetra_verts.y) * interp.tetra_weights.y +
-      tetra_verts.at(interp.itetra_verts.z) * interp.tetra_weights.z +
-      tetra_verts.at(interp.itetra_verts.w) * interp.tetra_weights.w;
+      tetra_verts.at(tetra_cell.itetra_verts.x).pos * interp.tetra_weights.x +
+      tetra_verts.at(tetra_cell.itetra_verts.y).pos * interp.tetra_weights.y +
+      tetra_verts.at(tetra_cell.itetra_verts.z).pos * interp.tetra_weights.z +
+      tetra_verts.at(tetra_cell.itetra_verts.w).pos * interp.tetra_weights.w;
     out.emplace_back(vert);
   }
   return out;

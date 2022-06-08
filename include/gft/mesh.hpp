@@ -4,6 +4,7 @@
 #include <array>
 #include <vector>
 #include <string>
+#include <set>
 #include "glm/glm.hpp"
 #include "gft/geom.hpp"
 
@@ -99,14 +100,23 @@ extern BinGrid bin_idxmesh(
 
 
 
+struct TetrahedralVertex {
+  glm::vec3 pos;
+  // Indices to adjacent cells.
+  std::set<uint32_t> ineighbor_cells;
+};
+struct TetrahedralCell {
+  glm::uvec4 itetra_verts;
+};
 struct TetrahedralInterpolant {
   // Indices to tettrahedron vertices.
-  glm::uvec4 itetra_verts;
+  uint32_t itetra_cell;
   // Barycentric weights of tetrahedron vertices.
   glm::vec4 tetra_weights;
 };
 struct TetrahedralMesh {
-  std::vector<glm::vec3> tetra_verts;
+  std::vector<TetrahedralVertex> tetra_verts;
+  std::vector<TetrahedralCell> tetra_cells;
   std::vector<TetrahedralInterpolant> interps;
 
   static TetrahedralMesh from_points(float density, const std::vector<glm::vec3>& points);
