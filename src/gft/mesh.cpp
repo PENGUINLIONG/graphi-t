@@ -778,6 +778,12 @@ std::vector<glm::vec3> TetrahedralMesh::to_points() const {
   return out;
 }
 
+void TetrahedralMesh::apply_trans(const glm::mat4& trans) {
+  for (auto& tetra_vert : tetra_verts) {
+    tetra_vert.pos = glm::vec3(trans * glm::vec4(tetra_vert.pos, 1.0f));
+  }
+}
+
 std::vector<geom::Tetrahedron> TetrahedralMesh::to_tetras() const {
   std::vector<geom::Tetrahedron> out {};
   for (const auto& tetra_cell : tetra_cells) {
