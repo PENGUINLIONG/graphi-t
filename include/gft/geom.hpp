@@ -58,6 +58,9 @@ struct Aabb {
     }
     return Aabb::from_min_max(min, max);
   }
+  static constexpr Aabb from_points(const std::vector<glm::vec3>& points) {
+    return from_points(points.data(), points.size());
+  }
 };
 struct Sphere {
   glm::vec3 p;
@@ -96,7 +99,7 @@ extern bool raycast_tet(const Ray& ray, const Tetrahedron& tet, float& t);
 
 extern bool contains_point_aabb(const Aabb& aabb, const glm::vec3& point);
 extern bool contains_point_sphere(const Sphere& sphere, const glm::vec3& point);
-extern bool contains_point_tet(const Tetrahedron& tet, const glm::vec3& point);
+extern bool contains_point_tet(const Tetrahedron& tet, const glm::vec3& point, glm::vec4& bary);
 
 extern bool intersect_tri(const Triangle& tri1, const Triangle& tri2);
 extern bool intersect_aabb_tri(const Triangle& tri, const Aabb& aabb);

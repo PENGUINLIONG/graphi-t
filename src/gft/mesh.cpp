@@ -457,6 +457,14 @@ IndexedMesh IndexedMesh::from_mesh(const Mesh& mesh) {
   return out;
 }
 
+
+
+Aabb PointCloud::aabb() const {
+  return geom::Aabb::from_points(poses);
+}
+
+
+
 struct Binner {
   Aabb aabb;
   glm::uvec3 grid_res;
@@ -483,7 +491,8 @@ struct Binner {
     grid_lines_x(make_grid_lines(aabb.min.x, aabb.max.x, grid_res.x)),
     grid_lines_y(make_grid_lines(aabb.min.y, aabb.max.y, grid_res.y)),
     grid_lines_z(make_grid_lines(aabb.min.z, aabb.max.z, grid_res.z)),
-    bins()
+    bins(),
+    counter()
   {
     bins.reserve(grid_res.x * grid_res.y * grid_res.z);
     for (uint32_t z = 0; z < grid_res.z; ++z) {
@@ -508,17 +517,17 @@ struct Binner {
   }
 
   size_t get_ibin(const std::vector<float>& grid_lines, float x) {
-    size_t i = 1;
+    size_t i = 0;
     // The loop breaks when `x` is less than `grid_lines` so `i` ended at any
     // index of the left-close and right-open interval that contains the point.
     // But also note that if the loop runs out of range, i.e., `x >= aabb.max`
     // the index of the farthest bin is naturally assigned to `i`. Given that
     // non-intersecting triangles are filetered in `bin` any point enclosed
     // by `aabb` can be uniquely assigned to a bin at boundaries.
-    for (; i < grid_lines.size(); ++i) {
+    for (; i < grid_lines.size() - 1; ++i) {
       if (x < grid_lines.at(i)) { break; }
     }
-    return i - 1;
+    return i;
   }
 
   bool bin(const Aabb& aabb, size_t& iprim) {
@@ -549,6 +558,22 @@ struct Binner {
     return true;
   }
 
+  bool bin(const glm::vec3& point, size_t& iprim) {
+    if (!contains_point_aabb(aabb, point)) {
+      // The point is not intersecting with the current binner space. So simply
+      // ignore this point.
+      return false;
+    }
+
+    size_t x = get_ibin(grid_lines_x, point.x);
+    size_t y = get_ibin(grid_lines_y, point.y);
+    size_t z = get_ibin(grid_lines_z, point.z);
+    size_t i = ((z * grid_res.y + y) * grid_res.x) + x;
+    bins.at(i).iprims.emplace_back(counter);
+    ++counter;
+    return true;
+  }
+
   BinGrid into_grid() {
     BinGrid grid {
       std::move(grid_lines_x),
@@ -567,11 +592,21 @@ BinGrid bin_point_cloud(
 ) {
   Binner binner(aabb, grid_res);
   for (const auto& point : point_cloud.poses) {
-    Aabb aabb2 { point };
     size_t _;
-    binner.bin(aabb2, _);
+    binner.bin(point, _);
   }
   return binner.into_grid();
+}
+BinGrid bin_point_cloud(
+  const glm::vec3& grid_interval,
+  const PointCloud& point_cloud
+) {
+  Aabb aabb = point_cloud.aabb();
+  glm::uvec3 grid_res = glm::ceil(aabb.size() / grid_interval);
+  aabb = Aabb::from_center_size(
+    aabb.center(),
+    glm::vec3(grid_res) * grid_interval);
+  return bin_point_cloud(aabb, grid_res, point_cloud);
 }
 
 BinGrid bin_mesh(
@@ -640,6 +675,100 @@ void compact_mesh(BinGrid& grid) {
     std::vector<uint32_t> idxs;
   }
 }
+
+
+
+struct TetraVert2Idx {
+  struct Key {
+    glm::vec3 pos;
+
+    friend bool operator<(const Key& a, const Key& b) {
+      return std::memcmp(&a, &b, sizeof(Key)) < 0;
+    }
+  };
+  std::vector<glm::vec3> verts;
+  std::map<Key, size_t> inner;
+
+  size_t get_idx(const glm::vec3& vert) {
+    Key key { vert };
+    auto it = inner.find(key);
+    if (it == inner.end()) {
+      size_t idx = verts.size();
+      verts.emplace_back(vert);
+      inner.emplace_hint(it, std::make_pair(key, idx));
+      return idx;
+    } else {
+      return it->second;
+    }
+  }
+};
+TetrahedralMesh TetrahedralMesh::from_points(float density, const std::vector<glm::vec3>& points) {
+  // Bin vertices into a voxel grid.
+  PointCloud point_cloud { points };
+  glm::vec3 size = geom::Aabb::from_points(points).size() * density;
+  float max_edge = std::max(size.x, std::max(size.y, size.z));
+  BinGrid grid = bin_point_cloud(glm::vec3(max_edge / (density * 10.0f)), point_cloud);
+  TetraVert2Idx tetra_vert2idx {};
+
+  // Split voxel bins into tetrahedrons.
+  std::vector<TetrahedralInterpolant> interps;
+  interps.resize(points.size());
+  std::vector<geom::Tetrahedron> tets;
+  tets.reserve(5);
+  for (const auto& bin : grid.bins) {
+    geom::split_aabb2tets(bin.aabb, tets);
+
+    std::vector<uint32_t> iprims(bin.iprims.begin(), bin.iprims.end());
+    for (const auto& tet : tets) {
+      TetrahedralInterpolant interp_templ {};
+      interp_templ.itetra_verts = glm::uvec4(
+        tetra_vert2idx.get_idx(tet.a),
+        tetra_vert2idx.get_idx(tet.b),
+        tetra_vert2idx.get_idx(tet.c),
+        tetra_vert2idx.get_idx(tet.d));
+
+      for (size_t i = 0; i < iprims.size();) {
+        size_t iprim = iprims.at(i);
+        glm::vec4 bary;
+        if (contains_point_tet(tet, points.at(iprim), bary)) {
+          iprims.erase(iprims.begin() + i);
+
+          TetrahedralInterpolant interp = interp_templ;
+          interp.tetra_weights = bary;
+          interps.at(iprim) = (interp);
+        } else {
+          ++i;
+        }
+      }
+    }
+
+    L_ASSERT(iprims.empty());
+    tets.clear();
+  }
+
+  TetrahedralMesh tetmesh {};
+  tetmesh.interps = std::move(interps);
+  tetmesh.tetra_verts = std::move(tetra_vert2idx.verts);
+  return tetmesh;
+}
+std::vector<glm::vec3> TetrahedralMesh::to_points() const {
+  std::vector<glm::vec3> out {};
+  out.reserve(interps.size());
+  for (size_t i = 0; i < interps.size(); ++i) {
+    auto interp = interps.at(i);
+    glm::vec3 vert =
+      tetra_verts.at(interp.itetra_verts.x) * interp.tetra_weights.x +
+      tetra_verts.at(interp.itetra_verts.y) * interp.tetra_weights.y +
+      tetra_verts.at(interp.itetra_verts.z) * interp.tetra_weights.z +
+      tetra_verts.at(interp.itetra_verts.w) * interp.tetra_weights.w;
+    out.emplace_back(vert);
+  }
+  return out;
+}
+
+
+
+
 
 } // namespace mesh
 } // namespace liong

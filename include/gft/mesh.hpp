@@ -1,6 +1,7 @@
 // # 3D Mesh utilities
 // @PENGUINLIONG
 #pragma once
+#include <array>
 #include <vector>
 #include <string>
 #include "glm/glm.hpp"
@@ -41,6 +42,8 @@ struct IndexedMesh {
 
 struct PointCloud {
   std::vector<glm::vec3> poses;
+
+  geom::Aabb aabb() const;
 };
 
 
@@ -69,6 +72,10 @@ extern BinGrid bin_point_cloud(
   const glm::uvec3& grid_res,
   const PointCloud& point_cloud
 );
+extern BinGrid bin_point_cloud(
+  const glm::vec3& grid_interval,
+  const PointCloud& point_cloud
+);
 
 extern BinGrid bin_mesh(
   const geom::Aabb& aabb,
@@ -89,6 +96,23 @@ extern BinGrid bin_idxmesh(
   const glm::vec3& grid_interval,
   const IndexedMesh& idxmesh
 );
+
+
+
+struct TetrahedralInterpolant {
+  // Indices to tettrahedron vertices.
+  glm::uvec4 itetra_verts;
+  // Barycentric weights of tetrahedron vertices.
+  glm::vec4 tetra_weights;
+};
+struct TetrahedralMesh {
+  std::vector<glm::vec3> tetra_verts;
+  std::vector<TetrahedralInterpolant> interps;
+
+  static TetrahedralMesh from_points(float density, const std::vector<glm::vec3>& points);
+  std::vector<glm::vec3> to_points() const;
+};
+
 
 } // namespace mesh
 } // namespace liong
