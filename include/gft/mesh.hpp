@@ -121,6 +121,9 @@ struct TetrahedralMesh {
 
   static TetrahedralMesh from_points(float density, const std::vector<glm::vec3>& points);
   std::vector<glm::vec3> to_points() const;
+
+  std::vector<geom::Tetrahedron> to_tetras() const;
+  Mesh to_mesh() const;
 };
 
 

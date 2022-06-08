@@ -40,7 +40,9 @@ struct Renderer {
   void end_frame();
 
   Renderer& draw_mesh(const mesh::Mesh& mesh);
-  Renderer& draw_mesh_wireframe(const mesh::Mesh& mesh, const glm::vec3& color = glm::vec3(1.0f, 1.0f, 0.0f));
+  Renderer& draw_mesh_wireframe(const mesh::Mesh& mesh, const std::vector<glm::vec3>& colors);
+  Renderer& draw_mesh_wireframe(const mesh::Mesh& mesh, const glm::vec3& color);
+  Renderer& draw_mesh_wireframe(const mesh::Mesh& mesh);
   //Renderer& draw_idxmesh(const mesh::IndexedMesh& idxmesh);
 };
 

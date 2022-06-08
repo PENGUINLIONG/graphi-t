@@ -17,11 +17,11 @@ bool contains_point_aabb(const Aabb& aabb, const vec3& point) {
 bool contains_point_sphere(const Sphere& sphere, const vec3& point) {
   return (point - sphere.p).length() <= sphere.r;
 }
-bool contains_point_tet(const Tetrahedron& tet, const vec3& point, vec4& bary) {
-  vec4 v0(tet.a, 1);
-  vec4 v1(tet.b, 1);
-  vec4 v2(tet.c, 1);
-  vec4 v3(tet.d, 1);
+bool contains_point_tetra(const Tetrahedron& tetra, const vec3& point, vec4& bary) {
+  vec4 v0(tetra.a, 1);
+  vec4 v1(tetra.b, 1);
+  vec4 v2(tetra.c, 1);
+  vec4 v3(tetra.d, 1);
   vec4 p0(point, 1);
   const float det0 = glm::determinant(mat4(v0, v1, v2, v3));
   const float det1 = glm::determinant(mat4(p0, v1, v2, v3));
@@ -54,7 +54,7 @@ bool intersect_aabb(const Aabb& aabb1, const Aabb& aabb2) {
 
 
 
-void split_tet2tris(const Tetrahedron& tet, std::vector<Triangle>& out) {
+void split_tetra2tris(const Tetrahedron& tet, std::vector<Triangle>& out) {
   Triangle t0 { tet.a, tet.b, tet.c };
   Triangle t1 { tet.a, tet.b, tet.d };
   Triangle t2 { tet.a, tet.c, tet.d };
@@ -66,7 +66,7 @@ void split_tet2tris(const Tetrahedron& tet, std::vector<Triangle>& out) {
   out.emplace_back(std::move(t3));
 }
 
-void split_aabb2tets(const Aabb& aabb, std::vector<Tetrahedron>& out) {
+void split_aabb2tetras(const Aabb& aabb, std::vector<Tetrahedron>& out) {
   // Any cube can be split into five tetrahedra and in this function we split
   // the AABB in a hard-coded pattern for simplicity.
   //

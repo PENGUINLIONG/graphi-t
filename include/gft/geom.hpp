@@ -99,14 +99,14 @@ extern bool raycast_tet(const Ray& ray, const Tetrahedron& tet, float& t);
 
 extern bool contains_point_aabb(const Aabb& aabb, const glm::vec3& point);
 extern bool contains_point_sphere(const Sphere& sphere, const glm::vec3& point);
-extern bool contains_point_tet(const Tetrahedron& tet, const glm::vec3& point, glm::vec4& bary);
+extern bool contains_point_tetra(const Tetrahedron& tet, const glm::vec3& point, glm::vec4& bary);
 
 extern bool intersect_tri(const Triangle& tri1, const Triangle& tri2);
 extern bool intersect_aabb_tri(const Triangle& tri, const Aabb& aabb);
 extern bool intersect_aabb(const Aabb& aabb1, const Aabb& aabb2);
 
-extern void split_tet2tris(const Tetrahedron& tet, std::vector<Triangle>& tris);
-extern void split_aabb2tets(const Aabb& aabb, std::vector<Tetrahedron>& tets);
+extern void split_tetra2tris(const Tetrahedron& tet, std::vector<Triangle>& tris);
+extern void split_aabb2tetras(const Aabb& aabb, std::vector<Tetrahedron>& tets);
 
 extern void subdivide_aabb(
   const Aabb& aabb,

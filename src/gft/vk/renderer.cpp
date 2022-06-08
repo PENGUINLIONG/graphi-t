@@ -41,14 +41,18 @@ scoped::Task create_wireframe_task(const scoped::RenderPass& pass) {
     #version 460 core
 
     layout(location=0) in vec3 pos;
+    layout(location=0) out vec4 v_color;
 
     layout(binding=0, std140) uniform Uniform {
       mat4 model2world;
       mat4 world2view;
-      vec4 emission;
+    };
+    layout(binding=1, std430) readonly buffer Colors {
+      vec4 colors[];
     };
 
     void main() {
+      v_color = colors[gl_VertexIndex];
       gl_Position = world2view * model2world * vec4(pos, 1.0);
     }
   )";
@@ -56,18 +60,18 @@ scoped::Task create_wireframe_task(const scoped::RenderPass& pass) {
     #version 460 core
     precision mediump float;
 
+    layout(location=0) in highp vec4 v_color;
     layout(location=0) out vec4 scene_color;
 
     layout(binding=0, std140) uniform Uniform {
       mat4 model2world;
       mat4 world2view;
-      vec4 emission;
     };
 
     layout(binding=3) uniform sampler2D main_tex;
 
     void main() {
-      scene_color = emission;
+      scene_color = v_color;
     }
   )";
 
@@ -77,6 +81,7 @@ scoped::Task create_wireframe_task(const scoped::RenderPass& pass) {
     .vert(art.vert_spv)
     .frag(art.frag_spv)
     .rsc(L_RESOURCE_TYPE_UNIFORM_BUFFER)
+    .rsc(L_RESOURCE_TYPE_STORAGE_BUFFER)
     .topo(L_TOPOLOGY_TRIANGLE_WIREFRAME)
     .build();
   return wireframe_task;
@@ -275,11 +280,10 @@ Renderer& Renderer::draw_mesh(const mesh::Mesh& mesh) {
   return *this;
 }
 
-Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh, const glm::vec3& color) {
+Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh, const std::vector<glm::vec3>& colors) {
   struct Uniform {
     glm::mat4 model2world;
     glm::mat4 world2view;
-    glm::vec4 emission;
   };
   Uniform u;
   glm::mat4x4 model2world = glm::scale(glm::mat4x4(1.0f), glm::vec3(1.0f, -1.0f, -1.0f));
@@ -287,7 +291,6 @@ Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh, const glm::vec3&
   glm::mat4x4 camera2view = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 1e-2f, 65534.0f);
   glm::mat4x4 world2camera = glm::lookAt(-camera_pos, glm::vec3 {}, glm::vec3(0.0f, 1.0f, 0.0f));
   u.world2view = camera2view * world2camera;
-  u.emission = glm::vec4(color, 1.0f);
 
   scoped::Buffer uniform_buf = ctxt.build_buf()
     .uniform()
@@ -299,14 +302,27 @@ Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh, const glm::vec3&
     .streaming_with_aligned(mesh.poses, sizeof(glm::vec4))
     .build();
 
+  scoped::Buffer colors_buf = ctxt.build_buf()
+    .storage()
+    .streaming_with_aligned(colors, sizeof(glm::vec4))
+    .build();
+
   scoped::Invocation lit_invoke = wireframe_task.build_graph_invoke()
     .vert_buf(poses_buf.view())
     .nvert(mesh.poses.size())
     .rsc(uniform_buf.view())
+    .rsc(colors_buf.view())
     .build();
 
   rpib->invoke(lit_invoke);
   return *this;
+}
+Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh, const glm::vec3& color) {
+  std::vector<glm::vec3> colors(mesh.poses.size(), color);
+  return draw_mesh_wireframe(mesh, colors);
+}
+Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh) {
+  return draw_mesh_wireframe(mesh, glm::vec3(1.0f, 1.0f, 0.0f));
 }
 
 } // namespace scoped

@@ -722,7 +722,7 @@ TetrahedralMesh TetrahedralMesh::from_points(float density, const std::vector<gl
   std::vector<geom::Tetrahedron> tets;
   tets.reserve(5);
   for (const auto& bin : grid.bins) {
-    geom::split_aabb2tets(bin.aabb, tets);
+    geom::split_aabb2tetras(bin.aabb, tets);
 
     std::vector<uint32_t> iprims(bin.iprims.begin(), bin.iprims.end());
     for (const auto& tet : tets) {
@@ -740,7 +740,7 @@ TetrahedralMesh TetrahedralMesh::from_points(float density, const std::vector<gl
       for (size_t i = 0; i < iprims.size();) {
         size_t iprim = iprims.at(i);
         glm::vec4 bary;
-        if (contains_point_tet(tet, points.at(iprim), bary)) {
+        if (contains_point_tetra(tet, points.at(iprim), bary)) {
           iprims.erase(iprims.begin() + i);
 
           TetrahedralInterpolant interp = interp_templ;
@@ -778,7 +778,27 @@ std::vector<glm::vec3> TetrahedralMesh::to_points() const {
   return out;
 }
 
-
+std::vector<geom::Tetrahedron> TetrahedralMesh::to_tetras() const {
+  std::vector<geom::Tetrahedron> out {};
+  for (const auto& tetra_cell : tetra_cells) {
+    geom::Tetrahedron tetra {};
+    tetra.a = tetra_verts.at(tetra_cell.itetra_verts.x).pos;
+    tetra.b = tetra_verts.at(tetra_cell.itetra_verts.y).pos;
+    tetra.c = tetra_verts.at(tetra_cell.itetra_verts.z).pos;
+    tetra.d = tetra_verts.at(tetra_cell.itetra_verts.w).pos;
+    out.emplace_back(std::move(tetra));
+  }
+  return out;
+}
+Mesh TetrahedralMesh::to_mesh() const {
+  std::vector<geom::Tetrahedron> tetras = to_tetras();
+  std::vector<Triangle> out {};
+  out.reserve(tetras.size() * 4);
+  for (const auto& tetra : tetras) {
+    split_tetra2tris(tetra, out);
+  }
+  return Mesh::from_tris(out);
+}
 
 
 
