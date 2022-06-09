@@ -36,7 +36,7 @@ scoped::RenderPass create_pass(
     .build();
   return pass;
 }
-scoped::Task create_wireframe_task(const scoped::RenderPass& pass) {
+scoped::Task create_unlit_task(const scoped::RenderPass& pass, Topology topo) {
   const char* vert_src = R"(
     #version 460 core
 
@@ -82,7 +82,7 @@ scoped::Task create_wireframe_task(const scoped::RenderPass& pass) {
     .frag(art.frag_spv)
     .rsc(L_RESOURCE_TYPE_UNIFORM_BUFFER)
     .rsc(L_RESOURCE_TYPE_STORAGE_BUFFER)
-    .topo(L_TOPOLOGY_TRIANGLE_WIREFRAME)
+    .topo(topo)
     .build();
   return wireframe_task;
 }
@@ -203,7 +203,8 @@ Renderer::Renderer(
   pass(create_pass(ctxt, width, height)),
   zbuf_img(create_zbuf(ctxt, width, height)),
   lit_task(create_lit_task(pass)),
-  wireframe_task(create_wireframe_task(pass)),
+  wireframe_task(create_unlit_task(pass, L_TOPOLOGY_TRIANGLE_WIREFRAME)),
+  point_cloud_task(create_unlit_task(pass, L_TOPOLOGY_POINT)),
   default_tex_img(create_default_tex_img(ctxt)),
   width(width),
   height(height),
@@ -323,6 +324,43 @@ Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh, const glm::vec3&
 }
 Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh) {
   return draw_mesh_wireframe(mesh, glm::vec3(1.0f, 1.0f, 0.0f));
+}
+Renderer& Renderer::draw_point_cloud(const mesh::PointCloud& point_cloud, const std::vector<glm::vec3>& colors) {
+  struct Uniform {
+    glm::mat4 model2world;
+    glm::mat4 world2view;
+  };
+  Uniform u;
+  glm::mat4x4 model2world = glm::scale(glm::mat4x4(1.0f), glm::vec3(1.0f, -1.0f, -1.0f));
+  u.model2world = model2world;
+  glm::mat4x4 camera2view = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 1e-2f, 65534.0f);
+  glm::mat4x4 world2camera = glm::lookAt(-camera_pos, glm::vec3 {}, glm::vec3(0.0f, 1.0f, 0.0f));
+  u.world2view = camera2view * world2camera;
+
+  scoped::Buffer uniform_buf = ctxt.build_buf()
+    .uniform()
+    .streaming_with(u)
+    .build();
+
+  scoped::Buffer poses_buf = ctxt.build_buf()
+    .vertex()
+    .streaming_with_aligned(point_cloud.poses, sizeof(glm::vec4))
+    .build();
+
+  scoped::Buffer colors_buf = ctxt.build_buf()
+    .storage()
+    .streaming_with_aligned(colors, sizeof(glm::vec4))
+    .build();
+
+  scoped::Invocation invoke = point_cloud_task.build_graph_invoke()
+    .vert_buf(poses_buf.view())
+    .nvert(point_cloud.poses.size())
+    .rsc(uniform_buf.view())
+    .rsc(colors_buf.view())
+    .build();
+
+  rpib->invoke(invoke);
+  return *this;
 }
 
 } // namespace scoped

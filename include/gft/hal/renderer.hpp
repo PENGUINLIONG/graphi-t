@@ -18,6 +18,7 @@ struct Renderer {
   scoped::DepthImage zbuf_img;
   scoped::Task lit_task;
   scoped::Task wireframe_task;
+  scoped::Task point_cloud_task;
 
   scoped::Image default_tex_img;
 
@@ -43,6 +44,7 @@ struct Renderer {
   Renderer& draw_mesh_wireframe(const mesh::Mesh& mesh, const std::vector<glm::vec3>& colors);
   Renderer& draw_mesh_wireframe(const mesh::Mesh& mesh, const glm::vec3& color);
   Renderer& draw_mesh_wireframe(const mesh::Mesh& mesh);
+  Renderer& draw_point_cloud(const mesh::PointCloud& point_cloud, const std::vector<glm::vec3>& colors);
   //Renderer& draw_idxmesh(const mesh::IndexedMesh& idxmesh);
 };
 
