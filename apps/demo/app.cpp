@@ -218,15 +218,15 @@ void guarded_main2() {
   }
 
   scoped::Buffer verts = ctxt.build_buf("verts")
-    .size(3 * 4 * sizeof(float))
+    .size(3 * 3 * sizeof(float))
     .vertex()
     .streaming()
     .build();
   {
-    float data[12] {
-       1, -1, 0, 1,
-      -1, -1, 0, 1,
-      -1,  1, 0, 1,
+    float data[9] {
+       1, -1, 0,
+      -1, -1, 0,
+      -1,  1, 0,
     };
     verts.map_write().write(data);
   }
@@ -269,7 +269,6 @@ void guarded_main2() {
   scoped::Task task = pass.build_graph_task("graph_task")
     .vert(art.vert_spv)
     .frag(art.frag_spv)
-    .per_vert_input(L_FORMAT_R32G32B32A32_SFLOAT)
     .rsc(L_RESOURCE_TYPE_UNIFORM_BUFFER)
     .build();
 
