@@ -1,3 +1,4 @@
+#ifdef _WIN32
 #include "gft/platform/windows.hpp"
 
 namespace liong {
@@ -64,3 +65,4 @@ Window create_window() {
 
 } // namespace windows
 } // namespace liong
+#endif // _WIN32
