@@ -16,6 +16,8 @@ namespace windows {
 
 struct Window {
   struct Extra {};
+  uint32_t width;
+  uint32_t height;
   HINSTANCE hinst;
   HWND hwnd;
 };
