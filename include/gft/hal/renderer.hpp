@@ -25,6 +25,7 @@ struct Renderer {
   uint32_t width;
   uint32_t height;
   glm::vec3 camera_pos;
+  glm::vec3 model_pos;
   glm::vec3 light_dir;
   glm::vec3 ambient;
   glm::vec3 albedo;
@@ -36,6 +37,12 @@ struct Renderer {
     uint32_t width,
     uint32_t height
   );
+
+  glm::mat4 get_model2world() const;
+  glm::mat4 get_world2view() const;
+
+  void set_camera_pos(const glm::vec3& x);
+  void set_model_pos(const glm::vec3& x);
 
   Renderer& begin_frame(const scoped::Image& render_target_img);
   void end_frame();
