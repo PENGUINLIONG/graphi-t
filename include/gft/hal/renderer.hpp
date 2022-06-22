@@ -41,9 +41,13 @@ struct Renderer {
   void end_frame();
 
   Renderer& draw_mesh(const mesh::Mesh& mesh);
+  Renderer& draw_idxmesh(const mesh::IndexedMesh& idxmesh);
   Renderer& draw_mesh_wireframe(const mesh::Mesh& mesh, const std::vector<glm::vec3>& colors);
   Renderer& draw_mesh_wireframe(const mesh::Mesh& mesh, const glm::vec3& color);
   Renderer& draw_mesh_wireframe(const mesh::Mesh& mesh);
+  Renderer& draw_idxmesh_wireframe(const mesh::IndexedMesh& idxmesh, const std::vector<glm::vec3>& colors);
+  Renderer& draw_idxmesh_wireframe(const mesh::IndexedMesh& idxmesh, const glm::vec3& color);
+  Renderer& draw_idxmesh_wireframe(const mesh::IndexedMesh& idxmesh);
   Renderer& draw_point_cloud(const mesh::PointCloud& point_cloud, const std::vector<glm::vec3>& colors);
   //Renderer& draw_idxmesh(const mesh::IndexedMesh& idxmesh);
 };
