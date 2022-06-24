@@ -9,6 +9,13 @@ namespace liong {
 
 namespace glslang {
 
+enum GlslangTarget {
+  L_GLSLANG_TARGET_VULKAN_1_0,
+  L_GLSLANG_TARGET_VULKAN_1_1,
+  L_GLSLANG_TARGET_VULKAN_1_2,
+};
+
+void initialize(GlslangTarget target);
 void initialize();
 
 struct ComputeSpirvArtifact {

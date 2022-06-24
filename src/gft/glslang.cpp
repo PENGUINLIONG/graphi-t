@@ -9,6 +9,9 @@ namespace liong {
 
 namespace glslang {
 
+::glslang::EshTargetClientVersion TARGET_CLIENT_VER;
+::glslang::EShTargetLanguageVersion TARGET_LANG_VER;
+
 void _initialize(bool silent) {
   static bool is_initialized = false;
   if (is_initialized) {
@@ -28,10 +31,28 @@ void _initialize(bool silent) {
   log::info("supported glsl version: ", glsl_ver_str);
 
   is_initialized = true;
-
+}
+void initialize(GlslangTarget target) {
+  switch (target) {
+  case L_GLSLANG_TARGET_VULKAN_1_0:
+    TARGET_CLIENT_VER = ::glslang::EshTargetClientVersion::EShTargetVulkan_1_0;
+    TARGET_LANG_VER = ::glslang::EShTargetLanguageVersion::EShTargetSpv_1_0;
+    break;
+  case L_GLSLANG_TARGET_VULKAN_1_1:
+    TARGET_CLIENT_VER = ::glslang::EshTargetClientVersion::EShTargetVulkan_1_1;
+    TARGET_LANG_VER = ::glslang::EShTargetLanguageVersion::EShTargetSpv_1_3;
+    break;
+  case L_GLSLANG_TARGET_VULKAN_1_2:
+    TARGET_CLIENT_VER = ::glslang::EshTargetClientVersion::EShTargetVulkan_1_2;
+    TARGET_LANG_VER = ::glslang::EShTargetLanguageVersion::EShTargetSpv_1_5;
+    break;
+  default:
+    L_PANIC("invalid glslang target");
+  }
+  _initialize(false);
 }
 void initialize() {
-  _initialize(false);
+  initialize(L_GLSLANG_TARGET_VULKAN_1_0);
 }
 
 std::unique_ptr<::glslang::TProgram> _create_program() {
@@ -176,9 +197,9 @@ public:
     auto ver = 100;
     auto src_lang          = ::glslang::EShSourceGlsl;
     auto target_client     = ::glslang::EShClientVulkan;
-    auto target_client_ver = ::glslang::EShTargetVulkan_1_0;
+    auto target_client_ver = TARGET_CLIENT_VER;
     auto target_lang       = ::glslang::EShTargetSpv;
-    auto target_lang_ver   = ::glslang::EShTargetSpv_1_0;
+    auto target_lang_ver   = TARGET_LANG_VER;
     shader->setStrings(&src_c_str, 1);
     shader->setEntryPoint("main");
     shader->setSourceEntryPoint(entry_point.c_str());
@@ -296,9 +317,9 @@ public:
     auto ver = 100;
     auto src_lang          = ::glslang::EShSourceHlsl;
     auto target_client     = ::glslang::EShClientVulkan;
-    auto target_client_ver = ::glslang::EShTargetVulkan_1_0;
+    auto target_client_ver = TARGET_CLIENT_VER;
     auto target_lang       = ::glslang::EShTargetSpv;
-    auto target_lang_ver   = ::glslang::EShTargetSpv_1_0;
+    auto target_lang_ver   = TARGET_LANG_VER;
     shader->setStrings(&src_c_str, 1);
     shader->setEntryPoint("main");
     shader->setSourceEntryPoint(entry_point.c_str());
