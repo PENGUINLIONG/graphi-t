@@ -29,7 +29,7 @@ public:
 // Debug configs.
 #define L_ASSERT(pred, ...) \
   if (!(pred)) { \
-    throw liong::AssertionFailedException(__FILE__, __LINE__, util::format(__VA_ARGS__)); \
+    throw liong::AssertionFailedException(__FILE__, __LINE__, liong::util::format(__VA_ARGS__)); \
   }
 #endif
 
