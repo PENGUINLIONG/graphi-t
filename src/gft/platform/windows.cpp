@@ -55,6 +55,8 @@ Window create_window(uint32_t width, uint32_t height) {
   ShowWindow(hwnd, SW_SHOW);
 
   Window out {};
+  out.width = width;
+  out.height = height;
   out.hinst = hinst;
   out.hwnd = hwnd;
   return out;

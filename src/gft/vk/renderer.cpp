@@ -209,10 +209,28 @@ Renderer::Renderer(
   width(width),
   height(height),
   camera_pos(0.0f, 0.0f, -10.0f),
+  model_pos(0.0f, 0.0f, 0.0f),
   light_dir(0.5f, -1.0f, 1.0f),
   ambient(0.1f, 0.1f, 0.1f),
   albedo(1.0f, 0.1f, 1.0f),
   rpib(nullptr) {}
+
+glm::mat4 Renderer::get_model2world() const {
+  glm::mat4 model2world = glm::scale(glm::mat4x4(1.0f), glm::vec3(1.0f, -1.0f, -1.0f));
+  return model2world;
+}
+glm::mat4 Renderer::get_world2view() const {
+  glm::mat4 camera2view = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 1e-2f, 65534.0f);
+  glm::mat4 world2camera = glm::lookAt(-camera_pos, model_pos, glm::vec3(0.0f, 1.0f, 0.0f));
+  return camera2view * world2camera;
+}
+
+void Renderer::set_camera_pos(const glm::vec3& x) {
+  camera_pos = x;
+}
+void Renderer::set_model_pos(const glm::vec3& x) {
+  model_pos = x;
+}
 
 Renderer& Renderer::begin_frame(const scoped::Image& render_target_img) {
   push_gc_frame("renderer");
@@ -238,11 +256,8 @@ Renderer& Renderer::draw_mesh(const mesh::Mesh& mesh) {
     glm::vec4 albedo;
   };
   Uniform u;
-  glm::mat4x4 model2world = glm::scale(glm::mat4x4(1.0f), glm::vec3(1.0f, -1.0f, -1.0f));
-  u.model2world = model2world;
-  glm::mat4x4 camera2view = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 1e-2f, 65534.0f);
-  glm::mat4x4 world2camera = glm::lookAt(-camera_pos, glm::vec3 {}, glm::vec3(0.0f, 1.0f, 0.0f));
-  u.world2view = camera2view * world2camera;
+  u.model2world = get_model2world();
+  u.world2view = get_world2view();
   u.camera_pos = glm::vec4(camera_pos, 1.0f);
   u.light_dir = glm::vec4(light_dir, 0.0f);
   u.ambient = glm::vec4(ambient, 1.0f);
@@ -280,6 +295,62 @@ Renderer& Renderer::draw_mesh(const mesh::Mesh& mesh) {
   rpib->invoke(lit_invoke);
   return *this;
 }
+Renderer& Renderer::draw_idxmesh(const mesh::IndexedMesh& idxmesh) {
+  struct Uniform {
+    glm::mat4 model2world;
+    glm::mat4 world2view;
+    glm::vec4 camera_pos;
+    glm::vec4 light_dir;
+    glm::vec4 ambient;
+    glm::vec4 albedo;
+  };
+  Uniform u;
+  u.model2world = get_model2world();
+  u.world2view = get_world2view();
+  u.camera_pos = glm::vec4(camera_pos, 1.0f);
+  u.light_dir = glm::vec4(light_dir, 0.0f);
+  u.ambient = glm::vec4(ambient, 1.0f);
+  u.albedo = glm::vec4(albedo, 1.0f);
+
+  scoped::Buffer uniform_buf = ctxt.build_buf()
+    .uniform()
+    .streaming_with(u)
+    .build();
+
+  scoped::Buffer poses_buf = ctxt.build_buf()
+    .vertex()
+    .streaming_with_aligned(idxmesh.mesh.poses, sizeof(glm::vec4))
+    .build();
+
+  scoped::Buffer uv_buf = ctxt.build_buf()
+    .storage()
+    .streaming_with(idxmesh.mesh.uvs)
+    .build();
+
+  scoped::Buffer norm_buf = ctxt.build_buf()
+    .storage()
+    .streaming_with_aligned(idxmesh.mesh.norms, sizeof(glm::vec4))
+    .build();
+
+  scoped::Buffer idxs_buf = ctxt.build_buf()
+    .index()
+    .streaming_with(idxmesh.idxs)
+    .build();
+
+  scoped::Invocation lit_invoke = lit_task.build_graph_invoke()
+    .vert_buf(poses_buf.view())
+    .idx_buf(idxs_buf.view())
+    .idx_ty(L_INDEX_TYPE_UINT32)
+    .nidx(idxmesh.idxs.size() * 3)
+    .rsc(uniform_buf.view())
+    .rsc(uv_buf.view())
+    .rsc(norm_buf.view())
+    .rsc(default_tex_img.view())
+    .build();
+
+  rpib->invoke(lit_invoke);
+  return *this;
+}
 
 Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh, const std::vector<glm::vec3>& colors) {
   struct Uniform {
@@ -287,11 +358,8 @@ Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh, const std::vecto
     glm::mat4 world2view;
   };
   Uniform u;
-  glm::mat4x4 model2world = glm::scale(glm::mat4x4(1.0f), glm::vec3(1.0f, -1.0f, -1.0f));
-  u.model2world = model2world;
-  glm::mat4x4 camera2view = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 1e-2f, 65534.0f);
-  glm::mat4x4 world2camera = glm::lookAt(-camera_pos, glm::vec3 {}, glm::vec3(0.0f, 1.0f, 0.0f));
-  u.world2view = camera2view * world2camera;
+  u.model2world = get_model2world();
+  u.world2view = get_world2view();
 
   scoped::Buffer uniform_buf = ctxt.build_buf()
     .uniform()
@@ -325,17 +393,62 @@ Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh, const glm::vec3&
 Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh) {
   return draw_mesh_wireframe(mesh, glm::vec3(1.0f, 1.0f, 0.0f));
 }
+Renderer& Renderer::draw_idxmesh_wireframe(const mesh::IndexedMesh& idxmesh, const std::vector<glm::vec3>& colors) {
+  struct Uniform {
+    glm::mat4 model2world;
+    glm::mat4 world2view;
+  };
+  Uniform u;
+  u.model2world = get_model2world();
+  u.world2view = get_world2view();
+
+  scoped::Buffer uniform_buf = ctxt.build_buf()
+    .uniform()
+    .streaming_with(u)
+    .build();
+
+  scoped::Buffer poses_buf = ctxt.build_buf()
+    .vertex()
+    .streaming_with_aligned(idxmesh.mesh.poses, sizeof(glm::vec4))
+    .build();
+
+  scoped::Buffer idxs_buf = ctxt.build_buf()
+    .index()
+    .streaming_with(idxmesh.idxs)
+    .build();
+
+  scoped::Buffer colors_buf = ctxt.build_buf()
+    .storage()
+    .streaming_with_aligned(colors, sizeof(glm::vec4))
+    .build();
+
+  scoped::Invocation lit_invoke = wireframe_task.build_graph_invoke()
+    .vert_buf(poses_buf.view())
+    .idx_buf(idxs_buf.view())
+    .idx_ty(L_INDEX_TYPE_UINT32)
+    .nidx(idxmesh.idxs.size() * 3)
+    .rsc(uniform_buf.view())
+    .rsc(colors_buf.view())
+    .build();
+
+  rpib->invoke(lit_invoke);
+  return *this;
+}
+Renderer& Renderer::draw_idxmesh_wireframe(const mesh::IndexedMesh& idxmesh, const glm::vec3& color) {
+  std::vector<glm::vec3> colors(idxmesh.mesh.poses.size(), color);
+  return draw_idxmesh_wireframe(idxmesh, colors);
+}
+Renderer& Renderer::draw_idxmesh_wireframe(const mesh::IndexedMesh& idxmesh) {
+  return draw_idxmesh_wireframe(idxmesh, glm::vec3(1.0f, 1.0f, 0.0f));
+}
 Renderer& Renderer::draw_point_cloud(const mesh::PointCloud& point_cloud, const std::vector<glm::vec3>& colors) {
   struct Uniform {
     glm::mat4 model2world;
     glm::mat4 world2view;
   };
   Uniform u;
-  glm::mat4x4 model2world = glm::scale(glm::mat4x4(1.0f), glm::vec3(1.0f, -1.0f, -1.0f));
-  u.model2world = model2world;
-  glm::mat4x4 camera2view = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 1e-2f, 65534.0f);
-  glm::mat4x4 world2camera = glm::lookAt(-camera_pos, glm::vec3 {}, glm::vec3(0.0f, 1.0f, 0.0f));
-  u.world2view = camera2view * world2camera;
+  u.model2world = get_model2world();
+  u.world2view = get_world2view();
 
   scoped::Buffer uniform_buf = ctxt.build_buf()
     .uniform()
