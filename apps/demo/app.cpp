@@ -3,6 +3,10 @@
 #include "gft/glslang.hpp"
 #include "gft/renderdoc.hpp"
 
+#if defined(__MACH__) && defined(__APPLE__)
+#include "gft/platform/macos.hpp"
+#endif // defined(__MACH__) && defined(__APPLE__)
+
 using namespace liong;
 using namespace vk;
 using namespace fmt;
@@ -92,83 +96,7 @@ void dbg_dump_spv_art(
     art.frag_spv.size() * sizeof(uint32_t));
 }
 
-
-
-
-
-
-
 void guarded_main() {
-  scoped::GcScope scope;
-
-  dbg_enum_dev_descs();
-
-  std::string glsl = R"(
-    #version 450 core
-    layout(local_size_x_id=0, local_size_y_id=1, local_size_z_id=2) in;
-    layout(binding=0) writeonly buffer Buffer {
-      float data[];
-    };
-
-    void comp() {
-      uvec3 size = gl_NumWorkGroups;
-      uvec3 id = gl_WorkGroupID;
-      uint idx = id.x + size.x * (id.y + size.y * id.z);
-      data[idx] = float(idx);
-    }
-  )";
-  glslang::ComputeSpirvArtifact art =
-    glslang::compile_comp(glsl.c_str(), "comp");
-  dbg_dump_spv_art("out", art);
-
-  ContextConfig ctxt_cfg { "ctxt", 0 };
-  scoped::Context ctxt = scoped::Context::own_by_gc_frame(create_ctxt(ctxt_cfg));
-
-  scoped::Task task = ctxt.build_comp_task("comp_task")
-    .comp(art.comp_spv)
-    .rsc(L_RESOURCE_TYPE_STORAGE_BUFFER)
-    .build();
-
-  scoped::Buffer buf = ctxt.build_buf("buf")
-    .size(16 * sizeof(float))
-    .storage()
-    .streaming()
-    .read_back()
-    .build();
-
-  scoped::Invocation invoke = task.build_comp_invoke()
-    .rsc(buf.view())
-    .workgrp_count(4, 4, 4)
-    .build();
-  invoke.bake();
-
-  invoke.submit().wait();
-  invoke.submit().wait();
-
-  std::vector<float> dbuf;
-  dbuf.resize(16);
-  copy_buf2host(buf.view(), dbuf.data(), dbuf.size() * sizeof(float));
-
-  for (auto i = 0; i < dbuf.size(); ++i) {
-    liong::log::info("dbuf[", i, "] = ", dbuf[i]);
-  }
-
-  std::vector<float> pattern;
-  {
-    pattern.resize(7 * 7 * 4);
-    for (int i = 0; i < 7; ++i) {
-      for (int j = i; j < 7; ++j) {
-        pattern[(i * 7 + j) * 4 + 0] = 1.0f;
-        pattern[(i * 7 + j) * 4 + 1] = 0.0f;
-        pattern[(i * 7 + j) * 4 + 2] = 1.0f;
-        pattern[(i * 7 + j) * 4 + 3] = 1.0f;
-      }
-    }
-  }
-
-}
-
-void guarded_main2() {
   scoped::GcScope scope;
 
   dbg_enum_dev_descs();
@@ -197,13 +125,16 @@ void guarded_main2() {
   L_ASSERT(art.ubo_size == 4 * sizeof(float),
     "unexpected ubo size; should be 16, but is ", art.ubo_size);
 
-  ContextConfig ctxt_cfg { "ctxt", 0 };
-  scoped::Context ctxt = scoped::Context::own_by_gc_frame(create_ctxt(ctxt_cfg));
+#if defined(__MACH__) && defined(__APPLE__)
+  macos::Window window = macos::create_window(1024, 768);
+  ContextMetalConfig ctxt_metal_cfg { "ctxt", 0, window.metal_layer };
+  scoped::Context ctxt = scoped::Context::own_by_gc_frame(create_ctxt_metal(ctxt_metal_cfg));
+#else
+  //ContextConfig ctxt_cfg { "ctxt", 0 };
+  //scoped::Context ctxt = scoped::Context::own_by_gc_frame(create_ctxt(ctxt_cfg));
+#endif
 
   renderdoc::CaptureGuard capture;
-
-  constexpr uint32_t FRAMEBUF_WIDTH = 4;
-  constexpr uint32_t FRAMEBUF_HEIGHT = 4;
 
   scoped::Buffer ubo = ctxt.build_buf("ubo")
     .size(4 * sizeof(float))
@@ -243,27 +174,15 @@ void guarded_main2() {
     idxs.map_write().write(data);
   }
 
-  scoped::DepthImage zbuf = ctxt.build_depth_img("zbuf")
-    .width(4)
-    .height(4)
-    .fmt(L_DEPTH_FORMAT_D16_UNORM)
-    .attachment()
-    .tile_memory()
-    .build();
-  scoped::Image out_img = ctxt.build_img("attm")
-    .width(4)
-    .height(4)
-    .fmt(L_FORMAT_R32G32B32A32_SFLOAT)
-    .attachment()
-    .build();
 
 
+  scoped::Swapchain swapchain = ctxt.build_swapchain("swapchain")
+    .build();
 
   scoped::RenderPass pass = ctxt.build_pass("pass")
-    .width(FRAMEBUF_WIDTH)
-    .height(FRAMEBUF_HEIGHT)
-    .clear_store_attm(L_FORMAT_R32G32B32A32_SFLOAT)
-    .clear_store_attm(L_DEPTH_FORMAT_D16_UNORM)
+    .width(swapchain.width())
+    .height(swapchain.height())
+    .clear_store_attm(L_FORMAT_B8G8R8A8_UNORM_PACK32)
     .build();
 
   scoped::Task task = pass.build_graph_task("graph_task")
@@ -272,44 +191,26 @@ void guarded_main2() {
     .rsc(L_RESOURCE_TYPE_UNIFORM_BUFFER)
     .build();
 
-  scoped::Invocation draw_call = task.build_graph_invoke("draw_call")
-    .vert_buf(verts.view())
-    .idx_buf(idxs.view())
-    .rsc(ubo.view())
-    .nidx(3)
-    .build();
+  for (;;) {
+    scoped::Image out_img = swapchain.get_img();
 
-  scoped::Invocation main_pass = pass.build_pass_invoke("main_pass")
-    .attm(out_img.view())
-    .attm(zbuf.view())
-    .invoke(draw_call)
-    .is_timed()
-    .build();
+    scoped::Invocation draw_call = task.build_graph_invoke("draw_call")
+      .vert_buf(verts.view())
+      .idx_buf(idxs.view())
+      .rsc(ubo.view())
+      .nidx(3)
+      .build();
 
-  scoped::Buffer out_buf = ctxt.build_buf("out_buf")
-    .size(FRAMEBUF_WIDTH * FRAMEBUF_HEIGHT * 4 * sizeof(float))
-    .read_back()
-    .build();
+    scoped::Invocation main_pass = pass.build_pass_invoke("main_pass")
+      .attm(out_img.view())
+      .invoke(draw_call)
+      .build();
 
-  scoped::Invocation write_back = ctxt.build_trans_invoke("write_back")
-    .src(out_img.view())
-    .dst(out_buf.view())
-    .build();
+    main_pass.submit().wait();
 
-  scoped::Invocation proc = ctxt.build_composite_invoke("proc")
-    .invoke(main_pass)
-    .invoke(write_back)
-    .build();
-
-  proc.submit().wait();
-
-  liong::log::warn("drawing took ", main_pass.get_time_us(), "us");
-
-  {
-    scoped::MappedBuffer mapped = out_buf.map(L_MEMORY_ACCESS_READ_BIT);
-    const float* out_data = (const float*)mapped;
-    liong::util::save_bmp(out_data, FRAMEBUF_WIDTH, FRAMEBUF_HEIGHT, "out_img.bmp");
+    swapchain.create_present_invoke().submit().wait();
   }
+
 }
 
 
@@ -321,7 +222,6 @@ int main(int argc, char** argv) {
     glslang::initialize();
 
     guarded_main();
-    guarded_main2();
   } catch (const std::exception& e) {
     liong::log::error("application threw an exception");
     liong::log::error(e.what());

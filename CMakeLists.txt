@@ -26,6 +26,14 @@ set(INC_DIRS
     "${PROJECT_SOURCE_DIR}/include"
 )
 
+if(APPLE)
+find_library(Foundation NAMES Foundation)
+find_library(AppKit NAMES AppKit)
+find_library(Metal NAMES Metal)
+find_library(MetalKit NAMES MetalKit)
+list(APPEND LINK_LIBS ${Foundation} ${AppKit} ${Metal} ${MetalKit})
+endif()
+
 set(BUILD_STATIC_LIBS ON)
 add_subdirectory(${PROJECT_SOURCE_DIR}/third/glm)
 list(APPEND LINK_LIBS
@@ -74,6 +82,9 @@ add_executable(bin2c
 # The GraphiT library.
 include_directories(${INC_DIRS})
 file(GLOB_RECURSE SRCS "${PROJECT_SOURCE_DIR}/src/*")
+if (APPLE)
+list(APPEND SRCS "${PROJECT_SOURCE_DIR}/src/gft/platform/macos.mm")
+endif()
 file(GLOB_RECURSE INCS "${PROJECT_SOURCE_DIR}/include/*")
 add_library(GraphiT STATIC ${SRCS} ${INCS} )
 target_link_libraries(GraphiT ${LINK_LIBS})

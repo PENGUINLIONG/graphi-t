@@ -616,6 +616,13 @@ struct Swapchain {
   inline Image get_img() const {
     return Image::borrow(get_swapchain_img(*inner));
   }
+
+  inline uint32_t width() const {
+    return get_swapchain_img_width(*inner);
+  }
+  inline uint32_t height() const {
+    return get_swapchain_img_height(*inner);
+  }
 };
 struct SwapchainBuilder {
   using Self = SwapchainBuilder;

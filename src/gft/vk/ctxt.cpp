@@ -14,6 +14,10 @@
 #include "vulkan/vulkan_android.h"
 #endif // defined(ANDROID) || defined(__ANDROID__)
 
+#if defined(__MACH__) && defined(__APPLE__)
+#include "vulkan/vulkan_metal.h"
+#endif // defined(__MACH__) && defined(__APPLE__)
+
 namespace liong {
 namespace vk {
 
@@ -61,6 +65,29 @@ VkSurfaceKHR _create_surf_android(const ContextAndroidConfig& cfg) {
   return VK_NULL_HANDLE;
 #endif // VK_KHR_android_surface
 }
+
+VkSurfaceKHR _create_surf_metal(const ContextMetalConfig& cfg) {
+#if VK_EXT_metal_surface
+  L_ASSERT(cfg.dev_idx < get_inst().physdev_details.size(),
+    "wanted vulkan device does not exists (#", cfg.dev_idx, " of ",
+    get_inst().physdev_details.size(), " available devices)");
+  auto physdev = get_inst().physdev_details.at(cfg.dev_idx);
+
+  VkMetalSurfaceCreateInfoEXT msci {};
+  msci.sType = VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK;
+  msci.pLayer = (const CAMetalLayer*)cfg.metal_layer;
+
+  VkSurfaceKHR surf;
+  VK_ASSERT << vkCreateMetalSurfaceEXT(get_inst().inst, &msci, nullptr, &surf);
+
+  log::debug("created windows surface '", cfg.label, "'");
+  return surf;
+#else
+  panic("metal surface cannot be created on current platform");
+  return VK_NULL_HANDLE;
+#endif // VK_EXT_metal_surface
+}
+
 Context _create_ctxt(
   const std::string& label,
   uint32_t dev_idx,
@@ -292,6 +319,10 @@ Context create_ctxt_windows(const ContextWindowsConfig& cfg) {
 }
 Context create_ctxt_android(const ContextAndroidConfig& cfg) {
   VkSurfaceKHR surf = _create_surf_android(cfg);
+  return _create_ctxt(cfg.label, cfg.dev_idx, surf);
+}
+Context create_ctxt_metal(const ContextMetalConfig& cfg) {
+  VkSurfaceKHR surf = _create_surf_metal(cfg);
   return _create_ctxt(cfg.label, cfg.dev_idx, surf);
 }
 void destroy_ctxt(Context& ctxt) {

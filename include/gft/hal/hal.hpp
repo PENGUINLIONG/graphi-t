@@ -73,11 +73,17 @@ struct ContextAndroidConfig {
   // Android native window, `ANativeWindow`.
   const void* native_wnd;
 };
+struct ContextMetalConfig {
+  std::string label;
+  uint32_t dev_idx;
+  const void* metal_layer;
+};
 
 L_IMPL_STRUCT struct Context;
 L_IMPL_FN Context create_ctxt(const ContextConfig& cfg);
 L_IMPL_FN Context create_ctxt_windows(const ContextWindowsConfig& cfg);
 L_IMPL_FN Context create_ctxt_android(const ContextAndroidConfig& cfg);
+L_IMPL_FN Context create_ctxt_metal(const ContextMetalConfig& cfg);
 L_IMPL_FN void destroy_ctxt(Context& ctxt);
 
 
@@ -311,6 +317,8 @@ L_IMPL_FN const SwapchainConfig& get_swapchain_cfg(const Swapchain& swapchain);
 // `acquire_surf_img` transition finishes and before the next presentation
 // invocation.
 L_IMPL_FN const Image& get_swapchain_img(const Swapchain& swapchain);
+L_IMPL_FN uint32_t get_swapchain_img_width(const Swapchain& swapchain);
+L_IMPL_FN uint32_t get_swapchain_img_height(const Swapchain& swapchain);
 
 
 

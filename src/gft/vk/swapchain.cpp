@@ -185,6 +185,13 @@ const Image& get_swapchain_img(const Swapchain& swapchain) {
 
   return dyn_detail.imgs[*dyn_detail.img_idx];
 }
+uint32_t get_swapchain_img_width(const Swapchain& swapchain) {
+  return swapchain.dyn_detail->width;
+}
+uint32_t get_swapchain_img_height(const Swapchain& swapchain) {
+  return swapchain.dyn_detail->height;
+}
+
 
 } // namespace vk
 } // namespace liong
