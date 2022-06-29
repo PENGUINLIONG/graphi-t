@@ -740,6 +740,30 @@ struct Buffer {
   inline MappedBuffer map_write() const {
     return map(L_MEMORY_ACCESS_WRITE_BIT);
   }
+
+  template<typename T>
+  inline std::vector<T> to_cpu() const {
+    L_ASSERT(inner->buf_cfg.size % sizeof(T) == 0);
+    std::vector<T> out(inner->buf_cfg.size / sizeof(T));
+    if (inner->buf_cfg.host_access & L_MEMORY_ACCESS_READ_BIT) {
+      MappedBuffer mapped = map_read();
+      mapped.read(out);
+    } else {
+      auto ctxt = scoped::Context::borrow(inner->ctxt);
+      scoped::Buffer stage_buf = ctxt.build_buf()
+        .size_like(out)
+        .read_back()
+        .build();
+
+      ctxt.build_trans_invoke()
+        .src(view())
+        .dst(stage_buf.view())
+        .build()
+        .submit()
+        .wait();
+    }
+    return out;
+  }
 };
 struct BufferBuilder {
   using Self = BufferBuilder;
