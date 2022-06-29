@@ -17,6 +17,7 @@ struct Window {
 };
 
 Window create_window(uint32_t width, uint32_t height);
+Window create_window();
 
 #undef NSWindow
 #undef CAMetalLayer

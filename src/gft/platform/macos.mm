@@ -76,6 +76,9 @@ Window create_window(uint32_t width, uint32_t height) {
   out.metal_layer = (void*)metal_layer;
   return out;
 }
+Window create_window() {
+  return create_window(1024, 768);
+}
 
 } // namespace macos
 } // namespace liong
