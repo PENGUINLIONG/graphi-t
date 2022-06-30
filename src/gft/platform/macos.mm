@@ -1,3 +1,5 @@
+#if defined(__APPLE__) && defined(__MACH__)
+
 #include "gft/platform/macos.hpp"
 #import <Cocoa/Cocoa.h>
 #import <MetalKit/MTKView.h>
@@ -82,3 +84,5 @@ Window create_window() {
 
 } // namespace macos
 } // namespace liong
+
+#endif // defined(__APPLE__) && defined(__MACH__)
