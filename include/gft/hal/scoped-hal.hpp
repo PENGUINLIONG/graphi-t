@@ -749,11 +749,11 @@ struct Buffer {
       MappedBuffer mapped = map_read();
       mapped.read(out);
     } else {
-      auto ctxt = scoped::Context::borrow(inner->ctxt);
+      auto ctxt = scoped::Context::borrow(*inner->ctxt);
       scoped::Buffer stage_buf = ctxt.build_buf()
         .size_like(out)
         .read_back()
-        .build();
+        .build(false);
 
       ctxt.build_trans_invoke()
         .src(view())
@@ -761,6 +761,9 @@ struct Buffer {
         .build()
         .submit()
         .wait();
+
+      MappedBuffer mapped = stage_buf.map_read();
+      std::memcpy(out.data(), mapped, out.size() * sizeof(T));
     }
     return out;
   }
