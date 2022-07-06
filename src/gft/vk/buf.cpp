@@ -93,6 +93,7 @@ void map_buf_mem(
 
   log::debug("mapped buffer '", buf.buf->buf_cfg.label, "' from ", buf.offset,
     " to ", buf.offset + buf.size);
+  mapped = (uint8_t*)mapped + buf.offset;
 }
 void unmap_buf_mem(
   const BufferView& buf,
@@ -100,6 +101,43 @@ void unmap_buf_mem(
 ) {
   vmaUnmapMemory(buf.buf->ctxt->allocator, buf.buf->alloc);
   log::debug("unmapped buffer '", buf.buf->buf_cfg.label, "'");
+}
+void read_buf_mem(
+  const BufferView& buf,
+  void* data,
+  size_t size
+) {
+  L_ASSERT(size <= buf.size);
+  L_ASSERT(buf.offset + buf.size <= buf.buf->buf_cfg.size);
+
+  if (buf.buf->buf_cfg.host_access & L_MEMORY_ACCESS_READ_BIT) {
+    void* mapped = nullptr;
+    map_buf_mem(buf, L_MEMORY_ACCESS_READ_BIT, mapped);
+    L_ASSERT(mapped != nullptr);
+    std::memcpy(data, mapped, size);
+    unmap_buf_mem(buf, mapped);
+  } else {
+    const Context& ctxt = *buf.buf->ctxt;
+
+    BufferConfig staging_buf_cfg {};
+    staging_buf_cfg.align = 1;
+    staging_buf_cfg.host_access = L_MEMORY_ACCESS_READ_BIT;
+    staging_buf_cfg.size = size;
+    staging_buf_cfg.usage = L_BUFFER_USAGE_TRANSFER_DST_BIT;
+    Buffer stage_buf = create_buf(ctxt, staging_buf_cfg);
+    BufferView stage_buf_view = make_buf_view(stage_buf);
+
+    TransferInvocationConfig trans_invoke_cfg {};
+    trans_invoke_cfg.src_rsc_view = make_rsc_view(buf);
+    trans_invoke_cfg.dst_rsc_view = make_rsc_view(stage_buf_view);
+    Invocation invoke = create_trans_invoke(ctxt, trans_invoke_cfg);
+    Transaction transact = submit_invoke(invoke);
+    wait_transact(transact);
+
+    read_buf_mem(stage_buf_view, data, size);
+
+    destroy_buf(stage_buf);
+  }
 }
 
 

@@ -149,6 +149,16 @@ L_IMPL_FN void unmap_buf_mem(
   const BufferView& buf,
   void* mapped
 );
+L_IMPL_FN void read_buf_mem(
+  const BufferView& buf,
+  void* data,
+  size_t size
+);
+L_IMPL_FN void write_buf_mem(
+  const BufferView& buf,
+  const void* data,
+  size_t size
+);
 
 
 
