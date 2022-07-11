@@ -3,6 +3,10 @@
 #include "gft/glslang.hpp"
 #include "gft/renderdoc.hpp"
 
+#if defined(_WIN32)
+#include "gft/platform/windows.hpp"
+#endif // defined(_WIN32)
+
 #if defined(__MACH__) && defined(__APPLE__)
 #include "gft/platform/macos.hpp"
 #endif // defined(__MACH__) && defined(__APPLE__)
@@ -129,7 +133,7 @@ void guarded_main() {
   macos::Window window = macos::create_window(1024, 768);
   ContextMetalConfig ctxt_metal_cfg { "ctxt", 0, window.metal_layer };
   scoped::Context ctxt = scoped::Context::own_by_gc_frame(create_ctxt_metal(ctxt_metal_cfg));
-#else defined(_WIN32)
+#elif defined(_WIN32)
   windows::Window window = windows::create_window();
   ContextWindowsConfig ctxt_cfg { "ctxt", 0, window.hinst, window.hwnd };
   scoped::Context ctxt = scoped::Context::own_by_gc_frame(create_ctxt_windows(ctxt_cfg));
