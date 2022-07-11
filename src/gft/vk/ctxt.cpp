@@ -46,17 +46,17 @@ VkSurfaceKHR _create_surf_windows(const ContextWindowsConfig& cfg) {
 
 VkSurfaceKHR _create_surf_android(const ContextAndroidConfig& cfg) {
 #if VK_KHR_android_surface
-  L_ASSERT(cfg.dev_idx < physdevs.size(),
+  L_ASSERT(cfg.dev_idx < get_inst().physdev_details.size(),
     "wanted vulkan device does not exists (#", cfg.dev_idx, " of ",
-      physdevs.size(), " available devices)");
-  auto physdev = physdevs[cfg.dev_idx];
+      get_inst().physdev_details.size(), " available devices)");
+  auto physdev = get_inst().physdev_details.at(cfg.dev_idx);
 
   VkAndroidSurfaceCreateInfoKHR asci {};
   asci.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
   asci.window = (struct ANativeWindow* const)cfg.native_wnd;
 
   VkSurfaceKHR surf;
-  VK_ASSERT << vkCreateAndroidSurfaceKHR(INST->inst, &asci, nullptr, &surf);
+  VK_ASSERT << vkCreateAndroidSurfaceKHR(get_inst().inst, &asci, nullptr, &surf);
 
   log::debug("created android surface '", cfg.label, "'");
   return surf;

@@ -740,7 +740,7 @@ struct Buffer {
   inline MappedBuffer map_write() const {
     return map(L_MEMORY_ACCESS_WRITE_BIT);
   }
-
+/*
   template<typename T>
   inline std::vector<T> to_cpu() const {
     const BufferConfig& buf_cfg = get_buf_cfg(*inner);
@@ -749,6 +749,7 @@ struct Buffer {
     read_buf_mem(view(), out.data(), out.size());
     return out;
   }
+*/
 };
 struct BufferBuilder {
   using Self = BufferBuilder;
