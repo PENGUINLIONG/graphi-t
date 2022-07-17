@@ -48,15 +48,21 @@ struct PointCloud {
 };
 
 
+struct Grid {
+  std::vector<float> grid_lines_x;
+  std::vector<float> grid_lines_y;
+  std::vector<float> grid_lines_z;
+};
+
+extern Grid build_grid(const geom::Aabb& aabb, const glm::uvec3& grid_res);
+extern Grid build_grid(const geom::Aabb& aabb, const glm::vec3& grid_interval);
 
 struct Bin {
   geom::Aabb aabb;
   std::vector<uint32_t> iprims;
 };
 struct BinGrid {
-  std::vector<float> grid_lines_x;
-  std::vector<float> grid_lines_y;
-  std::vector<float> grid_lines_z;
+  Grid grid;
   std::vector<Bin> bins;
 
   inline std::vector<geom::Aabb> to_aabbs() const {
@@ -104,6 +110,7 @@ struct TetrahedralVertex {
   glm::vec3 pos;
   // Indices to adjacent cells.
   std::set<uint32_t> ineighbor_cells;
+  uint32_t itetra_cell;
 };
 struct TetrahedralCell {
   glm::uvec4 itetra_verts;
@@ -115,11 +122,14 @@ struct TetrahedralInterpolant {
   glm::vec4 tetra_weights;
 };
 struct TetrahedralMesh {
+  // Per tetrahedral mesh vertex.
   std::vector<TetrahedralVertex> tetra_verts;
+  // Per tetrahedral mesh cell.
   std::vector<TetrahedralCell> tetra_cells;
+  // Per triangle mesh vertex.
   std::vector<TetrahedralInterpolant> interps;
 
-  static TetrahedralMesh from_points(float density, const std::vector<glm::vec3>& points);
+  static TetrahedralMesh from_points(const glm::vec3& grid_interval, const std::vector<glm::vec3>& points);
   std::vector<glm::vec3> to_points() const;
 
   void apply_trans(const glm::mat4& trans);

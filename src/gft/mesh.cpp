@@ -464,46 +464,56 @@ Aabb PointCloud::aabb() const {
 }
 
 
+std::vector<float> make_grid_lines(float min, float max, uint32_t n) {
+  float range = max - min;
+  std::vector<float> out;
+  for (uint32_t i = 1; i < n; ++i) {
+    out.emplace_back((i / float(n)) * range + min);
+  }
+  out.emplace_back(max);
+  return out;
+}
+// `aabb` range divided by `grid_res` except for the exactly `min` vlaues.
+Grid build_grid(const geom::Aabb& aabb, const glm::uvec3& grid_res) {
+  Grid grid {};
+  grid.grid_lines_x = make_grid_lines(aabb.min.x, aabb.max.x, grid_res.x);
+  grid.grid_lines_y = make_grid_lines(aabb.min.y, aabb.max.y, grid_res.y);
+  grid.grid_lines_z = make_grid_lines(aabb.min.z, aabb.max.z, grid_res.z);
+  return grid;
+}
+Grid build_grid(const geom::Aabb& aabb, const glm::vec3& grid_interval) {
+  glm::uvec3 grid_res = glm::ceil(aabb.size() / grid_interval);
+  geom::Aabb aabb2 = Aabb::from_center_size(
+    aabb.center(),
+    glm::vec3(grid_res) * grid_interval);
+  return build_grid(aabb, grid_res);
+}
+
 
 struct Binner {
   Aabb aabb;
   glm::uvec3 grid_res;
-  // `aabb` range divided by `grid_res` except for the exactly `min` vlaues.
-  std::vector<float> grid_lines_x;
-  std::vector<float> grid_lines_y;
-  std::vector<float> grid_lines_z;
+  Grid grid;
   std::vector<Bin> bins;
   uint32_t counter;
-
-  static std::vector<float> make_grid_lines(float min, float max, uint32_t n) {
-    float range = max - min;
-    std::vector<float> out;
-    for (uint32_t i = 1; i < n; ++i) {
-      out.emplace_back((i / float(n)) * range + min);
-    }
-    out.emplace_back(max);
-    return out;
-  }
 
   Binner(const Aabb& aabb, const glm::uvec3& grid_res) :
     aabb(aabb),
     grid_res(grid_res),
-    grid_lines_x(make_grid_lines(aabb.min.x, aabb.max.x, grid_res.x)),
-    grid_lines_y(make_grid_lines(aabb.min.y, aabb.max.y, grid_res.y)),
-    grid_lines_z(make_grid_lines(aabb.min.z, aabb.max.z, grid_res.z)),
+    grid(build_grid(aabb, grid_res)),
     bins(),
     counter()
   {
     bins.reserve(grid_res.x * grid_res.y * grid_res.z);
     for (uint32_t z = 0; z < grid_res.z; ++z) {
-      float z_min = z == 0 ? aabb.min.z : grid_lines_z.at(z - 1);
-      float z_max = grid_lines_z.at(z);
+      float z_min = z == 0 ? aabb.min.z : grid.grid_lines_z.at(z - 1);
+      float z_max = grid.grid_lines_z.at(z);
       for (uint32_t y = 0; y < grid_res.y; ++y) {
-        float y_min = y == 0 ? aabb.min.y : grid_lines_y.at(y - 1);
-        float y_max = grid_lines_y.at(y);
+        float y_min = y == 0 ? aabb.min.y : grid.grid_lines_y.at(y - 1);
+        float y_max = grid.grid_lines_y.at(y);
         for (uint32_t x = 0; x < grid_res.x; ++x) {
-          float x_min = x == 0 ? aabb.min.x : grid_lines_x.at(x - 1);
-          float x_max = grid_lines_x.at(x);
+          float x_min = x == 0 ? aabb.min.x : grid.grid_lines_x.at(x - 1);
+          float x_max = grid.grid_lines_x.at(x);
 
           glm::vec3 min(x_min, y_min, z_min);
           glm::vec3 max(x_max, y_max, z_max);
@@ -524,7 +534,7 @@ struct Binner {
     // the index of the farthest bin is naturally assigned to `i`. Given that
     // non-intersecting triangles are filetered in `bin` any point enclosed
     // by `aabb` can be uniquely assigned to a bin at boundaries.
-    for (; i < grid_lines.size() - 1; ++i) {
+    for (; i < grid_lines.size(); ++i) {
       if (x < grid_lines.at(i)) { break; }
     }
     return i;
@@ -537,12 +547,12 @@ struct Binner {
       return false;
     }
 
-    size_t imin_x = get_ibin(grid_lines_x, aabb.min.x);
-    size_t imax_x = get_ibin(grid_lines_x, aabb.max.x);
-    size_t imin_y = get_ibin(grid_lines_y, aabb.min.y);
-    size_t imax_y = get_ibin(grid_lines_y, aabb.max.y);
-    size_t imin_z = get_ibin(grid_lines_z, aabb.min.z);
-    size_t imax_z = get_ibin(grid_lines_z, aabb.max.z);
+    size_t imin_x = get_ibin(grid.grid_lines_x, aabb.min.x);
+    size_t imax_x = get_ibin(grid.grid_lines_x, aabb.max.x);
+    size_t imin_y = get_ibin(grid.grid_lines_y, aabb.min.y);
+    size_t imax_y = get_ibin(grid.grid_lines_y, aabb.max.y);
+    size_t imin_z = get_ibin(grid.grid_lines_z, aabb.min.z);
+    size_t imax_z = get_ibin(grid.grid_lines_z, aabb.max.z);
     // TODO: (penguinliong) Consider the case of a very narrow triangle placed
     // on the diagonal of the bins looped here. There is a significant room of
     // optimization for large triangles.
@@ -565,23 +575,21 @@ struct Binner {
       return false;
     }
 
-    size_t x = get_ibin(grid_lines_x, point.x);
-    size_t y = get_ibin(grid_lines_y, point.y);
-    size_t z = get_ibin(grid_lines_z, point.z);
+    size_t x = get_ibin(grid.grid_lines_x, point.x);
+    size_t y = get_ibin(grid.grid_lines_y, point.y);
+    size_t z = get_ibin(grid.grid_lines_z, point.z);
     size_t i = ((z * grid_res.y + y) * grid_res.x) + x;
     bins.at(i).iprims.emplace_back(counter);
     ++counter;
     return true;
   }
 
-  BinGrid into_grid() {
-    BinGrid grid {
-      std::move(grid_lines_x),
-      std::move(grid_lines_y),
-      std::move(grid_lines_z),
+  BinGrid into_bingrid() {
+    BinGrid out {
+      std::move(grid),
       std::move(bins),
     };
-    return grid;
+    return out;
   }
 };
 
@@ -595,7 +603,7 @@ BinGrid bin_point_cloud(
     size_t _;
     binner.bin(point, _);
   }
-  return binner.into_grid();
+  return binner.into_bingrid();
 }
 BinGrid bin_point_cloud(
   const glm::vec3& grid_interval,
@@ -625,7 +633,7 @@ BinGrid bin_mesh(
     size_t _;
     binner.bin(aabb2, _);
   }
-  return binner.into_grid();
+  return binner.into_bingrid();
 }
 BinGrid bin_mesh(
   const glm::vec3& grid_interval,
@@ -655,7 +663,7 @@ BinGrid bin_idxmesh(
     size_t _;
     binner.bin(aabb2, _);
   }
-  return binner.into_grid();
+  return binner.into_bingrid();
 }
 BinGrid bin_idxmesh(
   const glm::vec3& grid_interval,
@@ -707,12 +715,12 @@ struct Dedup {
   }
 };
 
-TetrahedralMesh TetrahedralMesh::from_points(float density, const std::vector<glm::vec3>& points) {
+TetrahedralMesh TetrahedralMesh::from_points(const glm::vec3& grid_interval, const std::vector<glm::vec3>& points) {
   // Bin vertices into a voxel grid.
-  PointCloud point_cloud { points };
-  glm::vec3 size = geom::Aabb::from_points(points).size() * density;
-  float max_edge = std::max(size.x, std::max(size.y, size.z));
-  BinGrid grid = bin_point_cloud(glm::vec3(max_edge / (density * 10.0f)), point_cloud);
+  mesh::BinGrid grid = mesh::bin_point_cloud(
+    glm::vec3(1, 1, 1),
+    { points });
+
   Dedup<glm::vec3, TetrahedralVertex> dedup_tetra_vert {};
   Dedup<glm::uvec4, TetrahedralCell> dedup_tetra_cell {};
 

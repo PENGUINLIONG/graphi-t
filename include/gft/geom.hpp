@@ -107,6 +107,7 @@ extern bool intersect_aabb(const Aabb& aabb1, const Aabb& aabb2);
 
 extern void split_tetra2tris(const Tetrahedron& tet, std::vector<Triangle>& tris);
 extern void split_aabb2tetras(const Aabb& aabb, std::vector<Tetrahedron>& tets);
+extern void split_aabb2points(const Aabb& aabb, std::vector<glm::vec3>& out);
 
 extern void subdivide_aabb(
   const Aabb& aabb,

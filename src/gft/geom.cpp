@@ -132,6 +132,26 @@ void subdivide_aabb(
   }
 }
 
+void split_aabb2points(const Aabb& aabb, std::vector<glm::vec3>& out) {
+  glm::vec3 v0(aabb.min.x, aabb.min.y, aabb.min.z);
+  glm::vec3 v1(aabb.max.x, aabb.min.y, aabb.min.z);
+  glm::vec3 v2(aabb.min.x, aabb.max.y, aabb.min.z);
+  glm::vec3 v3(aabb.max.x, aabb.max.y, aabb.min.z);
+  glm::vec3 v4(aabb.min.x, aabb.min.y, aabb.max.z);
+  glm::vec3 v5(aabb.max.x, aabb.min.y, aabb.max.z);
+  glm::vec3 v6(aabb.min.x, aabb.max.y, aabb.max.z);
+  glm::vec3 v7(aabb.max.x, aabb.max.y, aabb.max.z);
+
+  out.emplace_back(v0);
+  out.emplace_back(v1);
+  out.emplace_back(v2);
+  out.emplace_back(v3);
+  out.emplace_back(v4);
+  out.emplace_back(v5);
+  out.emplace_back(v6);
+  out.emplace_back(v7);
+}
+
 void tile_aabb_ceil(
   const Aabb& aabb,
   const glm::vec3& tile_size,

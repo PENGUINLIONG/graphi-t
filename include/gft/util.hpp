@@ -2,6 +2,7 @@
 // @PENGUINLIONG
 #pragma once
 #include <cstdint>
+#include <cstdlib>
 #include <vector>
 #include <map>
 #include <string>
