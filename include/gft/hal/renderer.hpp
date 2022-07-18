@@ -56,6 +56,8 @@ struct Renderer {
   Renderer& draw_idxmesh_wireframe(const mesh::IndexedMesh& idxmesh, const glm::vec3& color);
   Renderer& draw_idxmesh_wireframe(const mesh::IndexedMesh& idxmesh);
   Renderer& draw_point_cloud(const mesh::PointCloud& point_cloud, const std::vector<glm::vec3>& colors);
+  Renderer& draw_point_cloud(const mesh::PointCloud& point_cloud, const glm::vec3& colors);
+  Renderer& draw_point_cloud(const mesh::PointCloud& point_cloud);
   //Renderer& draw_idxmesh(const mesh::IndexedMesh& idxmesh);
 };
 

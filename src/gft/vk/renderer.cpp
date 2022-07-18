@@ -475,6 +475,13 @@ Renderer& Renderer::draw_point_cloud(const mesh::PointCloud& point_cloud, const 
   rpib->invoke(invoke);
   return *this;
 }
+Renderer& Renderer::draw_point_cloud(const mesh::PointCloud& point_cloud, const glm::vec3& color) {
+  std::vector<glm::vec3> colors(point_cloud.poses.size(), color);
+  return draw_point_cloud(point_cloud, colors);
+}
+Renderer& Renderer::draw_point_cloud(const mesh::PointCloud& point_cloud) {
+  return draw_point_cloud(point_cloud, glm::vec3(1.0f, 1.0f, 0.0f));
+}
 
 } // namespace scoped
 } // namespace vk

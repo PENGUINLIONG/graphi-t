@@ -80,7 +80,11 @@ void split_aabb2tetras(const Aabb& aabb, std::vector<Tetrahedron>& out) {
   //    |/_________|/   Z
   //    H          G
   //
-  // ABDE, BCDG, DEGH, BEGF, BDEG
+  // BHCG, BHGF, BDCH, BAHE, BADH, BEHF
+  //
+  // Note: The first three vertices forms a triangle pointing out of the
+  // tetrahedron in a right-hand system. That is, the 4th vertex is behind the
+  // plane formed by the first vertices.
 
   glm::vec3 a(aabb.min.x, aabb.max.y, aabb.min.z);
   glm::vec3 b(aabb.max.x, aabb.max.y, aabb.min.z);
@@ -91,17 +95,19 @@ void split_aabb2tetras(const Aabb& aabb, std::vector<Tetrahedron>& out) {
   glm::vec3 g(aabb.max.x, aabb.min.y, aabb.max.z);
   glm::vec3 h(aabb.min.x, aabb.min.y, aabb.max.z);
 
-  Tetrahedron t0 { a, b, d, e };
-  Tetrahedron t1 { b, c, d, g };
-  Tetrahedron t2 { d, e, g, h };
-  Tetrahedron t3 { b, e, g, f };
-  Tetrahedron t4 { b, d, e, g };
+  Tetrahedron t0 { b, h, c, g };
+  Tetrahedron t1 { b, h, g, f };
+  Tetrahedron t2 { b, d, c, h };
+  Tetrahedron t3 { b, a, h, e };
+  Tetrahedron t4 { b, a, d, h };
+  Tetrahedron t5 { b, e, h, f };
 
   out.emplace_back(std::move(t0));
   out.emplace_back(std::move(t1));
   out.emplace_back(std::move(t2));
   out.emplace_back(std::move(t3));
   out.emplace_back(std::move(t4));
+  out.emplace_back(std::move(t5));
 }
 
 void subdivide_aabb(

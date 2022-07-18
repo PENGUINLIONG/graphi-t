@@ -735,15 +735,49 @@ TetrahedralMesh TetrahedralMesh::from_points(const glm::vec3& grid_interval, con
     std::vector<uint32_t> iprims(bin.iprims.begin(), bin.iprims.end());
     for (const auto& tet : tets) {
       TetrahedralInterpolant interp_templ {};
+
+      uint32_t itetra_vert_a = dedup_tetra_vert.get_idx(tet.a);
+      uint32_t itetra_vert_b = dedup_tetra_vert.get_idx(tet.b);
+      uint32_t itetra_vert_c = dedup_tetra_vert.get_idx(tet.c);
+      uint32_t itetra_vert_d = dedup_tetra_vert.get_idx(tet.d);
+
       glm::uvec4 tetra_cell = glm::uvec4(
-        dedup_tetra_vert.get_idx(tet.a),
-        dedup_tetra_vert.get_idx(tet.b),
-        dedup_tetra_vert.get_idx(tet.c),
-        dedup_tetra_vert.get_idx(tet.d));
+        itetra_vert_a,
+        itetra_vert_b,
+        itetra_vert_c,
+        itetra_vert_d);
+
       uint32_t itetra_cell = dedup_tetra_cell.get_idx(tetra_cell);
       interp_templ.itetra_cell = itetra_cell;
 
-      dedup_tetra_vert.get_value(tetra_cell.x).ineighbor_cells.insert(itetra_cell);
+      {
+        TetrahedralVertex& tetra_vert = dedup_tetra_vert.get_value(itetra_vert_a);
+        tetra_vert.ineighbor_cells.insert(itetra_cell);
+        tetra_vert.ineighbor_verts.insert(itetra_vert_b);
+        tetra_vert.ineighbor_verts.insert(itetra_vert_c);
+        tetra_vert.ineighbor_verts.insert(itetra_vert_d);
+      }
+      {
+        TetrahedralVertex& tetra_vert = dedup_tetra_vert.get_value(itetra_vert_b);
+        tetra_vert.ineighbor_cells.insert(itetra_cell);
+        tetra_vert.ineighbor_verts.insert(itetra_vert_a);
+        tetra_vert.ineighbor_verts.insert(itetra_vert_c);
+        tetra_vert.ineighbor_verts.insert(itetra_vert_d);
+      }
+      {
+        TetrahedralVertex& tetra_vert = dedup_tetra_vert.get_value(itetra_vert_c);
+        tetra_vert.ineighbor_cells.insert(itetra_cell);
+        tetra_vert.ineighbor_verts.insert(itetra_vert_a);
+        tetra_vert.ineighbor_verts.insert(itetra_vert_b);
+        tetra_vert.ineighbor_verts.insert(itetra_vert_d);
+      }
+      {
+        TetrahedralVertex& tetra_vert = dedup_tetra_vert.get_value(itetra_vert_d);
+        tetra_vert.ineighbor_cells.insert(itetra_cell);
+        tetra_vert.ineighbor_verts.insert(itetra_vert_a);
+        tetra_vert.ineighbor_verts.insert(itetra_vert_b);
+        tetra_vert.ineighbor_verts.insert(itetra_vert_c);
+      }
 
       for (size_t i = 0; i < iprims.size();) {
         size_t iprim = iprims.at(i);

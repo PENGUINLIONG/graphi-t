@@ -110,7 +110,8 @@ struct TetrahedralVertex {
   glm::vec3 pos;
   // Indices to adjacent cells.
   std::set<uint32_t> ineighbor_cells;
-  uint32_t itetra_cell;
+  // Indices to adjacent vertices.
+  std::set<uint32_t> ineighbor_verts;
 };
 struct TetrahedralCell {
   glm::uvec4 itetra_verts;
