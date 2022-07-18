@@ -717,9 +717,7 @@ struct Dedup {
 
 TetrahedralMesh TetrahedralMesh::from_points(const glm::vec3& grid_interval, const std::vector<glm::vec3>& points) {
   // Bin vertices into a voxel grid.
-  mesh::BinGrid grid = mesh::bin_point_cloud(
-    glm::vec3(1, 1, 1),
-    { points });
+  mesh::BinGrid grid = mesh::bin_point_cloud(grid_interval, { points });
 
   Dedup<glm::vec3, TetrahedralVertex> dedup_tetra_vert {};
   Dedup<glm::uvec4, TetrahedralCell> dedup_tetra_cell {};
