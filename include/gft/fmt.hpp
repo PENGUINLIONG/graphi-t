@@ -84,6 +84,7 @@ struct FormatCodec<L_FORMAT_R16G16B16A16_SFLOAT> {
       uint32_t exponent = (x >> 23) & 255;
       if (exponent == 255 || exponent < (127 - 15) || exponent >= 127 + 15) { return 0; }
       uint32_t fraction = x & 8388607;
+      unimplemented();
     };
     for (uint32_t i = 0; i < npx; ++i) {
       uint16_t f0 = float2half(*(const uint32_t*)(&src[i].x));

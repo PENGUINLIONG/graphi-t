@@ -71,6 +71,10 @@ struct Tetrahedron {
   glm::vec3 b;
   glm::vec3 c;
   glm::vec3 d;
+
+  constexpr glm::vec3 center() const {
+    return (a + b + c + d) * 0.25f;
+  }
 };
 struct Plane {
   glm::vec3 n;

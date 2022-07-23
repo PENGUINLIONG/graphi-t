@@ -713,6 +713,10 @@ struct Dedup {
     }
     return out;
   }
+
+  size_t size() const {
+    return key2idx.size();
+  }
 };
 
 TetrahedralMesh TetrahedralMesh::from_points(const glm::vec3& grid_interval, const std::vector<glm::vec3>& points) {
@@ -726,13 +730,16 @@ TetrahedralMesh TetrahedralMesh::from_points(const glm::vec3& grid_interval, con
   std::vector<TetrahedralInterpolant> interps;
   interps.resize(points.size());
   std::vector<geom::Tetrahedron> tets;
-  tets.reserve(5);
+  tets.reserve(6);
+  std::array<TetrahedralInterpolant, 6> interp_templs {};
   for (const auto& bin : grid.bins) {
     geom::split_aabb2tetras(bin.aabb, tets);
 
+
     std::vector<uint32_t> iprims(bin.iprims.begin(), bin.iprims.end());
-    for (const auto& tet : tets) {
-      TetrahedralInterpolant interp_templ {};
+    for (size_t i = 0; i < tets.size(); ++i) {
+      const geom::Tetrahedron& tet = tets.at(i);
+      TetrahedralInterpolant& interp_templ = interp_templs.at(i);
 
       uint32_t itetra_vert_a = dedup_tetra_vert.get_idx(tet.a);
       uint32_t itetra_vert_b = dedup_tetra_vert.get_idx(tet.b);
@@ -777,6 +784,16 @@ TetrahedralMesh TetrahedralMesh::from_points(const glm::vec3& grid_interval, con
         tetra_vert.ineighbor_verts.insert(itetra_vert_c);
       }
 
+      {
+        TetrahedralCell& tetra_cell = dedup_tetra_cell.get_value(itetra_cell);
+        tetra_cell.itetra_verts = glm::uvec4(
+          itetra_vert_a,
+          itetra_vert_b,
+          itetra_vert_c,
+          itetra_vert_d);
+        tetra_cell.center = tet.center();
+      }
+
       for (size_t i = 0; i < iprims.size();) {
         size_t iprim = iprims.at(i);
         glm::vec4 bary;
@@ -792,7 +809,32 @@ TetrahedralMesh TetrahedralMesh::from_points(const glm::vec3& grid_interval, con
       }
     }
 
-    L_ASSERT(iprims.empty());
+    // If any primitive is perfectly enclosed by a tetrahedron, assign it to the
+    // nearest one and tolerate the negative weight.
+    for (size_t i = 0; iprims.size(); ++i) {
+      size_t iprim = iprims.at(i);
+      glm::vec3 pos = points.at(iprim);
+
+      float dist_nearest = std::numeric_limits<float>::max();
+      uint32_t itetra_cell_nearest = tets.size();
+      for (size_t i = 0; i < tets.size(); ++i) {
+        const geom::Tetrahedron& tet = tets.at(i);
+        glm::vec3 center = tet.center();
+
+        float dist = glm::length(pos - center);
+        if (dist < dist_nearest) {
+          dist_nearest = dist;
+          itetra_cell_nearest = i;
+        }
+      }
+
+      glm::vec4 bary;
+      contains_point_tetra(tets.at(itetra_cell_nearest), points.at(iprim), bary);
+      TetrahedralInterpolant interp = interp_templs.at(itetra_cell_nearest);
+      interp.tetra_weights = bary;
+      interps.at(iprim) = interp;
+    }
+
     tets.clear();
   }
 

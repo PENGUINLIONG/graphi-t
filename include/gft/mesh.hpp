@@ -115,6 +115,7 @@ struct TetrahedralVertex {
 };
 struct TetrahedralCell {
   glm::uvec4 itetra_verts;
+  glm::vec3 center;
 };
 struct TetrahedralInterpolant {
   // Indices to tettrahedron vertices.
