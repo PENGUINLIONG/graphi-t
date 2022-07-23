@@ -9,13 +9,114 @@ namespace liong {
 namespace vk {
 namespace scoped {
 
+MeshGpu::MeshGpu(const scoped::Context& ctxt, uint32_t nvert, bool streaming, bool gc) : nvert(nvert) {
+  poses = ctxt.build_buf()
+    .size(nvert * sizeof(glm::vec4))
+    .vertex()
+    .storage()
+    .host_access(streaming ? L_MEMORY_ACCESS_WRITE_BIT : 0)
+    .build(gc);
+
+  uvs = ctxt.build_buf()
+    .size(nvert * sizeof(glm::vec2))
+    .storage()
+    .host_access(streaming ? L_MEMORY_ACCESS_WRITE_BIT : 0)
+    .build(gc);
+
+  norms = ctxt.build_buf()
+    .size(nvert * sizeof(glm::vec4))
+    .storage()
+    .host_access(streaming ? L_MEMORY_ACCESS_WRITE_BIT : 0)
+    .build(gc);
+}
+MeshGpu::MeshGpu(const scoped::Context& ctxt, const mesh::Mesh& mesh, bool gc) :
+  MeshGpu(ctxt, mesh.poses.size(), true)
+{
+  write(mesh);
+}
+void MeshGpu::write(const mesh::Mesh& mesh) {
+  L_ASSERT(nvert == mesh.poses.size());
+  L_ASSERT(nvert == mesh.uvs.size());
+  L_ASSERT(nvert == mesh.norms.size());
+  poses.map_write().write_aligned(mesh.poses, sizeof(glm::vec4));
+  uvs.map_write().write_aligned(mesh.uvs, sizeof(glm::vec2));
+  norms.map_write().write_aligned(mesh.norms, sizeof(glm::vec4));
+}
+
+
+
+IndexedMeshGpu::IndexedMeshGpu(const scoped::Context& ctxt, uint32_t nvert, uint32_t ntri, bool streaming, bool gc) : mesh(ctxt, nvert, streaming), ntri(ntri) {
+  idxs = ctxt.build_buf()
+    .size(ntri * sizeof(glm::uvec3))
+    .index()
+    .storage()
+    .host_access(streaming ? L_MEMORY_ACCESS_WRITE_BIT : 0)
+    .build(gc);
+}
+IndexedMeshGpu::IndexedMeshGpu(const scoped::Context& ctxt, const mesh::IndexedMesh& idxmesh, bool gc) :
+  IndexedMeshGpu(ctxt, idxmesh.mesh.poses.size(), idxmesh.idxs.size(), true)
+{
+  write(idxmesh);
+}
+void IndexedMeshGpu::write(const mesh::IndexedMesh& idxmesh) {
+  L_ASSERT(ntri == idxmesh.idxs.size());
+  mesh.write(idxmesh.mesh);
+  idxs.map_write().write_aligned(idxmesh.idxs, sizeof(glm::uvec3));
+}
+
+
+
+TextureGpu::TextureGpu(
+  const scoped::Context& ctxt,
+  uint32_t width,
+  uint32_t height,
+  bool streaming,
+  bool gc
+) : ctxt(scoped::Context::borrow(ctxt)) {
+  tex = ctxt.build_img()
+    .width(width)
+    .height(height)
+    .fmt(fmt::L_FORMAT_R8G8B8A8_UNORM_PACK32)
+    .sampled()
+    .storage()
+    .build();
+  stage_buf = ctxt.build_buf()
+    .size(sizeof(uint32_t) * width * height)
+    .streaming()
+    .build();
+}
+TextureGpu::TextureGpu(
+  const scoped::Context& ctxt,
+  uint32_t width,
+  uint32_t height,
+  const std::vector<uint32_t>& pxs,
+  bool gc
+) : TextureGpu(ctxt, width, height, gc) {
+  write(pxs);
+}
+void TextureGpu::write(const std::vector<uint32_t>& pxs) {
+  const auto& tex_cfg = tex.cfg();
+  L_ASSERT(pxs.size() == tex_cfg.width * tex_cfg.height);
+
+  stage_buf.map_write().write(pxs);
+
+  ctxt.build_trans_invoke()
+    .src(stage_buf.view())
+    .dst(tex.view())
+    .build()
+    .submit()
+    .wait();
+}
+
+
+
 scoped::DepthImage create_zbuf(
   const scoped::Context& ctxt,
   uint32_t width,
   uint32_t height
 ) {
   scoped::DepthImage zbuf_img = ctxt.build_depth_img()
-    .fmt(fmt::L_DEPTH_FORMAT_D16_UNORM)
+    .fmt(fmt::L_DEPTH_FORMAT_D32_SFLOAT)
     .attachment()
     .width(width)
     .height(height)
@@ -30,7 +131,7 @@ scoped::RenderPass create_pass(
 ) {
   scoped::RenderPass pass = ctxt.build_pass()
     .clear_store_attm(fmt::L_FORMAT_B8G8R8A8_UNORM_PACK32)
-    .clear_store_attm(fmt::L_DEPTH_FORMAT_D16_UNORM)
+    .clear_store_attm(fmt::L_DEPTH_FORMAT_D32_SFLOAT)
     .width(width)
     .height(height)
     .build();
@@ -152,6 +253,7 @@ scoped::Task create_lit_task(const scoped::RenderPass& pass) {
       vec3 diffuse = clamp(NoH, 0.0f, 1.0f) * texture(main_tex, v_uv).xyz;
 
       scene_color = vec4(albedo.xyz * diffuse.xyz + ambient.xyz, 1.0);
+      scene_color = vec4(texture(main_tex, v_uv).xyz, 1.0);
     }
   )";
 
@@ -169,28 +271,11 @@ scoped::Task create_lit_task(const scoped::RenderPass& pass) {
   return lit_task;
 }
 
-scoped::Image create_default_tex_img(
+scoped::TextureGpu create_default_tex(
   const scoped::Context& ctxt
 ) {
-  scoped::Image white_img = ctxt.build_img()
-    .sampled()
-    .width(4)
-    .height(4)
-    .fmt(fmt::L_FORMAT_R8G8B8A8_UNORM_PACK32)
-    .build();
-
-  std::vector<uint32_t> white_img_data(16, ~(uint32_t)0);
-  scoped::Buffer staging_buf = ctxt.build_buf()
-    .streaming_with(white_img_data)
-    .build();
-
-  ctxt.build_trans_invoke()
-    .src(staging_buf.view())
-    .dst(white_img.view())
-    .build()
-    .submit()
-    .wait();
-
+  std::vector<uint32_t> white_img_data(16, 0xffffffff);
+  scoped::TextureGpu white_img(ctxt, 4, 4, white_img_data);
   return white_img;
 }
 
@@ -205,7 +290,7 @@ Renderer::Renderer(
   lit_task(create_lit_task(pass)),
   wireframe_task(create_unlit_task(pass, L_TOPOLOGY_TRIANGLE_WIREFRAME)),
   point_cloud_task(create_unlit_task(pass, L_TOPOLOGY_POINT)),
-  default_tex_img(create_default_tex_img(ctxt)),
+  default_tex(create_default_tex(ctxt)),
   width(width),
   height(height),
   camera_pos(0.0f, 0.0f, -10.0f),
@@ -221,7 +306,7 @@ glm::mat4 Renderer::get_model2world() const {
 }
 glm::mat4 Renderer::get_world2view() const {
   glm::mat4 camera2view = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 1e-2f, 65534.0f);
-  glm::mat4 world2camera = glm::lookAt(-camera_pos, model_pos, glm::vec3(0.0f, 1.0f, 0.0f));
+  glm::mat4 world2camera = glm::lookAt(camera_pos, model_pos, glm::vec3(0.0f, 1.0f, 0.0f));
   return camera2view * world2camera;
 }
 
@@ -233,17 +318,17 @@ void Renderer::set_model_pos(const glm::vec3& x) {
 }
 
 Renderer& Renderer::begin_frame(const scoped::Image& render_target_img) {
-  push_gc_frame("renderer");
   rpib = std::make_unique<RenderPassInvocationBuilder>(pass.build_pass_invoke());
   rpib->attm(render_target_img.view()).attm(zbuf_img.view());
   return *this;
 }
-void Renderer::end_frame() {
-  rpib->build()
-    .submit()
-    .wait();
-  pop_gc_frame("renderer");
-  pass.build_pass_invoke();
+scoped::Invocation Renderer::end_frame() {
+  return rpib->build();
+}
+
+Renderer& Renderer::is_timed(bool is_timed) {
+  rpib->is_timed(is_timed);
+  return *this;
 }
 
 Renderer& Renderer::draw_mesh(const mesh::Mesh& mesh) {
@@ -289,13 +374,14 @@ Renderer& Renderer::draw_mesh(const mesh::Mesh& mesh) {
     .rsc(uniform_buf.view())
     .rsc(uv_buf.view())
     .rsc(norm_buf.view())
-    .rsc(default_tex_img.view())
+    .rsc(default_tex.tex.view())
     .build();
 
   rpib->invoke(lit_invoke);
   return *this;
 }
-Renderer& Renderer::draw_idxmesh(const mesh::IndexedMesh& idxmesh) {
+
+Renderer& Renderer::draw_idxmesh(const scoped::IndexedMeshGpu& idxmesh, const scoped::TextureGpu& tex) {
   struct Uniform {
     glm::mat4 model2world;
     glm::mat4 world2view;
@@ -317,39 +403,29 @@ Renderer& Renderer::draw_idxmesh(const mesh::IndexedMesh& idxmesh) {
     .streaming_with(u)
     .build();
 
-  scoped::Buffer poses_buf = ctxt.build_buf()
-    .vertex()
-    .streaming_with_aligned(idxmesh.mesh.poses, sizeof(glm::vec4))
-    .build();
-
-  scoped::Buffer uv_buf = ctxt.build_buf()
-    .storage()
-    .streaming_with(idxmesh.mesh.uvs)
-    .build();
-
-  scoped::Buffer norm_buf = ctxt.build_buf()
-    .storage()
-    .streaming_with_aligned(idxmesh.mesh.norms, sizeof(glm::vec4))
-    .build();
-
-  scoped::Buffer idxs_buf = ctxt.build_buf()
-    .index()
-    .streaming_with(idxmesh.idxs)
-    .build();
-
   scoped::Invocation lit_invoke = lit_task.build_graph_invoke()
-    .vert_buf(poses_buf.view())
-    .idx_buf(idxs_buf.view())
+    .vert_buf(idxmesh.mesh.poses.view())
+    .idx_buf(idxmesh.idxs.view())
     .idx_ty(L_INDEX_TYPE_UINT32)
-    .nidx(idxmesh.idxs.size() * 3)
+    .nidx(idxmesh.ntri * 3)
     .rsc(uniform_buf.view())
-    .rsc(uv_buf.view())
-    .rsc(norm_buf.view())
-    .rsc(default_tex_img.view())
+    .rsc(idxmesh.mesh.uvs.view())
+    .rsc(idxmesh.mesh.norms.view())
+    .rsc(tex.tex.view())
     .build();
 
   rpib->invoke(lit_invoke);
   return *this;
+}
+Renderer& Renderer::draw_idxmesh(const scoped::IndexedMeshGpu& idxmesh) {
+  return draw_idxmesh(idxmesh, default_tex);
+}
+Renderer& Renderer::draw_idxmesh(const mesh::IndexedMesh& idxmesh, const scoped::TextureGpu& tex) {
+  scoped::IndexedMeshGpu idxmesh2(ctxt, idxmesh);
+  return draw_idxmesh(idxmesh2, tex);
+}
+Renderer& Renderer::draw_idxmesh(const mesh::IndexedMesh& idxmesh) {
+  return draw_idxmesh(idxmesh, default_tex);
 }
 
 Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh, const std::vector<glm::vec3>& colors) {

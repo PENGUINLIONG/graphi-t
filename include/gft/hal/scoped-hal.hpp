@@ -709,6 +709,12 @@ struct MappedBuffer {
   inline void write(const T& src) {
     write(&src, sizeof(T));
   }
+  template<typename T>
+  inline void write_aligned(const std::vector<T>& src, size_t align) {
+    for (size_t i = 0; i < src.size(); ++i) {
+      std::memcpy((uint8_t*)data() + i * align, &src.data()[i], sizeof(T));
+    }
+  }
 };
 struct Buffer {
   L_DECLR_SCOPED_OBJ(Buffer);
