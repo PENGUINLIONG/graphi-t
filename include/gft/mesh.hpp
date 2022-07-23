@@ -146,32 +146,37 @@ struct TetrahedralMesh {
 
 struct Bone {
   std::string name;
+  // Parent bone index; -1 if it's a root bone. 
+  int32_t parent;
+  // Model space to bone space transformation.
   glm::mat4 offset_trans;
 };
 struct Skinning {
   std::vector<Bone> bones;
+  // Per-vertex bone indices.
   std::vector<glm::uvec4> ibones;
+  // Per-vertex bone weights.
   std::vector<glm::vec4> bone_weights;
 };
 
 struct BoneKeyFrame {
-  double tick;
+  float tick;
   glm::vec3 scale;
   glm::quat rotate;
   glm::vec3 pos;
 
-  constexpr glm::mat4 to_trans() const {
-    glm::mat4 out =
-      glm::translate(glm::scale((glm::mat4)rotate, scale), pos);
-    return out;
-  }
+  glm::mat4 to_transform() const;
+
+  static BoneKeyFrame lerp(const BoneKeyFrame& a, const BoneKeyFrame& b, float alpha);
 };
 struct BoneAnimation {
   std::vector<BoneKeyFrame> key_frames;
+
+  glm::mat4 get_transform(float tick) const;
 };
 struct SkeletalAnimation {
   std::string name;
-  double tick_per_sec;
+  float tick_per_sec;
   // For each bone.
   std::vector<BoneAnimation> bone_anims;
 };
@@ -180,6 +185,12 @@ struct SkinnedMesh {
   IndexedMesh idxmesh;
   Skinning skinning;
   std::vector<SkeletalAnimation> skel_anims;
+
+  void get_transforms(
+    const std::string& anim_name,
+    float tick,
+    std::vector<glm::mat4>& tranforms
+  );
 };
 
 } // namespace mesh

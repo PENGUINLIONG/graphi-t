@@ -890,5 +890,51 @@ Mesh TetrahedralMesh::to_mesh() const {
 
 
 
+glm::mat4 BoneKeyFrame::to_transform() const {
+  glm::mat4 out =
+    glm::translate(glm::scale((glm::mat4)rotate, scale), pos);
+  return out;
+}
+
+BoneKeyFrame BoneKeyFrame::lerp(const BoneKeyFrame& a, const BoneKeyFrame& b, float alpha) {
+  alpha = std::max(std::min(alpha, 1.0f), 0.0f);
+  BoneKeyFrame out {};
+  out.scale = (1.0f - alpha) * a.scale + alpha * b.scale;
+  out.rotate = glm::lerp(a.rotate, b.rotate, alpha);
+  out.pos = (1.0f - alpha) * a.pos + alpha * b.pos;
+  return out;
+}
+
+glm::mat4 BoneAnimation::get_transform(float tick) const {
+  auto it = std::find_if(key_frames.begin(), key_frames.end(), [&](const BoneKeyFrame& key_frame) {
+    return tick < key_frame.tick;
+  });
+
+  const BoneKeyFrame& b = it == key_frames.end() ? key_frames.back() : *it;
+  const BoneKeyFrame& a = *(--it);
+  float alpha = (tick - a.tick) / (b.tick - a.tick + 1e-5f);
+
+  return BoneKeyFrame::lerp(a, b, alpha).to_transform();
+};
+
+void SkinnedMesh::get_transforms(
+  const std::string& anim_name,
+  float tick,
+  std::vector<glm::mat4>& transforms
+) {
+  auto it = std::find_if(skel_anims.begin(), skel_anims.end(), [&](const SkeletalAnimation& skel_anim) {
+    return skel_anim.name == anim_name;
+  });
+  L_ASSERT(it != skel_anims.end());
+  const SkeletalAnimation& skel_anim = *it;
+
+  transforms.resize(skel_anim.bone_anims.size());
+  for (size_t i = 0; i < skel_anim.bone_anims.size(); ++i) {
+    transforms.at(i) = skel_anim.bone_anims.at(i).get_transform(tick);
+  }
+}
+
+
+
 } // namespace mesh
 } // namespace liong
