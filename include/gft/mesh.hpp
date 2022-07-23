@@ -142,6 +142,18 @@ struct TetrahedralMesh {
   Mesh to_mesh() const;
 };
 
+
+
+struct Bone {
+  std::string name;
+  glm::mat4 offset_trans;
+};
+struct Skinning {
+  std::vector<Bone> bones;
+  std::vector<glm::uvec4> ibones;
+  std::vector<glm::vec4> bone_weights;
+};
+
 struct BoneKeyFrame {
   double tick;
   glm::vec3 scale;
@@ -155,23 +167,19 @@ struct BoneKeyFrame {
   }
 };
 struct BoneAnimation {
-  std::string name;
-  double tick_per_sec;
   std::vector<BoneKeyFrame> key_frames;
 };
-struct Bone {
+struct SkeletalAnimation {
   std::string name;
-  glm::mat4 offset_trans;
-  std::map<std::string, BoneAnimation> bone_anims;
+  double tick_per_sec;
+  // For each bone.
+  std::vector<BoneAnimation> bone_anims;
 };
-struct Skeleton {
-  std::vector<glm::uvec4> ibones;
-  std::vector<glm::vec4> bone_weights;
-  std::vector<Bone> bones;
-};
-struct SkeletalMesh {
-  mesh::IndexedMesh idxmesh;
-  std::unique_ptr<Skeleton> skel;
+
+struct SkinnedMesh {
+  IndexedMesh idxmesh;
+  Skinning skinning;
+  std::vector<SkeletalAnimation> skel_anims;
 };
 
 } // namespace mesh
