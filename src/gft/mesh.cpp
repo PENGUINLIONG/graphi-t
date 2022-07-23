@@ -905,7 +905,7 @@ BoneKeyFrame BoneKeyFrame::lerp(const BoneKeyFrame& a, const BoneKeyFrame& b, fl
   return out;
 }
 
-glm::mat4 BoneAnimation::get_transform(float tick) const {
+glm::mat4 BoneAnimation::get_local_transform(float tick) const {
   auto it = std::find_if(key_frames.begin(), key_frames.end(), [&](const BoneKeyFrame& key_frame) {
     return tick < key_frame.tick;
   });
@@ -917,11 +917,38 @@ glm::mat4 BoneAnimation::get_transform(float tick) const {
   return BoneKeyFrame::lerp(a, b, alpha).to_transform();
 };
 
+const SkeletalAnimation& SkinnedMesh::get_skel_anim(
+  const std::string& anim_name
+) const {
+  auto it = std::find_if(skel_anims.begin(), skel_anims.end(), [&](const SkeletalAnimation& skel_anim) {
+    return skel_anim.name == anim_name;
+  });
+  L_ASSERT(it != skel_anims.end());
+  return *it;
+}
+
+glm::mat4 SkinnedMesh::get_bone_transform(
+  const std::string& anim_name,
+  uint32_t ibone,
+  float tick
+) const {
+  glm::mat4 local_trans = get_skel_anim(anim_name)
+    .bone_anims.at(ibone)
+    .get_local_transform(tick);
+
+  int32_t parent = skinning.bones.at(ibone).parent;
+  if (parent >= 0) {
+    return local_trans * get_bone_transform(anim_name, parent, tick);
+  } else {
+    return local_trans;
+  }
+}
+
 void SkinnedMesh::get_transforms(
   const std::string& anim_name,
   float tick,
   std::vector<glm::mat4>& transforms
-) {
+) const {
   auto it = std::find_if(skel_anims.begin(), skel_anims.end(), [&](const SkeletalAnimation& skel_anim) {
     return skel_anim.name == anim_name;
   });
@@ -930,7 +957,9 @@ void SkinnedMesh::get_transforms(
 
   transforms.resize(skel_anim.bone_anims.size());
   for (size_t i = 0; i < skel_anim.bone_anims.size(); ++i) {
-    transforms.at(i) = skel_anim.bone_anims.at(i).get_transform(tick);
+    const glm::mat4& model2bone = skinning.bones.at(i).offset_trans;
+    glm::mat4 bone_trans = get_bone_transform(anim_name, i, tick);
+    transforms.at(i) = bone_trans * model2bone;
   }
 }
 

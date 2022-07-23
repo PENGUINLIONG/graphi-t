@@ -172,7 +172,7 @@ struct BoneKeyFrame {
 struct BoneAnimation {
   std::vector<BoneKeyFrame> key_frames;
 
-  glm::mat4 get_transform(float tick) const;
+  glm::mat4 get_local_transform(float tick) const;
 };
 struct SkeletalAnimation {
   std::string name;
@@ -186,11 +186,17 @@ struct SkinnedMesh {
   Skinning skinning;
   std::vector<SkeletalAnimation> skel_anims;
 
+  const SkeletalAnimation& get_skel_anim(const std::string& skel_anim) const;
+  glm::mat4 get_bone_transform(
+    const std::string& anim_name,
+    uint32_t ibone,
+    float tick
+  ) const;
   void get_transforms(
     const std::string& anim_name,
     float tick,
     std::vector<glm::mat4>& tranforms
-  );
+  ) const;
 };
 
 } // namespace mesh
