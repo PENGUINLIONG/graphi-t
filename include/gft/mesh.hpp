@@ -5,7 +5,9 @@
 #include <vector>
 #include <string>
 #include <set>
+#include <map>
 #include "glm/glm.hpp"
+#include "glm/ext.hpp"
 #include "gft/geom.hpp"
 
 namespace liong {
@@ -140,6 +142,37 @@ struct TetrahedralMesh {
   Mesh to_mesh() const;
 };
 
+struct BoneKeyFrame {
+  double tick;
+  glm::vec3 scale;
+  glm::quat rotate;
+  glm::vec3 pos;
+
+  constexpr glm::mat4 to_trans() const {
+    glm::mat4 out =
+      glm::translate(glm::scale((glm::mat4)rotate, scale), pos);
+    return out;
+  }
+};
+struct BoneAnimation {
+  std::string name;
+  double tick_per_sec;
+  std::vector<BoneKeyFrame> key_frames;
+};
+struct Bone {
+  std::string name;
+  glm::mat4 offset_trans;
+  std::map<std::string, BoneAnimation> bone_anims;
+};
+struct Skeleton {
+  std::vector<glm::uvec4> ibones;
+  std::vector<glm::vec4> bone_weights;
+  std::vector<Bone> bones;
+};
+struct SkeletalMesh {
+  mesh::IndexedMesh idxmesh;
+  std::unique_ptr<Skeleton> skel;
+};
 
 } // namespace mesh
 } // namespace liong
