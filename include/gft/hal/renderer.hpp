@@ -33,6 +33,28 @@ struct IndexedMeshGpu {
 
   void write(const mesh::IndexedMesh& idxmesh);
 };
+struct SkinnedMeshGpu {
+  scoped::Context ctxt;
+  IndexedMeshGpu idxmesh;
+  const uint32_t nbone;
+  
+  scoped::Buffer rest_poses;
+  scoped::Buffer ibones;
+  scoped::Buffer bone_weights;
+
+  scoped::Buffer bone_mats;
+
+  mesh::Skinning skinning;
+  mesh::SkeletalAnimationCollection skel_anims;
+
+  SkinnedMeshGpu(const scoped::Context& ctxt, uint32_t nvert, uint32_t ntri, uint32_t nbone, bool streaming = true, bool gc = true);
+  SkinnedMeshGpu(const scoped::Context& ctxt, const mesh::SkinnedMesh& skinmesh, bool gc = true);
+
+  void write(const mesh::SkinnedMesh& skinmesh);
+
+  scoped::Invocation animate(const std::string& anim_name, float tick);
+  scoped::Invocation animate(float tick);
+};
 
 struct TextureGpu {
   scoped::Context ctxt;
@@ -86,16 +108,21 @@ struct Renderer {
   Renderer& is_timed(bool is_timed = true);
 
   Renderer& draw_mesh(const mesh::Mesh& mesh);
+
   Renderer& draw_idxmesh(const scoped::IndexedMeshGpu& idxmesh, const scoped::TextureGpu& tex);
   Renderer& draw_idxmesh(const scoped::IndexedMeshGpu& idxmesh);
+
   Renderer& draw_idxmesh(const mesh::IndexedMesh& idxmesh, const scoped::TextureGpu& tex);
   Renderer& draw_idxmesh(const mesh::IndexedMesh& idxmesh);
+
   Renderer& draw_mesh_wireframe(const mesh::Mesh& mesh, const std::vector<glm::vec3>& colors);
   Renderer& draw_mesh_wireframe(const mesh::Mesh& mesh, const glm::vec3& color);
   Renderer& draw_mesh_wireframe(const mesh::Mesh& mesh);
+
   Renderer& draw_idxmesh_wireframe(const mesh::IndexedMesh& idxmesh, const std::vector<glm::vec3>& colors);
   Renderer& draw_idxmesh_wireframe(const mesh::IndexedMesh& idxmesh, const glm::vec3& color);
   Renderer& draw_idxmesh_wireframe(const mesh::IndexedMesh& idxmesh);
+
   Renderer& draw_point_cloud(const mesh::PointCloud& point_cloud, const std::vector<glm::vec3>& colors);
   Renderer& draw_point_cloud(const mesh::PointCloud& point_cloud, const glm::vec3& colors);
   Renderer& draw_point_cloud(const mesh::PointCloud& point_cloud);

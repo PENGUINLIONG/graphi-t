@@ -148,7 +148,9 @@ struct Bone {
   std::string name;
   // Parent bone index; -1 if it's a root bone. 
   int32_t parent;
-  // Model space to bone space transformation.
+  // Parent bone space to current bone space transform.
+  glm::mat4 parent_trans;
+  // Model space to bone space transform.
   glm::mat4 offset_trans;
 };
 struct Skinning {
@@ -179,24 +181,20 @@ struct SkeletalAnimation {
   float tick_per_sec;
   // For each bone.
   std::vector<BoneAnimation> bone_anims;
+
+  glm::mat4 get_bone_transform(const Skinning& skinning, uint32_t ibone, float tick) const;
+  void get_bone_transforms(const Skinning& skinning, float tick, std::vector<glm::mat4>& out) const;
+};
+struct SkeletalAnimationCollection {
+  std::vector<SkeletalAnimation> skel_anims;
+
+  const SkeletalAnimation& get_skel_anim(const std::string& skel_anim) const;
 };
 
 struct SkinnedMesh {
   IndexedMesh idxmesh;
   Skinning skinning;
-  std::vector<SkeletalAnimation> skel_anims;
-
-  const SkeletalAnimation& get_skel_anim(const std::string& skel_anim) const;
-  glm::mat4 get_bone_transform(
-    const std::string& anim_name,
-    uint32_t ibone,
-    float tick
-  ) const;
-  void get_transforms(
-    const std::string& anim_name,
-    float tick,
-    std::vector<glm::mat4>& tranforms
-  ) const;
+  SkeletalAnimationCollection skel_anims;
 };
 
 } // namespace mesh

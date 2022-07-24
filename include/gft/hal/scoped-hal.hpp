@@ -968,6 +968,25 @@ struct Context {
   ) const {
     return CompositeInvocationBuilder(*this, label);
   }
+
+  std::map<std::string, scoped::Task> global_tasks;
+  inline bool try_get_global_task(const std::string& name, scoped::Task& out) const {
+    auto it = global_tasks.find(name);
+    if (it == global_tasks.end()) {
+      return false;
+    }
+
+    out = scoped::Task::borrow(it->second);
+    return true;
+  }
+  inline scoped::Task reg_global_task(const std::string& name, scoped::Task&& task) {
+    L_ASSERT(task.ownership == L_SCOPED_OBJECT_OWNERSHIP_OWNED_BY_RAII);
+
+    auto out = scoped::Task::borrow(task);
+    bool succ = global_tasks.emplace(std::make_pair(name, std::move(task))).second;
+    L_ASSERT(succ);
+    return out;
+  }
 };
 
 

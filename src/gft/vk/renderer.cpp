@@ -30,7 +30,7 @@ MeshGpu::MeshGpu(const scoped::Context& ctxt, uint32_t nvert, bool streaming, bo
     .build(gc);
 }
 MeshGpu::MeshGpu(const scoped::Context& ctxt, const mesh::Mesh& mesh, bool gc) :
-  MeshGpu(ctxt, mesh.poses.size(), true)
+  MeshGpu(ctxt, mesh.poses.size(), gc)
 {
   write(mesh);
 }
@@ -45,7 +45,13 @@ void MeshGpu::write(const mesh::Mesh& mesh) {
 
 
 
-IndexedMeshGpu::IndexedMeshGpu(const scoped::Context& ctxt, uint32_t nvert, uint32_t ntri, bool streaming, bool gc) : mesh(ctxt, nvert, streaming), ntri(ntri) {
+IndexedMeshGpu::IndexedMeshGpu(
+  const scoped::Context& ctxt,
+  uint32_t nvert,
+  uint32_t ntri,
+  bool streaming,
+  bool gc
+) : mesh(ctxt, nvert, streaming, gc), ntri(ntri) {
   idxs = ctxt.build_buf()
     .size(ntri * sizeof(glm::uvec3))
     .index()
@@ -54,14 +60,134 @@ IndexedMeshGpu::IndexedMeshGpu(const scoped::Context& ctxt, uint32_t nvert, uint
     .build(gc);
 }
 IndexedMeshGpu::IndexedMeshGpu(const scoped::Context& ctxt, const mesh::IndexedMesh& idxmesh, bool gc) :
-  IndexedMeshGpu(ctxt, idxmesh.mesh.poses.size(), idxmesh.idxs.size(), true)
+  IndexedMeshGpu(ctxt, idxmesh.mesh.poses.size(), idxmesh.idxs.size(), gc)
 {
   write(idxmesh);
 }
 void IndexedMeshGpu::write(const mesh::IndexedMesh& idxmesh) {
   L_ASSERT(ntri == idxmesh.idxs.size());
   mesh.write(idxmesh.mesh);
-  idxs.map_write().write_aligned(idxmesh.idxs, sizeof(glm::uvec3));
+  idxs.map_write().write(idxmesh.idxs);
+}
+
+
+
+SkinnedMeshGpu::SkinnedMeshGpu(
+  const scoped::Context& ctxt,
+  uint32_t nvert,
+  uint32_t ntri,
+  uint32_t nbone,
+  bool streaming,
+  bool gc
+) : ctxt(scoped::Context::borrow(ctxt)), idxmesh(ctxt, nvert, ntri, streaming, gc), nbone(nbone) {
+  rest_poses = ctxt.build_buf()
+    .size(nvert * sizeof(glm::vec4))
+    .storage()
+    .host_access(streaming ? L_MEMORY_ACCESS_WRITE_BIT : 0)
+    .build();
+
+  ibones = ctxt.build_buf()
+    .size(nvert * sizeof(glm::uvec4))
+    .storage()
+    .host_access(streaming ? L_MEMORY_ACCESS_WRITE_BIT : 0)
+    .build();
+
+  bone_weights = ctxt.build_buf()
+    .size(nvert * sizeof(glm::vec4))
+    .storage()
+    .host_access(streaming ? L_MEMORY_ACCESS_WRITE_BIT : 0)
+    .build();
+
+  bone_mats = ctxt.build_buf()
+    .size(nvert * sizeof(glm::mat4))
+    .storage()
+    .host_access(streaming ? L_MEMORY_ACCESS_WRITE_BIT : 0)
+    .build();
+}
+SkinnedMeshGpu::SkinnedMeshGpu(const scoped::Context& ctxt, const mesh::SkinnedMesh& skinmesh, bool gc) :
+  SkinnedMeshGpu(ctxt, skinmesh.idxmesh.mesh.poses.size(), skinmesh.idxmesh.idxs.size(), skinmesh.skinning.bones.size(), gc)
+{
+  write(skinmesh);
+}
+scoped::Task create_animate_task(const scoped::Context& ctxt, uint32_t nbone) {
+  std::string src = R"(
+    #version 450 core
+    layout(local_size_x_id=0, local_size_y_id=1, local_size_z_id=2) in;
+
+    layout(binding=0) readonly buffer _0 { vec4 rest_poses[]; };
+    layout(binding=1) readonly buffer _1 { uvec4 ibones[]; };
+    layout(binding=2) readonly buffer _2 { vec4 bone_weights[]; };
+    layout(binding=3) readonly buffer _3 { mat4 bone_mats[]; };
+    layout(binding=4) writeonly buffer _4 { vec4 poses[]; };
+
+    void main() {
+      uvec3 global_id = gl_GlobalInvocationID;
+      int i = int(global_id.x);
+      if (i >= )" + std::to_string(nbone) + R"() return;
+
+      vec4 rest_pos = rest_poses[i];
+
+      uvec4 ibone = ibones[i];
+      vec4 bone_weight = bone_weights[i];
+
+      vec4 pos =
+        bone_mats[ibone.x] * rest_pos * bone_weight.x +
+        bone_mats[ibone.y] * rest_pos * bone_weight.y +
+        bone_mats[ibone.z] * rest_pos * bone_weight.z +
+        bone_mats[ibone.w] * rest_pos * bone_weight.w;
+
+      poses[i] = pos;
+    }
+  )";
+
+  auto art = glslang::compile_comp(src, "main");
+
+  scoped::Task task = ctxt.build_comp_task()
+    .comp(art.comp_spv)
+    .rsc(L_RESOURCE_TYPE_STORAGE_BUFFER)
+    .rsc(L_RESOURCE_TYPE_STORAGE_BUFFER)
+    .rsc(L_RESOURCE_TYPE_STORAGE_BUFFER)
+    .rsc(L_RESOURCE_TYPE_STORAGE_BUFFER)
+    .rsc(L_RESOURCE_TYPE_STORAGE_BUFFER)
+    .workgrp_size(64, 1, 1)
+    .build(false);
+
+  return task;
+};
+void SkinnedMeshGpu::write(const mesh::SkinnedMesh& skinmesh) {
+  L_ASSERT(nbone == skinmesh.skinning.bones.size());
+  idxmesh.write(skinmesh.idxmesh);
+  rest_poses.map_write().write_aligned(skinmesh.idxmesh.mesh.poses, sizeof(glm::vec4));
+  ibones.map_write().write(skinmesh.skinning.ibones);
+  bone_weights.map_write().write(skinmesh.skinning.bone_weights);
+  std::vector<glm::mat4> bone_mats_data(skinmesh.skinning.bones.size(), glm::identity<glm::mat4>());
+  bone_mats.map_write().write(bone_mats_data);
+
+  skinning = skinmesh.skinning;
+  skel_anims = skinmesh.skel_anims;
+}
+scoped::Invocation SkinnedMeshGpu::animate(const std::string& anim_name, float tick) {
+  std::vector<glm::mat4> bone_mats_data;
+  skel_anims.get_skel_anim(anim_name).get_bone_transforms(skinning, tick, bone_mats_data);
+  bone_mats.map_write().write(bone_mats_data);
+
+  std::string task_name = "__skinmesh_bone_animate" + std::to_string(nbone);
+  scoped::Task task;
+  if (!ctxt.try_get_global_task(task_name, task)) {
+    task = ctxt.reg_global_task(task_name, create_animate_task(ctxt, nbone));
+  }
+
+  return task.build_comp_invoke()
+    .rsc(rest_poses.view())
+    .rsc(ibones.view())
+    .rsc(bone_weights.view())
+    .rsc(bone_mats.view())
+    .rsc(idxmesh.mesh.poses.view())
+    .workgrp_count(util::div_up(idxmesh.mesh.nvert, 64), 1, 1)
+    .build();
+}
+scoped::Invocation SkinnedMeshGpu::animate(float tick) {
+  return animate(skel_anims.skel_anims.front().name, tick);
 }
 
 
