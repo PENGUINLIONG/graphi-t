@@ -891,16 +891,17 @@ Mesh TetrahedralMesh::to_mesh() const {
 
 
 glm::mat4 BoneKeyFrame::to_transform() const {
-  glm::mat4 out =
-    glm::translate(glm::scale((glm::mat4)rotate, scale), pos);
-  return out;
+  glm::mat4 t = glm::translate(glm::identity<glm::mat4>(), pos);
+  glm::mat4 s = glm::scale(glm::identity<glm::mat4>(), scale);
+  glm::mat4 r = glm::mat4_cast(rotate);
+  return t * r * s;
 }
 
 BoneKeyFrame BoneKeyFrame::lerp(const BoneKeyFrame& a, const BoneKeyFrame& b, float alpha) {
   alpha = std::max(std::min(alpha, 1.0f), 0.0f);
   BoneKeyFrame out {};
   out.scale = (1.0f - alpha) * a.scale + alpha * b.scale;
-  out.rotate = glm::lerp(a.rotate, b.rotate, alpha);
+  out.rotate = glm::normalize(glm::lerp(a.rotate, b.rotate, alpha));
   out.pos = (1.0f - alpha) * a.pos + alpha * b.pos;
   return out;
 }
@@ -914,7 +915,8 @@ glm::mat4 BoneAnimation::get_local_transform(float tick) const {
   const BoneKeyFrame& a = *(--it);
   float alpha = (tick - a.tick) / (b.tick - a.tick + 1e-5f);
 
-  return BoneKeyFrame::lerp(a, b, alpha).to_transform();
+  glm::mat4 mat = BoneKeyFrame::lerp(a, b, alpha).to_transform();
+  return mat;
 };
 
 glm::mat4 SkeletalAnimation::get_bone_transform(const Skinning& skinning, uint32_t ibone, float tick) const {
@@ -924,16 +926,17 @@ glm::mat4 SkeletalAnimation::get_bone_transform(const Skinning& skinning, uint32
   glm::mat4 local_trans = bone.parent_trans * bone_anims.at(ibone).get_local_transform(tick);
 
   if (parent >= 0) {
-    return local_trans * get_bone_transform(skinning, parent, tick) * bone.offset_trans;
+    return get_bone_transform(skinning, parent, tick) * local_trans;
   } else {
-    return local_trans * bone.offset_trans;
+    return local_trans;
   }
 }
 void SkeletalAnimation::get_bone_transforms(const Skinning& skinning, float tick, std::vector<glm::mat4>& out) const {
   out.resize(bone_anims.size());
   for (size_t i = 0; i < bone_anims.size(); ++i) {
+    const auto& bone = skinning.bones.at(i);
     glm::mat4 bone_trans = get_bone_transform(skinning, i, tick);
-    out.at(i) = bone_trans;
+    out.at(i) = bone_trans * bone.offset_trans;
   }
 }
 

@@ -109,7 +109,7 @@ SkinnedMeshGpu::SkinnedMeshGpu(const scoped::Context& ctxt, const mesh::SkinnedM
 {
   write(skinmesh);
 }
-scoped::Task create_animate_task(const scoped::Context& ctxt, uint32_t nbone) {
+scoped::Task create_animate_task(const scoped::Context& ctxt, uint32_t nvert) {
   std::string src = R"(
     #version 450 core
     layout(local_size_x_id=0, local_size_y_id=1, local_size_z_id=2) in;
@@ -123,9 +123,9 @@ scoped::Task create_animate_task(const scoped::Context& ctxt, uint32_t nbone) {
     void main() {
       uvec3 global_id = gl_GlobalInvocationID;
       int i = int(global_id.x);
-      if (i >= )" + std::to_string(nbone) + R"() return;
+      if (i >= )" + std::to_string(nvert) + R"() return;
 
-      vec4 rest_pos = rest_poses[i];
+      vec4 rest_pos = vec4(rest_poses[i].xyz, 1.0f);
 
       uvec4 ibone = ibones[i];
       vec4 bone_weight = bone_weights[i];
@@ -171,10 +171,11 @@ scoped::Invocation SkinnedMeshGpu::animate(const std::string& anim_name, float t
   skel_anims.get_skel_anim(anim_name).get_bone_transforms(skinning, tick, bone_mats_data);
   bone_mats.map_write().write(bone_mats_data);
 
-  std::string task_name = "__skinmesh_bone_animate" + std::to_string(nbone);
+  uint32_t nvert = idxmesh.mesh.nvert;
+  std::string task_name = "__skinmesh_bone_animate" + std::to_string(nvert);
   scoped::Task task;
   if (!ctxt.try_get_global_task(task_name, task)) {
-    task = ctxt.reg_global_task(task_name, create_animate_task(ctxt, nbone));
+    task = ctxt.reg_global_task(task_name, create_animate_task(ctxt, nvert));
   }
 
   return task.build_comp_invoke()
