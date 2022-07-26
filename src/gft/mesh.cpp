@@ -1022,6 +1022,28 @@ const SkeletalAnimation& SkeletalAnimationCollection::get_skel_anim(
   return *it;
 }
 
+std::vector<glm::vec3> SkinnedMesh::animate(const std::string& anim_name, float tick) {
+  std::vector<glm::mat4> bone_mats;
+  skel_anims.get_skel_anim(anim_name).get_bone_transforms(skinning, tick, bone_mats);
+
+  std::vector<glm::vec3> out(idxmesh.mesh.poses.size());
+  for (size_t i = 0; i < idxmesh.mesh.poses.size(); ++i) {
+    glm::vec4 rest_pos = glm::vec4(idxmesh.mesh.poses.at(i), 1.0f);
+    glm::uvec4 ibone = skinning.ibones.at(i);
+    glm::vec4 bone_weight = skinning.bone_weights.at(i);
+
+    glm::vec4 pos =
+      bone_mats.at(ibone.x) * rest_pos * bone_weight.x +
+      bone_mats.at(ibone.y) * rest_pos * bone_weight.y +
+      bone_mats.at(ibone.z) * rest_pos * bone_weight.z +
+      bone_mats.at(ibone.w) * rest_pos * bone_weight.w;
+    out.at(i) = pos;
+  }
+  return out;
+}
+std::vector<glm::vec3> SkinnedMesh::animate(float tick) {
+  return animate(skel_anims.skel_anims.front().name, tick);
+}
 
 
 } // namespace mesh

@@ -209,6 +209,9 @@ struct SkinnedMesh {
   IndexedMesh idxmesh;
   Skinning skinning;
   SkeletalAnimationCollection skel_anims;
+
+  std::vector<glm::vec3> animate(const std::string& anim_name, float tick);
+  std::vector<glm::vec3> animate(float tick);
 };
 
 } // namespace mesh
