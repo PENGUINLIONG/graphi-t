@@ -8,6 +8,7 @@
 #include <map>
 #include "glm/glm.hpp"
 #include "glm/ext.hpp"
+#include "gft/assert.hpp"
 #include "gft/geom.hpp"
 
 namespace liong {
@@ -74,6 +75,19 @@ struct BinGrid {
     }
     return out;
   }
+
+  inline const Bin& get_bin(uint32_t x, uint32_t y, uint32_t z) const {
+    L_ASSERT(x < grid.grid_lines_x.size());
+    L_ASSERT(y < grid.grid_lines_y.size());
+    L_ASSERT(z < grid.grid_lines_z.size());
+    const Bin& bin = 
+      bins[(z * grid.grid_lines_y.size() + y) * grid.grid_lines_x.size() + x];
+    return bin;
+  }
+
+  // Returns all bins with primitives contained as well as those in between
+  // them. There shall be no concave structure in the list of returned bins.
+  std::vector<Bin> get_solid() const;
 };
 
 extern BinGrid bin_point_cloud(

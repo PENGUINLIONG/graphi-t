@@ -490,6 +490,78 @@ Grid build_grid(const geom::Aabb& aabb, const glm::vec3& grid_interval) {
 }
 
 
+
+std::vector<bool> scan(
+  std::vector<Bin> bins,
+  size_t map_dim1,
+  size_t map_dim2,
+  size_t reduce_dim,
+  std::function<size_t(size_t, size_t, size_t)> idxer
+) {
+  std::vector<bool> solid_mask(map_dim1 * map_dim2 * reduce_dim);
+
+  for (size_t i = 0; i < map_dim1; ++i) {
+    for (size_t j = 0; j < map_dim2; ++j) {
+      std::vector<bool> prefix_mask(reduce_dim);
+      bool was_prefixed = false;
+      for (size_t k = 0; k < reduce_dim; ++k) {
+        size_t idx = idxer(i, j, k);
+        was_prefixed |= !bins.at(idx).iprims.empty();
+        prefix_mask.at(k) = was_prefixed;
+      }
+
+      std::vector<bool> suffix_mask(reduce_dim);
+      bool was_suffixed = false;
+      for (size_t k = 0; k < reduce_dim; ++k) {
+        size_t k2 = reduce_dim - k - 1;
+        size_t idx = idxer(i, j, k2);
+        was_suffixed |= !bins.at(idx).iprims.empty();
+        suffix_mask.at(k2) = was_suffixed;
+      }
+
+      for (size_t k = 0; k < reduce_dim; ++k) {
+        size_t idx = idxer(i, j, k);
+        solid_mask.at(idx) = prefix_mask.at(k) & suffix_mask.at(k);
+      }
+    }
+  }
+
+  return solid_mask;
+}
+
+std::vector<Bin> BinGrid::get_solid() const {
+  size_t nx = grid.grid_lines_x.size();
+  size_t ny = grid.grid_lines_y.size();
+  size_t nz = grid.grid_lines_z.size();
+
+  std::vector<bool> solid_mask_x = scan(bins, ny, nz, nx,
+    [&](size_t y, size_t z, size_t x) { return ((z * ny + y) * nx) + x; });
+  std::vector<bool> solid_mask_y = scan(bins, nx, nz, ny,
+    [&](size_t x, size_t z, size_t y) { return ((z * ny + y) * nx) + x; });
+  std::vector<bool> solid_mask_z = scan(bins, nx, ny, nz,
+    [&](size_t x, size_t y, size_t z) { return ((z * ny + y) * nx) + x; });
+
+  std::vector<Bin> out;
+  for (size_t x = 0; x < nx; ++x) {
+    for (size_t y = 0; y < ny; ++y) {
+      for (size_t z = 0; z < nz; ++z) {
+        size_t idx = ((z * ny + y) * nx) + x;
+        bool is_solid =
+          solid_mask_x.at(idx) |
+          solid_mask_y.at(idx) |
+          solid_mask_z.at(idx);
+        if (is_solid) {
+          out.emplace_back(get_bin(x, y, z));
+        }
+      }
+    }
+  }
+
+  return out;
+}
+
+
+
 struct Binner {
   Aabb aabb;
   glm::uvec3 grid_res;
@@ -732,9 +804,9 @@ TetrahedralMesh TetrahedralMesh::from_points(const glm::vec3& grid_interval, con
   std::vector<geom::Tetrahedron> tets;
   tets.reserve(6);
   std::array<TetrahedralInterpolant, 6> interp_templs {};
-  for (const auto& bin : grid.bins) {
+  std::vector<mesh::Bin> bins = grid.get_solid();
+  for (const auto& bin : bins) {
     geom::split_aabb2tetras(bin.aabb, tets);
-
 
     std::vector<uint32_t> iprims(bin.iprims.begin(), bin.iprims.end());
     for (size_t i = 0; i < tets.size(); ++i) {
