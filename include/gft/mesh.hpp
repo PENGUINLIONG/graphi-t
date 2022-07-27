@@ -18,6 +18,7 @@ struct Mesh {
   std::vector<glm::vec3> poses;
   std::vector<glm::vec2> uvs;
   std::vector<glm::vec3> norms;
+  std::vector<glm::vec4> colors;
 
   static Mesh from_tris(const geom::Triangle* tris, size_t ntri);
   inline static Mesh from_tris(const std::vector<geom::Triangle>& tris) {
