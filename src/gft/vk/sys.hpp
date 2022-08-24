@@ -85,9 +85,25 @@ extern VkPipeline create_graph_pipe(
   uint32_t height,
   const VkPipelineInputAssemblyStateCreateInfo& piasci,
   const VkPipelineRasterizationStateCreateInfo& prsci,
-  const std::array<VkPipelineShaderStageCreateInfo, 2> psscis
+  const std::array<VkPipelineShaderStageCreateInfo, 2>& psscis
 );
 extern void destroy_pipe(VkDevice dev, VkPipeline pipe);
+
+// VkDescriptorPool
+extern VkDescriptorPool create_desc_pool(
+  VkDevice dev,
+  const std::array<VkDescriptorPoolSize, 4>& desc_pool_sizes,
+  uint32_t ndesc_set
+);
+extern void destroy_desc_pool(VkDevice dev, VkDescriptorPool desc_pool);
+
+// VkDescriptorSet
+extern std::vector<VkDescriptorSet> allocate_desc_set(
+  VkDevice dev,
+  VkDescriptorPool desc_pool,
+  const std::array<VkDescriptorPoolSize, 4>& desc_pool_sizes,
+  uint32_t ndesc_set
+);
 
 
 } // namespace sys

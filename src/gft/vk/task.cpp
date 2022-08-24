@@ -7,11 +7,13 @@ namespace vk {
 
 VkDescriptorSetLayout _create_desc_set_layout(
   const Context& ctxt,
-  const std::vector<ResourceType>& rsc_tys,
-  std::vector<VkDescriptorPoolSize>& desc_pool_sizes
+  const std::vector<ResourceType>& rsc_tys
 ) {
+  uint32_t nuniform_buf {};
+  uint32_t nstorage_buf {};
+  uint32_t nsampled_img {};
+  uint32_t nstorage_img {};
   std::vector<VkDescriptorSetLayoutBinding> dslbs;
-  std::map<VkDescriptorType, uint32_t> desc_counter;
   for (auto i = 0; i < rsc_tys.size(); ++i) {
     const auto& rsc_ty = rsc_tys[i];
 
@@ -22,35 +24,61 @@ VkDescriptorSetLayout _create_desc_set_layout(
       VK_SHADER_STAGE_ALL_GRAPHICS | VK_SHADER_STAGE_COMPUTE_BIT;
     switch (rsc_ty) {
     case L_RESOURCE_TYPE_UNIFORM_BUFFER:
+      ++nuniform_buf;
       dslb.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
       break;
     case L_RESOURCE_TYPE_STORAGE_BUFFER:
+      ++nstorage_buf;
       dslb.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
       break;
     case L_RESOURCE_TYPE_SAMPLED_IMAGE:
+      ++nsampled_img;
       dslb.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
       break;
     case L_RESOURCE_TYPE_STORAGE_IMAGE:
+      ++nstorage_img;
       dslb.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
       break;
     default:
       panic("unexpected resource type");
     }
-    desc_counter[dslb.descriptorType] += 1;
-
     dslbs.emplace_back(std::move(dslb));
-
-    // Collect `desc_pool_sizes` for checks on resource bindings.
-    for (const auto& pair : desc_counter) {
-      VkDescriptorPoolSize desc_pool_size;
-      desc_pool_size.type = pair.first;
-      desc_pool_size.descriptorCount = pair.second;
-      desc_pool_sizes.emplace_back(std::move(desc_pool_size));
-    }
   }
 
-  VkDescriptorSetLayout desc_set_layout =
-    sys::create_desc_set_layout(ctxt.dev, dslbs);
+  L_ASSERT(nuniform_buf < 256);
+  L_ASSERT(nstorage_buf < 256);
+  L_ASSERT(nsampled_img < 256);
+  L_ASSERT(nstorage_img < 256);
+
+  DescriptorCounter desc_counter {};
+  std::array<VkDescriptorPoolSize, 4> desc_pool_sizes {};
+
+  desc_counter.counters.nuniform_buf = (uint8_t)nuniform_buf;
+  desc_pool_sizes[0].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+  desc_pool_sizes[0].descriptorCount = nuniform_buf;
+
+  desc_counter.counters.nstorage_buf = (uint8_t)nstorage_buf;
+  desc_pool_sizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+  desc_pool_sizes[1].descriptorCount = desc_counter.nstorage_buf;
+
+  desc_counter.counters.nsampled_img = (uint8_t)nsampled_img;
+  desc_pool_sizes[2].type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
+  desc_pool_sizes[2].descriptorCount = desc_counter.nsampled_img;
+
+  desc_counter.counters.nstorage_img = (uint8_t)nstorage_img;
+  desc_pool_sizes[3].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+  desc_pool_sizes[3].descriptorCount = desc_counter.nstorage_img;
+
+  VkDescriptorSetLayout desc_set_layout;
+  auto it = ctxt.desc_pool_detail.desc_set_layouts.find(desc_counter);
+  if (it == ctxt.desc_pool_detail.desc_set_layouts.end()) {
+    desc_set_layout = sys::create_desc_set_layout(ctxt.dev, dslbs);
+    ctxt.desc_pool_detail.desc_set_layouts[desc_counter] = desc_set_layout;
+    ctxt.desc_pool_detail.desc_pool_sizes[desc_set_layout] = desc_pool_sizes;
+  } else {
+    desc_set_layout = it->second;
+  }
+
   return desc_set_layout;
 }
 Task create_comp_task(
@@ -59,9 +87,8 @@ Task create_comp_task(
 ) {
   L_ASSERT(cfg.workgrp_size.x * cfg.workgrp_size.y * cfg.workgrp_size.z != 0,
     "workgroup size cannot be zero");
-  std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   VkDescriptorSetLayout desc_set_layout = _create_desc_set_layout(ctxt,
-    cfg.rsc_tys, desc_pool_sizes);
+    cfg.rsc_tys);
   VkPipelineLayout pipe_layout = sys::create_pipe_layout(ctxt.dev,
     desc_set_layout);
   VkShaderModule shader_mod = sys::create_shader_mod(ctxt.dev,
@@ -94,7 +121,6 @@ Task create_comp_task(
   rsc_detail.desc_set_layout = desc_set_layout;
   rsc_detail.pipe_layout = pipe_layout;
   rsc_detail.rsc_tys = cfg.rsc_tys;
-  rsc_detail.desc_pool_sizes = std::move(desc_pool_sizes);
 
   log::debug("created compute task '", cfg.label, "'");
   return Task {
@@ -179,7 +205,6 @@ Task create_graph_task(
   rsc_detail.desc_set_layout = desc_set_layout;
   rsc_detail.pipe_layout = pipe_layout;
   rsc_detail.rsc_tys = cfg.rsc_tys;
-  rsc_detail.desc_pool_sizes = std::move(desc_pool_sizes);
 
   log::debug("created graphics task '", cfg.label, "'");
   return Task {
@@ -193,7 +218,6 @@ void destroy_task(Task& task) {
   if (task.pipe != VK_NULL_HANDLE) {
     sys::destroy_pipe(dev, task.pipe);
     sys::destroy_pipe_layout(dev, task.rsc_detail.pipe_layout);
-    sys::destroy_desc_set_layout(dev, task.rsc_detail.desc_set_layout);
 
     log::debug("destroyed task '", task.label, "'");
     task = {};

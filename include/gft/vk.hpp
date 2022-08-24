@@ -138,6 +138,49 @@ struct ContextSubmitDetail {
   uint32_t qfam_idx;
   VkQueue queue;
 };
+struct DescriptorCounter {
+  union {
+    uint32_t key;
+    struct {
+      uint8_t nuniform_buf;
+      uint8_t nstorage_buf;
+      uint8_t nsampled_img;
+      uint8_t nstorage_img;
+    } counters;
+  };
+};
+constexpr bool operator<(
+  const DescriptorCounter& a,
+  const DescriptorCounter& b
+) {
+  return a.key < b.key;
+}
+struct DescriptorPoolClass {
+  const uint32_t POOL_SIZE_COE = 64;
+  const uint32_t POOL_SIZE_ALIGN = 4;
+
+  std::array<VkDescriptorPoolSize, 4> aligned_desc_pool_sizes;
+  DescriptorCounter aligned_desc_counter;
+};
+struct DescriptorPoolEntry {
+  VkDevice dev;
+  VkDescriptorPool desc_pool;
+  DescriptorPoolEntry(VkDevice dev, VkDescriptorPool desc_pool);
+  ~DescriptorPoolEntry();
+};
+struct DescriptorSetEntry {
+  VkDescriptorSetLayout desc_set_layout;
+  VkDescriptorSet desc_set;
+  std::shared_ptr<DescriptorPoolEntry> pool_entry;
+};
+struct ContextDescriptorPoolDetail {
+  // Shader resource counter -> descriptor set layout.
+  std::map<DescriptorCounter, VkDescriptorSetLayout> desc_set_layouts;
+  // Descriptor set layout -> descriptor pool.
+  std::map<VkDescriptorSetLayout, DescriptorPoolClass> desc_pool_classes;
+  // Aligned resource counter -> instance.
+  std::map<DescriptorCounter, std::vector<DescriptorSetEntry>> desc_sets;
+};
 struct Context {
   std::string label;
   uint32_t iphysdev;
@@ -146,6 +189,7 @@ struct Context {
   std::map<SubmitType, ContextSubmitDetail> submit_details;
   std::map<ImageSampler, VkSampler> img_samplers;
   std::map<DepthImageSampler, VkSampler> depth_img_samplers;
+  ContextDescriptorPoolDetail desc_pool_detail;
   VmaAllocator allocator;
 
   inline VkPhysicalDevice physdev() const {
@@ -157,6 +201,9 @@ struct Context {
   inline const VkPhysicalDeviceFeatures& physdev_feat() const {
     return get_inst().physdev_details.at(iphysdev).feat;
   }
+
+  DescriptorSetEntry acquire_desc_set(VkDescriptorSetLayout desc_set_layout);
+  void release_desc_set(DescriptorSetEntry&& desc_set);
 };
 
 
@@ -237,12 +284,11 @@ struct TaskResourceDetail {
   VkDescriptorSetLayout desc_set_layout;
   VkPipelineLayout pipe_layout;
   std::vector<ResourceType> rsc_tys;
-  std::vector<VkDescriptorPoolSize> desc_pool_sizes;
 };
 struct Task {
   std::string label;
   SubmitType submit_ty;
-  const Context* ctxt;
+  Context* ctxt;
   const RenderPass* pass; // Only for graphics task.
   VkPipeline pipe;
   DispatchSize workgrp_size; // Only for compute task.
@@ -295,15 +341,13 @@ struct InvocationCopyImageToImageDetail {
 struct InvocationComputeDetail {
   const Task* task;
   VkPipelineBindPoint bind_pt;
-  VkDescriptorPool desc_pool;
-  VkDescriptorSet desc_set;
+  DescriptorSetEntry desc_set;
   DispatchSize workgrp_count;
 };
 struct InvocationGraphicsDetail {
   const Task* task;
   VkPipelineBindPoint bind_pt;
-  VkDescriptorPool desc_pool;
-  VkDescriptorSet desc_set;
+  DescriptorSetEntry desc_set;
   std::vector<VkBuffer> vert_bufs;
   std::vector<VkDeviceSize> vert_buf_offsets;
   VkBuffer idx_buf;
@@ -332,7 +376,7 @@ struct InvocationBakingDetail {
 struct Invocation {
   std::string label;
   // Execution context of the invocation.
-  const Context* ctxt;
+  Context* ctxt;
   // Submit type of this invocation or the first non-any subinvocation.
   SubmitType submit_ty;
   std::unique_ptr<InvocationCopyBufferToBufferDetail> b2b_detail;

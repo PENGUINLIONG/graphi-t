@@ -371,6 +371,49 @@ void destroy_pipe(VkDevice dev, VkPipeline pipe) {
 
 
 
+// VkDescriptorPool
+VkDescriptorPool create_desc_pool(
+  VkDevice dev,
+  const std::array<VkDescriptorPoolSize, 4>& desc_pool_sizes,
+  uint32_t ndesc_set
+) {
+  VkDescriptorPoolCreateInfo dpci {};
+  dpci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+  dpci.poolSizeCount = static_cast<uint32_t>(desc_pool_sizes.size());
+  dpci.pPoolSizes = desc_pool_sizes.data();
+  dpci.maxSets = ndesc_set;
+
+  VkDescriptorPool desc_pool;
+  VK_ASSERT << vkCreateDescriptorPool(dev, &dpci, nullptr, &desc_pool);
+  return desc_pool;
+}
+void destroy_desc_pool(VkDevice dev, VkDescriptorPool desc_pool) {
+  vkDestroyDescriptorPool(dev, desc_pool, nullptr);
+}
+
+
+
+// VkDescriptorSet
+std::vector<VkDescriptorSet> allocate_desc_set(
+  VkDevice dev,
+  VkDescriptorPool desc_pool,
+  VkDescriptorSetLayout desc_set_layout,
+  const std::array<VkDescriptorPoolSize, 4>& desc_pool_sizes,
+  uint32_t ndesc_set
+) {
+  VkDescriptorSetAllocateInfo dsai {};
+  dsai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+  dsai.descriptorPool = desc_pool;
+  dsai.descriptorSetCount = ndesc_set;
+  dsai.pSetLayouts = &desc_set_layout;
+
+  std::vector<VkDescriptorSet> desc_set;
+  VK_ASSERT << vkAllocateDescriptorSets(dev, &dsai, desc_set.data());
+  return desc_set;
+}
+
+
+
 } // namespace sys
 } // namespace vk
 } // namespace liong

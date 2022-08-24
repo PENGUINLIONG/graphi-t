@@ -88,6 +88,44 @@ VkSurfaceKHR _create_surf_metal(const ContextMetalConfig& cfg) {
 #endif // VK_EXT_metal_surface
 }
 
+DescriptorPoolEntry::DescriptorPoolEntry(
+  VkDevice dev,
+  VkDescriptorPool desc_pool
+) : dev(dev), desc_pool(desc_pool) {}
+DescriptorPoolEntry::~DescriptorPoolEntry() {
+  sys::destroy_desc_pool(dev, desc_pool);
+}
+DescriptorSetEntry Context::acquire_desc_set(VkDescriptorSetLayout desc_set_layout) {
+  auto& desc_pool_class = desc_pool_detail.desc_pool_classes[desc_set_layout];
+  auto& desc_sets = desc_pool_detail.desc_sets[desc_pool_class.aligned_desc_counter];
+  if (desc_sets.empty()) {
+    VkDescriptorPool desc_pool = sys::create_desc_pool(dev,
+      desc_pool_class.aligned_desc_pool_sizes, desc_pool_class.POOL_SIZE_COE);
+    std::shared_ptr<DescriptorPoolEntry> desc_pool_entry =
+      std::make_shared<DescriptorPoolEntry>(dev, desc_pool);
+
+    std::vector<VkDescriptorSet> desc_sets2 =
+      sys::allocate_desc_set(dev, desc_pool,
+        desc_pool_class.aligned_desc_pool_sizes, desc_pool_class.POOL_SIZE_COE);
+    for (VkDescriptorSet desc_set : desc_sets2) {
+      DescriptorSetEntry desc_set_entry {};
+      desc_set_entry.desc_set = desc_set;
+      desc_set_entry.desc_set_layout = desc_set_layout;
+      desc_set_entry.pool_entry = desc_pool_entry;
+      desc_sets.emplace_back(std::move(desc_set_entry));
+    }
+  }
+  DescriptorSetEntry desc_set = std::move(desc_sets.back());
+  desc_sets.pop_back();
+  return desc_set;
+}
+void Context::release_desc_set(DescriptorSetEntry&& desc_set_entry) {
+  const DescriptorCounter& aligned_desc_counter =
+    desc_pool_detail.desc_pool_classes.at(desc_set_entry.desc_set_layout)
+      .aligned_desc_counter;
+  desc_pool_detail.desc_sets.at(aligned_desc_counter).emplace_back(std::move(desc_set_entry));
+}
+
 Context _create_ctxt(
   const std::string& label,
   uint32_t dev_idx,
@@ -292,6 +330,8 @@ Context _create_ctxt(
   depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_ANISOTROPY_4] = sys::create_sampler(dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 4.0f, VK_COMPARE_OP_LESS);
 
+  ContextDescriptorPoolDetail desc_pool_detail {};
+
   VmaAllocatorCreateInfo allocatorInfo = {};
   allocatorInfo.vulkanApiVersion = inst.api_ver;
   allocatorInfo.physicalDevice = physdev;
@@ -305,7 +345,8 @@ Context _create_ctxt(
     inst.physdev_details.at(dev_idx).desc);
   return Context {
     label, dev_idx, dev, surf,
-    std::move(submit_details), img_samplers, depth_img_samplers, allocator
+    std::move(submit_details), img_samplers, depth_img_samplers,
+    desc_pool_detail, allocator
   };
 
 }
@@ -339,6 +380,9 @@ void destroy_ctxt(Context& ctxt) {
     vmaDestroyAllocator(ctxt.allocator);
     sys::destroy_dev(ctxt.dev);
     log::debug("destroyed vulkan context '", ctxt.label, "'");
+  }
+  for (auto pair : ctxt.desc_pool_detail.desc_set_layouts) {
+    sys::destroy_desc_set_layout(ctxt.dev, pair.second);
   }
   ctxt = {};
 }
