@@ -59,22 +59,39 @@ VkDescriptorSetLayout _create_desc_set_layout(
 
   desc_counter.counters.nstorage_buf = (uint8_t)nstorage_buf;
   desc_pool_sizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-  desc_pool_sizes[1].descriptorCount = desc_counter.nstorage_buf;
+  desc_pool_sizes[1].descriptorCount = nstorage_buf;
 
   desc_counter.counters.nsampled_img = (uint8_t)nsampled_img;
   desc_pool_sizes[2].type = VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE;
-  desc_pool_sizes[2].descriptorCount = desc_counter.nsampled_img;
+  desc_pool_sizes[2].descriptorCount = nsampled_img;
 
   desc_counter.counters.nstorage_img = (uint8_t)nstorage_img;
   desc_pool_sizes[3].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-  desc_pool_sizes[3].descriptorCount = desc_counter.nstorage_img;
+  desc_pool_sizes[3].descriptorCount = nstorage_img;
 
   VkDescriptorSetLayout desc_set_layout;
   auto it = ctxt.desc_pool_detail.desc_set_layouts.find(desc_counter);
   if (it == ctxt.desc_pool_detail.desc_set_layouts.end()) {
     desc_set_layout = sys::create_desc_set_layout(ctxt.dev, dslbs);
-    ctxt.desc_pool_detail.desc_set_layouts[desc_counter] = desc_set_layout;
-    ctxt.desc_pool_detail.desc_pool_sizes[desc_set_layout] = desc_pool_sizes;
+
+    DescriptorCounter aligned_desc_counter {desc_counter};
+    aligned_desc_counter.counters.nuniform_buf = util::div_up(nuniform_buf, DescriptorPoolClass::NRESOURCE_ALIGN);
+    aligned_desc_counter.counters.nstorage_buf = util::div_up(nstorage_buf, DescriptorPoolClass::NRESOURCE_ALIGN);
+    aligned_desc_counter.counters.nsampled_img = util::div_up(nsampled_img, DescriptorPoolClass::NRESOURCE_ALIGN);
+    aligned_desc_counter.counters.nstorage_img = util::div_up(nstorage_img, DescriptorPoolClass::NRESOURCE_ALIGN);
+
+    std::array<VkDescriptorPoolSize, 4> aligned_desc_pool_sizes {desc_pool_sizes};
+    aligned_desc_pool_sizes[0].descriptorCount = aligned_desc_counter.counters.nuniform_buf;
+    aligned_desc_pool_sizes[1].descriptorCount = aligned_desc_counter.counters.nstorage_buf;
+    aligned_desc_pool_sizes[2].descriptorCount = aligned_desc_counter.counters.nsampled_img;
+    aligned_desc_pool_sizes[3].descriptorCount = aligned_desc_counter.counters.nstorage_img;
+
+    DescriptorPoolClass& desc_pool_class =
+      const_cast<Context&>(ctxt).desc_pool_detail.desc_pool_classes[desc_set_layout];
+    desc_pool_class.aligned_desc_counter = aligned_desc_counter;
+    desc_pool_class.aligned_desc_pool_sizes = aligned_desc_pool_sizes;
+
+    const_cast<Context&>(ctxt).desc_pool_detail.desc_set_layouts[desc_counter] = desc_set_layout;
   } else {
     desc_set_layout = it->second;
   }
@@ -124,7 +141,7 @@ Task create_comp_task(
 
   log::debug("created compute task '", cfg.label, "'");
   return Task {
-    cfg.label, L_SUBMIT_TYPE_COMPUTE, &ctxt, nullptr, pipe,
+    cfg.label, L_SUBMIT_TYPE_COMPUTE, const_cast<Context*>(&ctxt), nullptr, pipe,
     cfg.workgrp_size, std::move(rsc_detail)
   };
 }
@@ -137,9 +154,8 @@ Task create_graph_task(
 ) {
   const Context& ctxt = *pass.ctxt;
 
-  std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   VkDescriptorSetLayout desc_set_layout =
-    _create_desc_set_layout(ctxt, cfg.rsc_tys, desc_pool_sizes);
+    _create_desc_set_layout(ctxt, cfg.rsc_tys);
   VkPipelineLayout pipe_layout = sys::create_pipe_layout(ctxt.dev,
     desc_set_layout);
   VkShaderModule vert_shader_mod = sys::create_shader_mod(ctxt.dev,
@@ -208,7 +224,7 @@ Task create_graph_task(
 
   log::debug("created graphics task '", cfg.label, "'");
   return Task {
-    cfg.label, L_SUBMIT_TYPE_GRAPHICS, &ctxt, &pass, pipe, {},
+    cfg.label, L_SUBMIT_TYPE_GRAPHICS, const_cast<Context*>(&ctxt), &pass, pipe, {},
     std::move(rsc_detail)
   };
 }

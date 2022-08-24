@@ -96,7 +96,7 @@ DescriptorPoolEntry::~DescriptorPoolEntry() {
   sys::destroy_desc_pool(dev, desc_pool);
 }
 DescriptorSetEntry Context::acquire_desc_set(VkDescriptorSetLayout desc_set_layout) {
-  auto& desc_pool_class = desc_pool_detail.desc_pool_classes[desc_set_layout];
+  auto& desc_pool_class = desc_pool_detail.desc_pool_classes.at(desc_set_layout);
   auto& desc_sets = desc_pool_detail.desc_sets[desc_pool_class.aligned_desc_counter];
   if (desc_sets.empty()) {
     VkDescriptorPool desc_pool = sys::create_desc_pool(dev,

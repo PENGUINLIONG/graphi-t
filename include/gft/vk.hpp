@@ -156,8 +156,8 @@ constexpr bool operator<(
   return a.key < b.key;
 }
 struct DescriptorPoolClass {
-  const uint32_t POOL_SIZE_COE = 64;
-  const uint32_t POOL_SIZE_ALIGN = 4;
+  static const uint32_t POOL_SIZE_COE = 64;
+  static const uint32_t NRESOURCE_ALIGN = 4;
 
   std::array<VkDescriptorPoolSize, 4> aligned_desc_pool_sizes;
   DescriptorCounter aligned_desc_counter;
