@@ -10,6 +10,7 @@
 #include <fstream>
 #include <functional>
 #include <chrono>
+#include <cstring>
 
 namespace liong {
 

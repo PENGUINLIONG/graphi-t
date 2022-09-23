@@ -2,6 +2,7 @@
 // @PENGUINLIONG
 #pragma once
 #include <string>
+#include <cstring>
 
 namespace liong {
 
