@@ -233,11 +233,23 @@ struct RenderPass {
 
 
 
+struct TaskDescriptorSetPoolItem {
+  VkDescriptorPool desc_pool;
+  VkDescriptorSet desc_set;
+};
+struct TaskDescriptorSetPoolItemRef {
+  Task* task;
+  TaskDescriptorSetPoolItem item;
+  
+  TaskDescriptorSetPoolItemRef(Task* task);
+  ~TaskDescriptorSetPoolItemRef();
+};
 struct TaskResourceDetail {
   VkDescriptorSetLayout desc_set_layout;
   VkPipelineLayout pipe_layout;
   std::vector<ResourceType> rsc_tys;
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
+  std::vector<TaskDescriptorSetPoolItem> desc_pool_items;
 };
 struct Task {
   std::string label;
@@ -247,6 +259,9 @@ struct Task {
   VkPipeline pipe;
   DispatchSize workgrp_size; // Only for compute task.
   TaskResourceDetail rsc_detail;
+
+  TaskDescriptorSetPoolItem acquire_desc_set();
+  void release_desc_set(TaskDescriptorSetPoolItem&& item);
 };
 
 
@@ -295,15 +310,13 @@ struct InvocationCopyImageToImageDetail {
 struct InvocationComputeDetail {
   const Task* task;
   VkPipelineBindPoint bind_pt;
-  VkDescriptorPool desc_pool;
-  VkDescriptorSet desc_set;
+  std::unique_ptr<TaskDescriptorSetPoolItemRef> desc_set_item;
   DispatchSize workgrp_count;
 };
 struct InvocationGraphicsDetail {
   const Task* task;
   VkPipelineBindPoint bind_pt;
-  VkDescriptorPool desc_pool;
-  VkDescriptorSet desc_set;
+  std::unique_ptr<TaskDescriptorSetPoolItemRef> desc_set_item;
   std::vector<VkBuffer> vert_bufs;
   std::vector<VkDeviceSize> vert_buf_offsets;
   VkBuffer idx_buf;

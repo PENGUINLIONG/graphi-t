@@ -4,35 +4,6 @@
 namespace liong {
 namespace vk {
 
-VkDescriptorPool _create_desc_pool(
-  const Context& ctxt,
-  const std::vector<VkDescriptorPoolSize>& desc_pool_sizes
-) {
-  VkDescriptorPoolCreateInfo dpci {};
-  dpci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-  dpci.poolSizeCount = static_cast<uint32_t>(desc_pool_sizes.size());
-  dpci.pPoolSizes = desc_pool_sizes.data();
-  dpci.maxSets = 1;
-
-  VkDescriptorPool desc_pool;
-  VK_ASSERT << vkCreateDescriptorPool(ctxt.dev, &dpci, nullptr, &desc_pool);
-  return desc_pool;
-}
-VkDescriptorSet _alloc_desc_set(
-  const Context& ctxt,
-  VkDescriptorPool desc_pool,
-  VkDescriptorSetLayout desc_set_layout
-) {
-  VkDescriptorSetAllocateInfo dsai {};
-  dsai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-  dsai.descriptorPool = desc_pool;
-  dsai.descriptorSetCount = 1;
-  dsai.pSetLayouts = &desc_set_layout;
-
-  VkDescriptorSet desc_set;
-  VK_ASSERT << vkAllocateDescriptorSets(ctxt.dev, &dsai, &desc_set);
-  return desc_set;
-}
 void _update_desc_set(
   const Context& ctxt,
   VkDescriptorSet desc_set,
@@ -455,10 +426,10 @@ Invocation create_comp_invoke(
   comp_detail.task = &task;
   comp_detail.bind_pt = VK_PIPELINE_BIND_POINT_COMPUTE;
   if (task.rsc_detail.desc_pool_sizes.size() > 0) {
-    comp_detail.desc_pool = _create_desc_pool(ctxt, task.rsc_detail.desc_pool_sizes);
-    comp_detail.desc_set =
-      _alloc_desc_set(ctxt, comp_detail.desc_pool, task.rsc_detail.desc_set_layout);
-    _update_desc_set(ctxt, comp_detail.desc_set, task.rsc_detail.rsc_tys, cfg.rsc_views);
+    comp_detail.desc_set_item =
+      std::make_unique<TaskDescriptorSetPoolItemRef>(const_cast<Task*>(&task));
+    _update_desc_set(ctxt, comp_detail.desc_set_item->item.desc_set,
+      task.rsc_detail.rsc_tys, cfg.rsc_views);
   }
   comp_detail.workgrp_count = cfg.workgrp_count;
 
@@ -507,10 +478,10 @@ Invocation create_graph_invoke(
   graph_detail.task = &task;
   graph_detail.bind_pt = VK_PIPELINE_BIND_POINT_GRAPHICS;
   if (task.rsc_detail.desc_pool_sizes.size() > 0) {
-    graph_detail.desc_pool = _create_desc_pool(ctxt, task.rsc_detail.desc_pool_sizes);
-    graph_detail.desc_set =
-      _alloc_desc_set(ctxt, graph_detail.desc_pool, task.rsc_detail.desc_set_layout);
-    _update_desc_set(ctxt, graph_detail.desc_set, task.rsc_detail.rsc_tys, cfg.rsc_views);
+    graph_detail.desc_set_item =
+      std::make_unique<TaskDescriptorSetPoolItemRef>(const_cast<Task*>(&task));
+    _update_desc_set(ctxt, graph_detail.desc_set_item->item.desc_set,
+      task.rsc_detail.rsc_tys, cfg.rsc_views);
   }
   graph_detail.vert_bufs = std::move(vert_bufs);
   graph_detail.vert_buf_offsets = std::move(vert_buf_offsets);
@@ -642,13 +613,13 @@ void destroy_invoke(Invocation& invoke) {
     log::debug("destroyed transfer invocation '", invoke.label, "'");
   }
   if (invoke.comp_detail) {
-    const InvocationComputeDetail& comp_detail = *invoke.comp_detail;
-    vkDestroyDescriptorPool(ctxt.dev, comp_detail.desc_pool, nullptr);
+    InvocationComputeDetail& comp_detail = *invoke.comp_detail;
+    comp_detail.desc_set_item.reset();
     log::debug("destroyed compute invocation '", invoke.label, "'");
   }
   if (invoke.graph_detail) {
-    const InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
-    vkDestroyDescriptorPool(ctxt.dev, graph_detail.desc_pool, nullptr);
+    InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
+    graph_detail.desc_set_item.reset();
     log::debug("destroyed graphics invocation '", invoke.label, "'");
   }
   if (invoke.pass_detail) {
@@ -1287,9 +1258,9 @@ std::vector<VkFence> _record_invoke_impl(
     const DispatchSize& workgrp_count = comp_detail.workgrp_count;
 
     vkCmdBindPipeline(cmdbuf, comp_detail.bind_pt, task.pipe);
-    if (comp_detail.desc_set != VK_NULL_HANDLE) {
+    if (comp_detail.desc_set_item != VK_NULL_HANDLE) {
       vkCmdBindDescriptorSets(cmdbuf, comp_detail.bind_pt,
-        task.rsc_detail.pipe_layout, 0, 1, &comp_detail.desc_set, 0, nullptr);
+        task.rsc_detail.pipe_layout, 0, 1, &comp_detail.desc_set_item->item.desc_set, 0, nullptr);
     }
     vkCmdDispatch(cmdbuf, workgrp_count.x, workgrp_count.y, workgrp_count.z);
     log::debug("applied compute invocation '", invoke.label, "'");
@@ -1299,9 +1270,9 @@ std::vector<VkFence> _record_invoke_impl(
     const Task& task = *graph_detail.task;
 
     vkCmdBindPipeline(cmdbuf, graph_detail.bind_pt, task.pipe);
-    if (graph_detail.desc_set != VK_NULL_HANDLE) {
+    if (graph_detail.desc_set_item->item.desc_set != VK_NULL_HANDLE) {
       vkCmdBindDescriptorSets(cmdbuf, graph_detail.bind_pt,
-        task.rsc_detail.pipe_layout, 0, 1, &graph_detail.desc_set, 0, nullptr);
+        task.rsc_detail.pipe_layout, 0, 1, &graph_detail.desc_set_item->item.desc_set, 0, nullptr);
     }
     // TODO: (penguinliong) Vertex, index buffer transition.
     vkCmdBindVertexBuffers(cmdbuf, 0, (uint32_t)graph_detail.vert_bufs.size(),
