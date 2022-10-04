@@ -1,8 +1,5 @@
 #include <set>
-#include "gft/vk.hpp"
-#include "gft/log.hpp"
-#include "gft/assert.hpp"
-#include "sys.hpp"
+#include <vulkan/vulkan.h>
 
 #ifdef _WIN32
 #define WIN32_LEAN_AND_MEAN
@@ -18,10 +15,15 @@
 #include "vulkan/vulkan_metal.h"
 #endif // defined(__MACH__) && defined(__APPLE__)
 
+#include "gft/vk.hpp"
+#include "gft/log.hpp"
+#include "gft/assert.hpp"
+#include "sys.hpp"
+
 namespace liong {
 namespace vk {
 
-VkSurfaceKHR _create_surf_windows(const ContextWindowsConfig& cfg) {
+sys::SurfaceRef _create_surf_windows(const ContextWindowsConfig& cfg) {
 #if VK_KHR_win32_surface
   L_ASSERT(cfg.dev_idx < get_inst().physdev_details.size(),
     "wanted vulkan device does not exists (#", cfg.dev_idx, " of ",
@@ -32,9 +34,7 @@ VkSurfaceKHR _create_surf_windows(const ContextWindowsConfig& cfg) {
   wsci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
   wsci.hinstance = (HINSTANCE)cfg.hinst;
   wsci.hwnd = (HWND)cfg.hwnd;
-
-  VkSurfaceKHR surf;
-  VK_ASSERT << vkCreateWin32SurfaceKHR(get_inst().inst, &wsci, nullptr, &surf);
+  sys::SurfaceRef surf = sys::Surface::create(get_inst().inst, &wsci);
 
   log::debug("created windows surface '", cfg.label, "'");
   return surf;
@@ -44,7 +44,7 @@ VkSurfaceKHR _create_surf_windows(const ContextWindowsConfig& cfg) {
 #endif // VK_KHR_win32_surface
 }
 
-VkSurfaceKHR _create_surf_android(const ContextAndroidConfig& cfg) {
+sys::SurfaceRef _create_surf_android(const ContextAndroidConfig& cfg) {
 #if VK_KHR_android_surface
   L_ASSERT(cfg.dev_idx < get_inst().physdev_details.size(),
     "wanted vulkan device does not exists (#", cfg.dev_idx, " of ",
@@ -54,9 +54,7 @@ VkSurfaceKHR _create_surf_android(const ContextAndroidConfig& cfg) {
   VkAndroidSurfaceCreateInfoKHR asci {};
   asci.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
   asci.window = (struct ANativeWindow* const)cfg.native_wnd;
-
-  VkSurfaceKHR surf;
-  VK_ASSERT << vkCreateAndroidSurfaceKHR(get_inst().inst, &asci, nullptr, &surf);
+  sys::SurfaceRef surf = sys::Surface::create(get_inst().inst, &asci);
 
   log::debug("created android surface '", cfg.label, "'");
   return surf;
@@ -66,7 +64,7 @@ VkSurfaceKHR _create_surf_android(const ContextAndroidConfig& cfg) {
 #endif // VK_KHR_android_surface
 }
 
-VkSurfaceKHR _create_surf_metal(const ContextMetalConfig& cfg) {
+sys::SurfaceRef _create_surf_metal(const ContextMetalConfig& cfg) {
 #if VK_EXT_metal_surface
   L_ASSERT(cfg.dev_idx < get_inst().physdev_details.size(),
     "wanted vulkan device does not exists (#", cfg.dev_idx, " of ",
@@ -76,9 +74,7 @@ VkSurfaceKHR _create_surf_metal(const ContextMetalConfig& cfg) {
   VkMetalSurfaceCreateInfoEXT msci {};
   msci.sType = VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK;
   msci.pLayer = (const CAMetalLayer*)cfg.metal_layer;
-
-  VkSurfaceKHR surf;
-  VK_ASSERT << vkCreateMetalSurfaceEXT(get_inst().inst->inst, &msci, nullptr, &surf);
+  sys::SurfaceRef surf = sys::Surface::create(get_inst().inst->inst, &msci);
 
   log::debug("created windows surface '", cfg.label, "'");
   return surf;
@@ -91,7 +87,7 @@ VkSurfaceKHR _create_surf_metal(const ContextMetalConfig& cfg) {
 Context _create_ctxt(
   const std::string& label,
   uint32_t dev_idx,
-  VkSurfaceKHR surf
+  const sys::SurfaceRef& surf
 ) {
   const Instance& inst = get_inst();
 
@@ -193,10 +189,10 @@ Context _create_ctxt(
       L_SUBMIT_TYPE_PRESENT,
       "PRESENT",
       [&](const QueueFamilyTrait& qfam_trait) {
-        if (surf == VK_NULL_HANDLE) { return false; }
+        if (surf == nullptr) { return false; }
         VkBool32 is_supported = VK_FALSE;
         VK_ASSERT << vkGetPhysicalDeviceSurfaceSupportKHR(physdev,
-          qfam_trait.qfam_idx, surf, &is_supported);
+          qfam_trait.qfam_idx, surf->surf, &is_supported);
         return is_supported == VK_TRUE;
       },
     },
@@ -314,21 +310,18 @@ Context create_ctxt(const ContextConfig& cfg) {
   return _create_ctxt(cfg.label, cfg.dev_idx, VK_NULL_HANDLE);
 }
 Context create_ctxt_windows(const ContextWindowsConfig& cfg) {
-  VkSurfaceKHR surf = _create_surf_windows(cfg);
+  sys::SurfaceRef surf = _create_surf_windows(cfg);
   return _create_ctxt(cfg.label, cfg.dev_idx, surf);
 }
 Context create_ctxt_android(const ContextAndroidConfig& cfg) {
-  VkSurfaceKHR surf = _create_surf_android(cfg);
+  sys::SurfaceRef surf = _create_surf_android(cfg);
   return _create_ctxt(cfg.label, cfg.dev_idx, surf);
 }
 Context create_ctxt_metal(const ContextMetalConfig& cfg) {
-  VkSurfaceKHR surf = _create_surf_metal(cfg);
+  sys::SurfaceRef surf = _create_surf_metal(cfg);
   return _create_ctxt(cfg.label, cfg.dev_idx, surf);
 }
 void destroy_ctxt(Context& ctxt) {
-  if (ctxt.surf != VK_NULL_HANDLE) {
-    vkDestroySurfaceKHR(get_inst().inst->inst, ctxt.surf, nullptr);
-  }
   if (ctxt.dev != VK_NULL_HANDLE) {
     for (const auto& samp : ctxt.img_samplers) {
       sys::destroy_sampler(ctxt.dev->dev, samp.second);

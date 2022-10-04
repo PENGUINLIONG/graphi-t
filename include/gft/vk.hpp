@@ -108,7 +108,7 @@ struct Context {
   std::string label;
   uint32_t iphysdev;
   sys::DeviceRef dev;
-  VkSurfaceKHR surf;
+  sys::SurfaceRef surf;
   std::map<SubmitType, ContextSubmitDetail> submit_details;
   std::map<ImageSampler, VkSampler> img_samplers;
   std::map<DepthImageSampler, VkSampler> depth_img_samplers;

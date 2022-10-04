@@ -92,6 +92,47 @@ struct Device {
 };
 typedef std::shared_ptr<Device> DeviceRef;
 
+struct Surface {
+  typedef Surface Self;
+  VkInstance inst;
+  VkSurfaceKHR surf;
+  bool should_destroy;
+
+  Surface(VkInstance inst, VkSurfaceKHR surf, bool should_destroy) :
+    inst(inst), surf(surf), should_destroy(should_destroy) {}
+  ~Surface() { destroy(); }
+
+  operator VkSurfaceKHR() const {
+    return surf;
+  }
+
+#if VK_KHR_win32_surface
+  static std::shared_ptr<Surface> create(VkInstance inst, const VkWin32SurfaceCreateInfoKHR* wsci) {
+    VkSurfaceKHR surf = VK_NULL_HANDLE;
+    VK_ASSERT << vkCreateWin32SurfaceKHR(inst, wsci, nullptr, &surf);
+    return std::make_shared<Surface>(inst, surf, true);
+  }
+#endif // VK_KHR_win32_surface
+#if VK_KHR_android_surface
+  static std::shared_ptr<Surface> create(VkInstance inst, const VkAndroidSurfaceCreateInfoKHR* asci) {
+    VkSurfaceKHR surf = VK_NULL_HANDLE;
+    VK_ASSERT << vkCreateAndroidSurfaceKHR(inst, asci, nullptr, &surf);
+    return std::make_shared<Surface>(inst, surf, true);
+  }
+#endif // VK_KHR_android_surface
+#if VK_EXT_metal_surface
+  static std::shared_ptr<Surface> create(VkInstance inst, const VkMetalSurfaceCreateInfoEXT* msci) {
+    VkSurfaceKHR surf;
+    VK_ASSERT << vkCreateMetalSurfaceEXT(inst, msci, nullptr, &surf);
+    return std::make_shared<Surface>(inst, surf, true);
+  }
+#endif // VK_EXT_metal_surface
+  void destroy() {
+    vkDestroySurfaceKHR(inst, surf, nullptr);
+  }
+};
+typedef std::shared_ptr<Surface> SurfaceRef;
+
 struct Fence {
   typedef Fence Self;
   VkDevice dev;
