@@ -70,17 +70,17 @@ VkSwapchainKHR _create_swapchain(
   sci.clipped = VK_TRUE;
 
   VkSwapchainKHR swapchain;
-  VK_ASSERT << vkCreateSwapchainKHR(ctxt.dev, &sci, nullptr, &swapchain);
+  VK_ASSERT << vkCreateSwapchainKHR(ctxt.dev->dev, &sci, nullptr, &swapchain);
 
   // Collect swapchain images.
   std::vector<VkImage> imgs;
   {
     uint32_t nimg2;
-    VK_ASSERT << vkGetSwapchainImagesKHR(ctxt.dev, swapchain, &nimg2, nullptr);
+    VK_ASSERT << vkGetSwapchainImagesKHR(ctxt.dev->dev, swapchain, &nimg2, nullptr);
     L_ASSERT(nimg == nimg2, "expected ", nimg, "swapchain images, but actually "
       "get ", nimg2, " images");
     imgs.resize(nimg2);
-    VK_ASSERT << vkGetSwapchainImagesKHR(ctxt.dev, swapchain, &nimg2, imgs.data());
+    VK_ASSERT << vkGetSwapchainImagesKHR(ctxt.dev->dev, swapchain, &nimg2, imgs.data());
   }
 
   std::vector<Image> swapchain_imgs;
@@ -97,7 +97,7 @@ VkSwapchainKHR _create_swapchain(
     ivci.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
 
     VkImageView img_view;
-    VK_ASSERT << vkCreateImageView(ctxt.dev, &ivci, nullptr, &img_view);
+    VK_ASSERT << vkCreateImageView(ctxt.dev->dev, &ivci, nullptr, &img_view);
 
     Image out {};
     out.alloc = {};
@@ -139,16 +139,16 @@ void _init_swapchain(Swapchain& swapchain) {
   fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 
   VkFence fence;
-  VK_ASSERT << vkCreateFence(ctxt.dev, &fci, nullptr, &fence);
+  VK_ASSERT << vkCreateFence(ctxt.dev->dev, &fci, nullptr, &fence);
 
-  VkResult acq_res = vkAcquireNextImageKHR(ctxt.dev, swapchain.swapchain, 0,
+  VkResult acq_res = vkAcquireNextImageKHR(ctxt.dev->dev, swapchain.swapchain, 0,
     VK_NULL_HANDLE, fence, &*dyn_detail.img_idx);
   L_ASSERT(acq_res >= 0, "failed to initiate swapchain image acquisition");
 
   // Ensure the first image is acquired. It shouldn't take long.
-  VK_ASSERT << vkWaitForFences(ctxt.dev, 1, &fence, VK_TRUE, 1000);
+  VK_ASSERT << vkWaitForFences(ctxt.dev->dev, 1, &fence, VK_TRUE, 1000);
 
-  vkDestroyFence(ctxt.dev, fence, nullptr);
+  vkDestroyFence(ctxt.dev->dev, fence, nullptr);
 }
 Swapchain create_swapchain(const Context& ctxt, const SwapchainConfig& cfg) {
   SwapchainDynamicDetail dyn_detail;
@@ -169,10 +169,10 @@ void destroy_swapchain(Swapchain& swapchain) {
     dyn_detail.img_idx = nullptr;
     for (size_t i = 0; i < dyn_detail.imgs.size(); ++i) {
       const Image& img = dyn_detail.imgs[i];
-      vkDestroyImageView(ctxt.dev, img.img_view, nullptr);
+      vkDestroyImageView(ctxt.dev->dev, img.img_view, nullptr);
     }
   }
-  vkDestroySwapchainKHR(ctxt.dev, swapchain.swapchain, nullptr);
+  vkDestroySwapchainKHR(ctxt.dev->dev, swapchain.swapchain, nullptr);
 }
 
 const Image& get_swapchain_img(const Swapchain& swapchain) {

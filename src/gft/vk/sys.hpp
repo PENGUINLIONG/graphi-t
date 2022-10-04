@@ -23,13 +23,12 @@ extern std::vector<VkQueueFamilyProperties> collect_qfam_props(
 );
 
 // VkDevice
-extern VkDevice create_dev(
+extern sys::DeviceRef create_dev(
   VkPhysicalDevice physdev,
   const std::vector<VkDeviceQueueCreateInfo> dqcis,
   const std::vector<const char*> enabled_ext_names,
   const VkPhysicalDeviceFeatures& enabled_feat
 );
-extern void destroy_dev(VkDevice dev);
 VkQueue get_dev_queue(VkDevice dev, uint32_t qfam_idx, uint32_t queue_idx);
 
 // VkSampler

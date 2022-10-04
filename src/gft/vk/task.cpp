@@ -50,7 +50,7 @@ VkDescriptorSetLayout _create_desc_set_layout(
   }
 
   VkDescriptorSetLayout desc_set_layout =
-    sys::create_desc_set_layout(ctxt.dev, dslbs);
+    sys::create_desc_set_layout(ctxt.dev->dev, dslbs);
   return desc_set_layout;
 }
 
@@ -65,7 +65,7 @@ VkDescriptorPool _create_desc_pool(
   dpci.maxSets = 1;
 
   VkDescriptorPool desc_pool;
-  VK_ASSERT << vkCreateDescriptorPool(ctxt.dev, &dpci, nullptr, &desc_pool);
+  VK_ASSERT << vkCreateDescriptorPool(ctxt.dev->dev, &dpci, nullptr, &desc_pool);
   return desc_pool;
 }
 VkDescriptorSet _alloc_desc_set(
@@ -80,7 +80,7 @@ VkDescriptorSet _alloc_desc_set(
   dsai.pSetLayouts = &desc_set_layout;
 
   VkDescriptorSet desc_set;
-  VK_ASSERT << vkAllocateDescriptorSets(ctxt.dev, &dsai, &desc_set);
+  VK_ASSERT << vkAllocateDescriptorSets(ctxt.dev->dev, &dsai, &desc_set);
   return desc_set;
 }
 
@@ -93,9 +93,9 @@ Task create_comp_task(
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   VkDescriptorSetLayout desc_set_layout = _create_desc_set_layout(ctxt,
     cfg.rsc_tys, desc_pool_sizes);
-  VkPipelineLayout pipe_layout = sys::create_pipe_layout(ctxt.dev,
+  VkPipelineLayout pipe_layout = sys::create_pipe_layout(ctxt.dev->dev,
     desc_set_layout);
-  VkShaderModule shader_mod = sys::create_shader_mod(ctxt.dev,
+  VkShaderModule shader_mod = sys::create_shader_mod(ctxt.dev->dev,
     (const uint32_t*)cfg.code, cfg.code_size);
 
   // Specialize to set local group size.
@@ -117,9 +117,9 @@ Task create_comp_task(
   pssci.module = shader_mod;
   pssci.pSpecializationInfo = &spec_info;
 
-  VkPipeline pipe = sys::create_comp_pipe(ctxt.dev, pipe_layout, pssci);
+  VkPipeline pipe = sys::create_comp_pipe(ctxt.dev->dev, pipe_layout, pssci);
 
-  sys::destroy_shader_mod(ctxt.dev, shader_mod);
+  sys::destroy_shader_mod(ctxt.dev->dev, shader_mod);
 
   TaskResourceDetail rsc_detail {};
   rsc_detail.desc_set_layout = desc_set_layout;
@@ -145,11 +145,11 @@ Task create_graph_task(
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   VkDescriptorSetLayout desc_set_layout =
     _create_desc_set_layout(ctxt, cfg.rsc_tys, desc_pool_sizes);
-  VkPipelineLayout pipe_layout = sys::create_pipe_layout(ctxt.dev,
+  VkPipelineLayout pipe_layout = sys::create_pipe_layout(ctxt.dev->dev,
     desc_set_layout);
-  VkShaderModule vert_shader_mod = sys::create_shader_mod(ctxt.dev,
+  VkShaderModule vert_shader_mod = sys::create_shader_mod(ctxt.dev->dev,
     (const uint32_t*)cfg.vert_code, cfg.vert_code_size);
-  VkShaderModule frag_shader_mod = sys::create_shader_mod(ctxt.dev,
+  VkShaderModule frag_shader_mod = sys::create_shader_mod(ctxt.dev->dev,
     (const uint32_t*)cfg.frag_code, cfg.frag_code_size);
 
   VkPipelineInputAssemblyStateCreateInfo piasci {};
@@ -200,11 +200,11 @@ Task create_graph_task(
     pssci.module = frag_shader_mod;
   }
 
-  VkPipeline pipe = sys::create_graph_pipe(ctxt.dev, pipe_layout, pass.pass,
+  VkPipeline pipe = sys::create_graph_pipe(ctxt.dev->dev, pipe_layout, pass.pass,
     pass.width, pass.height, piasci, prsci, psscis);
 
-  sys::destroy_shader_mod(ctxt.dev, vert_shader_mod);
-  sys::destroy_shader_mod(ctxt.dev, frag_shader_mod);
+  sys::destroy_shader_mod(ctxt.dev->dev, vert_shader_mod);
+  sys::destroy_shader_mod(ctxt.dev->dev, frag_shader_mod);
 
   TaskResourceDetail rsc_detail {};
   rsc_detail.desc_set_layout = desc_set_layout;
@@ -219,7 +219,7 @@ Task create_graph_task(
   };
 }
 void destroy_task(Task& task) {
-  VkDevice dev = task.ctxt->dev;
+  VkDevice dev = task.ctxt->dev->dev;
 
   for (auto& item : task.rsc_detail.desc_pool_items) {
     vkDestroyDescriptorPool(dev, item.desc_pool, nullptr);

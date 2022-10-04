@@ -96,7 +96,7 @@ VkRenderPass _create_pass(
   rpci.pDependencies = nullptr;
 
   VkRenderPass pass;
-  VK_ASSERT << vkCreateRenderPass(ctxt.dev, &rpci, nullptr, &pass);
+  VK_ASSERT << vkCreateRenderPass(ctxt.dev->dev, &rpci, nullptr, &pass);
 
   return pass;
 }
@@ -131,7 +131,7 @@ RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg) {
   return RenderPass { &ctxt, cfg.width, cfg.height, pass, cfg, clear_values };
 }
 void destroy_pass(RenderPass& pass) {
-  vkDestroyRenderPass(pass.ctxt->dev, pass.pass, nullptr);
+  vkDestroyRenderPass(pass.ctxt->dev->dev, pass.pass, nullptr);
   log::debug("destroyed render pass '", pass.pass_cfg.label, "'");
 }
 

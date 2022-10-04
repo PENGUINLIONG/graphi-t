@@ -90,7 +90,7 @@ DepthImage create_depth_img(
   ivci.subresourceRange.levelCount = 1;
 
   VkImageView img_view;
-  VK_ASSERT << vkCreateImageView(ctxt.dev, &ivci, nullptr, &img_view);
+  VK_ASSERT << vkCreateImageView(ctxt.dev->dev, &ivci, nullptr, &img_view);
 
   DepthImageDynamicDetail dyn_detail {};
   dyn_detail.layout = layout;
@@ -104,7 +104,7 @@ DepthImage create_depth_img(
 }
 void destroy_depth_img(DepthImage& depth_img) {
   if (depth_img.img) {
-    vkDestroyImageView(depth_img.ctxt->dev, depth_img.img_view, nullptr);
+    vkDestroyImageView(depth_img.ctxt->dev->dev, depth_img.img_view, nullptr);
     vmaDestroyImage(depth_img.ctxt->allocator, depth_img.img, depth_img.alloc);
 
     log::debug("destroyed depth image '", depth_img.depth_img_cfg.label, "'");

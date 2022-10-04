@@ -8,7 +8,7 @@ void destroy_transact(Transaction& transact) {
   const Context& ctxt = *transact.ctxt;
   for (auto& submit_detail : transact.submit_details) {
     if (submit_detail.cmd_pool != VK_NULL_HANDLE) {
-      vkDestroyCommandPool(ctxt.dev, submit_detail.cmd_pool, nullptr);
+      vkDestroyCommandPool(ctxt.dev->dev, submit_detail.cmd_pool, nullptr);
     }
   }
 
@@ -18,7 +18,7 @@ void destroy_transact(Transaction& transact) {
 bool is_transact_done(const Transaction& transact) {
   const Context& ctxt = *transact.ctxt;
   for (const auto& fence : transact.fences) {
-    VkResult err = vkGetFenceStatus(ctxt.dev, fence->fence);
+    VkResult err = vkGetFenceStatus(ctxt.dev->dev, fence->fence);
     if (err == VK_NOT_READY) {
       return false;
     } else {
@@ -40,7 +40,7 @@ void wait_transact(const Transaction& transact) {
   util::Timer wait_timer {};
   wait_timer.tic();
   for (VkResult err;;) {
-    err = vkWaitForFences(ctxt.dev, transact.fences.size(),
+    err = vkWaitForFences(ctxt.dev->dev, transact.fences.size(),
       fences.data(), VK_TRUE, SPIN_INTERVAL);
     if (err == VK_TIMEOUT) {
       // log::warn("timeout after 3000ns");

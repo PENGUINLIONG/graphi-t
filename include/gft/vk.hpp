@@ -107,7 +107,7 @@ struct ContextSubmitDetail {
 struct Context {
   std::string label;
   uint32_t iphysdev;
-  VkDevice dev;
+  sys::DeviceRef dev;
   VkSurfaceKHR surf;
   std::map<SubmitType, ContextSubmitDetail> submit_details;
   std::map<ImageSampler, VkSampler> img_samplers;

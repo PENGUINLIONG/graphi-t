@@ -93,7 +93,7 @@ void _update_desc_set(
     wdss.emplace_back(std::move(wds));
   }
 
-  vkUpdateDescriptorSets(ctxt.dev, (uint32_t)wdss.size(), wdss.data(), 0,
+  vkUpdateDescriptorSets(ctxt.dev->dev, (uint32_t)wdss.size(), wdss.data(), 0,
     nullptr);
 }
 VkFramebuffer _create_framebuf(
@@ -148,7 +148,7 @@ VkFramebuffer _create_framebuf(
   fci.layers = 1;
 
   VkFramebuffer framebuf;
-  VK_ASSERT << vkCreateFramebuffer(pass.ctxt->dev, &fci, nullptr, &framebuf);
+  VK_ASSERT << vkCreateFramebuffer(pass.ctxt->dev->dev, &fci, nullptr, &framebuf);
 
   return framebuf;
 }
@@ -163,7 +163,7 @@ VkQueryPool _create_query_pool(
   qpci.queryCount = nquery;
 
   VkQueryPool query_pool;
-  VK_ASSERT << vkCreateQueryPool(ctxt.dev, &qpci, nullptr, &query_pool);
+  VK_ASSERT << vkCreateQueryPool(ctxt.dev->dev, &qpci, nullptr, &query_pool);
 
   return query_pool;
 }
@@ -624,7 +624,7 @@ void destroy_invoke(Invocation& invoke) {
   }
   if (invoke.pass_detail) {
     const InvocationRenderPassDetail& pass_detail = *invoke.pass_detail;
-    vkDestroyFramebuffer(ctxt.dev, pass_detail.framebuf, nullptr);
+    vkDestroyFramebuffer(ctxt.dev->dev, pass_detail.framebuf, nullptr);
     log::debug("destroyed render pass invocation '", invoke.label, "'");
   }
   if (invoke.composite_detail) {
@@ -632,13 +632,13 @@ void destroy_invoke(Invocation& invoke) {
   }
 
   if (invoke.query_pool != VK_NULL_HANDLE) {
-    vkDestroyQueryPool(ctxt.dev, invoke.query_pool, nullptr);
+    vkDestroyQueryPool(ctxt.dev->dev, invoke.query_pool, nullptr);
     log::debug("destroyed timing objects");
   }
 
   if (invoke.bake_detail) {
     const InvocationBakingDetail& bake_detail = *invoke.bake_detail;
-    vkDestroyCommandPool(ctxt.dev, bake_detail.cmd_pool, nullptr);
+    vkDestroyCommandPool(ctxt.dev->dev, bake_detail.cmd_pool, nullptr);
     log::debug("destroyed baking artifacts");
   }
 
@@ -648,7 +648,7 @@ void destroy_invoke(Invocation& invoke) {
 double get_invoke_time_us(const Invocation& invoke) {
   if (invoke.query_pool == VK_NULL_HANDLE) { return 0.0; }
   uint64_t t[2];
-  VK_ASSERT << vkGetQueryPoolResults(invoke.ctxt->dev, invoke.query_pool,
+  VK_ASSERT << vkGetQueryPoolResults(invoke.ctxt->dev->dev, invoke.query_pool,
     0, 2, sizeof(uint64_t) * 2, &t, sizeof(uint64_t),
     VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT); // Wait till ready.
   double ns_per_tick = invoke.ctxt->physdev_prop().limits.timestampPeriod;
@@ -662,7 +662,7 @@ VkCommandPool _create_cmd_pool(const Context& ctxt, SubmitType submit_ty) {
   cpci.queueFamilyIndex = ctxt.submit_details.at(submit_ty).qfam_idx;
 
   VkCommandPool cmd_pool;
-  VK_ASSERT << vkCreateCommandPool(ctxt.dev, &cpci, nullptr, &cmd_pool);
+  VK_ASSERT << vkCreateCommandPool(ctxt.dev->dev, &cpci, nullptr, &cmd_pool);
 
   return cmd_pool;
 }
@@ -678,7 +678,7 @@ VkCommandBuffer _alloc_cmdbuf(
   cbai.commandPool = cmd_pool;
 
   VkCommandBuffer cmdbuf;
-  VK_ASSERT << vkAllocateCommandBuffers(ctxt.dev, &cbai, &cmdbuf);
+  VK_ASSERT << vkAllocateCommandBuffers(ctxt.dev->dev, &cbai, &cmdbuf);
 
   return cmdbuf;
 }
@@ -731,7 +731,7 @@ void _push_transact_submit_detail(
   if (level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
     submit_detail.signal_sema = VK_NULL_HANDLE;
   } else {
-    submit_detail.signal_sema = sys::Semaphore::create(ctxt.dev);
+    submit_detail.signal_sema = sys::Semaphore::create(ctxt.dev->dev);
   }
 
   submit_details.emplace_back(std::move(submit_detail));
@@ -1152,8 +1152,8 @@ std::vector<sys::FenceRef> _record_invoke_impl(
 
 
     // Present the rendered image.
-    sys::FenceRef present_fence = sys::Fence::create(ctxt.dev);
-    sys::FenceRef acquire_fence = sys::Fence::create(ctxt.dev);
+    sys::FenceRef present_fence = sys::Fence::create(ctxt.dev->dev);
+    sys::FenceRef acquire_fence = sys::Fence::create(ctxt.dev->dev);
 
     VkResult present_res = VK_SUCCESS;
     VkPresentInfoKHR pi {};
@@ -1183,7 +1183,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     VK_ASSERT << res;
 
     img_idx = ~0u;
-    VK_ASSERT << vkAcquireNextImageKHR(ctxt.dev, swapchain.swapchain, 0,
+    VK_ASSERT << vkAcquireNextImageKHR(ctxt.dev->dev, swapchain.swapchain, 0,
       VK_NULL_HANDLE, acquire_fence->fence, &img_idx);
 
     transact.is_frozen = true;
@@ -1355,7 +1355,7 @@ std::vector<sys::FenceRef> _record_invoke(
   if (fences.empty()) {
     _end_cmdbuf(transact.submit_details.back());
     if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-      sys::FenceRef fence = sys::Fence::create(transact.ctxt->dev);
+      sys::FenceRef fence = sys::Fence::create(transact.ctxt->dev->dev);
       _submit_cmdbuf(transact, fence);
       fences.emplace_back(std::move(fence));
     }

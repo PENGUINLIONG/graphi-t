@@ -107,7 +107,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   ivci.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
 
   VkImageView img_view = VK_NULL_HANDLE;
-  VK_ASSERT << vkCreateImageView(ctxt.dev, &ivci, nullptr, &img_view);
+  VK_ASSERT << vkCreateImageView(ctxt.dev->dev, &ivci, nullptr, &img_view);
 
   ImageDynamicDetail dyn_detail {};
   dyn_detail.layout = layout;
@@ -122,7 +122,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
 }
 void destroy_img(Image& img) {
   if (img.img != VK_NULL_HANDLE) {
-    vkDestroyImageView(img.ctxt->dev, img.img_view, nullptr);
+    vkDestroyImageView(img.ctxt->dev->dev, img.img_view, nullptr);
     vmaDestroyImage(img.ctxt->allocator, img.img, img.alloc);
 
     log::debug("destroyed image '", img.img_cfg.label, "'");
@@ -148,7 +148,7 @@ void map_img_mem(
   is.mipLevel = 0;
 
   VkSubresourceLayout sl {};
-  vkGetImageSubresourceLayout(img.img->ctxt->dev, img.img->img, &is, &sl);
+  vkGetImageSubresourceLayout(img.img->ctxt->dev->dev, img.img->img, &is, &sl);
   size_t offset = sl.offset;
   size_t size = sl.size;
 

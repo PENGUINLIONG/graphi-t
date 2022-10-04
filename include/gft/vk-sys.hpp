@@ -52,6 +52,10 @@ struct Instance {
     inst(inst), should_destroy(should_destroy) {}
   ~Instance() { destroy(); }
 
+  operator VkInstance() const {
+    return inst;
+  }
+
   static std::shared_ptr<Instance> create(const VkInstanceCreateInfo* ici) {
     VkInstance inst = VK_NULL_HANDLE;
     VK_ASSERT << vkCreateInstance(ici, nullptr, &inst);
@@ -63,6 +67,31 @@ struct Instance {
 };
 typedef std::shared_ptr<Instance> InstanceRef;
 
+struct Device {
+  typedef Device Self;
+  VkPhysicalDevice physdev;
+  VkDevice dev;
+  bool should_destroy;
+
+  Device(VkPhysicalDevice physdev, VkDevice dev, bool should_destroy) :
+    physdev(physdev), dev(dev), should_destroy(should_destroy) {}
+  ~Device() { destroy(); }
+
+  operator VkDevice() const {
+    return dev;
+  }
+
+  static std::shared_ptr<Device> create(VkPhysicalDevice physdev, const VkDeviceCreateInfo* dci) {
+    VkDevice dev = VK_NULL_HANDLE;
+    VK_ASSERT << vkCreateDevice(physdev, dci, nullptr, &dev);
+    return std::make_shared<Device>(physdev, dev, true);
+  }
+  void destroy() {
+    vkDestroyDevice(dev, nullptr);
+  }
+};
+typedef std::shared_ptr<Device> DeviceRef;
+
 struct Fence {
   typedef Fence Self;
   VkDevice dev;
@@ -73,6 +102,10 @@ struct Fence {
     dev(dev), fence(fence), should_destroy(should_destroy) {}
   ~Fence() { destroy(); }
 
+  operator VkFence() const {
+    return fence;
+  }
+
   static std::shared_ptr<Fence> create(VkDevice dev) {
     VkFenceCreateInfo fci {};
     fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
@@ -81,7 +114,6 @@ struct Fence {
   static std::shared_ptr<Fence> create(VkDevice dev, const VkFenceCreateInfo* fci) {
     VkFence fence = VK_NULL_HANDLE;
     VK_ASSERT << vkCreateFence(dev, fci, nullptr, &fence);
-
     return std::make_shared<Fence>(dev, fence, true);
   }
   void destroy() {
@@ -100,6 +132,10 @@ struct Semaphore {
     dev(dev), sema(sema), should_destroy(should_destroy) {}
   ~Semaphore() { destroy(); }
 
+  operator VkSemaphore() const {
+    return sema;
+  }
+
   static std::shared_ptr<Semaphore> create(VkDevice dev) {
     VkSemaphoreCreateInfo sci {};
     sci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -108,7 +144,6 @@ struct Semaphore {
   static std::shared_ptr<Semaphore> create(VkDevice dev, const VkSemaphoreCreateInfo* sci) {
     VkSemaphore sema = VK_NULL_HANDLE;
     VK_ASSERT << vkCreateSemaphore(dev, sci, nullptr, &sema);
-
     return std::make_shared<Semaphore>(dev, sema, true);
   }
   void destroy() {

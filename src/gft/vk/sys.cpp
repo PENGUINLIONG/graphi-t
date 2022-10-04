@@ -119,7 +119,7 @@ std::vector<VkQueueFamilyProperties> collect_qfam_props(
 
 
 // VkDevice
-VkDevice create_dev(
+sys::DeviceRef create_dev(
   VkPhysicalDevice physdev,
   const std::vector<VkDeviceQueueCreateInfo> dqcis,
   const std::vector<const char*> enabled_ext_names,
@@ -133,12 +133,7 @@ VkDevice create_dev(
   dci.enabledExtensionCount = (uint32_t)enabled_ext_names.size();
   dci.ppEnabledExtensionNames = enabled_ext_names.data();
 
-  VkDevice dev;
-  VK_ASSERT << vkCreateDevice(physdev, &dci, nullptr, &dev);
-  return dev;
-}
-void destroy_dev(VkDevice dev) {
-  vkDestroyDevice(dev, nullptr);
+  return sys::Device::create(physdev, &dci);
 }
 VkQueue get_dev_queue(VkDevice dev, uint32_t qfam_idx, uint32_t queue_idx) {
   VkQueue queue;
