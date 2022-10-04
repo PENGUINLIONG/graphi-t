@@ -8,8 +8,7 @@ namespace vk {
 namespace sys {
 
 // VkInstance
-extern VkInstance create_inst(uint32_t api_ver);
-extern void destroy_inst(VkInstance inst);
+extern sys::InstanceRef create_inst(uint32_t api_ver);
 
 // VkPhysicalDevice
 extern std::vector<VkPhysicalDevice> collect_physdevs(VkInstance inst);

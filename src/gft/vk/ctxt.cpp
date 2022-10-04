@@ -78,7 +78,7 @@ VkSurfaceKHR _create_surf_metal(const ContextMetalConfig& cfg) {
   msci.pLayer = (const CAMetalLayer*)cfg.metal_layer;
 
   VkSurfaceKHR surf;
-  VK_ASSERT << vkCreateMetalSurfaceEXT(get_inst().inst, &msci, nullptr, &surf);
+  VK_ASSERT << vkCreateMetalSurfaceEXT(get_inst().inst->inst, &msci, nullptr, &surf);
 
   log::debug("created windows surface '", cfg.label, "'");
   return surf;
@@ -296,7 +296,7 @@ Context _create_ctxt(
   allocatorInfo.vulkanApiVersion = inst.api_ver;
   allocatorInfo.physicalDevice = physdev;
   allocatorInfo.device = dev;
-  allocatorInfo.instance = inst.inst;
+  allocatorInfo.instance = inst.inst->inst;
 
   VmaAllocator allocator;
   VK_ASSERT << vmaCreateAllocator(&allocatorInfo, &allocator);
@@ -327,7 +327,7 @@ Context create_ctxt_metal(const ContextMetalConfig& cfg) {
 }
 void destroy_ctxt(Context& ctxt) {
   if (ctxt.surf != VK_NULL_HANDLE) {
-    vkDestroySurfaceKHR(get_inst().inst, ctxt.surf, nullptr);
+    vkDestroySurfaceKHR(get_inst().inst->inst, ctxt.surf, nullptr);
   }
   if (ctxt.dev != VK_NULL_HANDLE) {
     for (const auto& samp : ctxt.img_samplers) {

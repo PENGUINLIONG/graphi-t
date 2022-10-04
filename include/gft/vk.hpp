@@ -67,7 +67,7 @@ struct InstancePhysicalDeviceDetail {
 };
 struct Instance {
   uint32_t api_ver;
-  VkInstance inst;
+  sys::InstanceRef inst;
   std::vector<InstancePhysicalDeviceDetail> physdev_details;
   bool is_imported;
 };

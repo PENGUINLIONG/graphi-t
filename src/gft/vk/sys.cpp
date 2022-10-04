@@ -8,7 +8,7 @@ namespace vk {
 namespace sys {
 
 // VkInstance
-VkInstance create_inst(uint32_t api_ver) {
+sys::InstanceRef create_inst(uint32_t api_ver) {
   VkApplicationInfo app_info {};
   app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
   app_info.apiVersion = api_ver;
@@ -57,13 +57,7 @@ VkInstance create_inst(uint32_t api_ver) {
   ici.ppEnabledExtensionNames = inst_ext_names.data();
   ici.enabledLayerCount = (uint32_t)layers.size();
   ici.ppEnabledLayerNames = layers.data();
-
-  VkInstance inst;
-  VK_ASSERT << vkCreateInstance(&ici, nullptr, &inst);
-  return inst;
-}
-void destroy_inst(VkInstance inst) {
-  vkDestroyInstance(inst, nullptr);
+  return sys::Instance::create(&ici);
 }
 
 

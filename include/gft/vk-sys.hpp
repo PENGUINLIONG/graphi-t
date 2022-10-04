@@ -43,12 +43,34 @@ struct VkAssert {
 
 namespace sys {
 
+struct Instance {
+  typedef Instance Self;
+  VkInstance inst;
+  bool should_destroy;
+
+  Instance(VkInstance inst, bool should_destroy) :
+    inst(inst), should_destroy(should_destroy) {}
+  ~Instance() { destroy(); }
+
+  static std::shared_ptr<Instance> create(const VkInstanceCreateInfo* ici) {
+    VkInstance inst = VK_NULL_HANDLE;
+    VK_ASSERT << vkCreateInstance(ici, nullptr, &inst);
+    return std::make_shared<Instance>(inst, true);
+  }
+  void destroy() {
+    vkDestroyInstance(inst, nullptr);
+  }
+};
+typedef std::shared_ptr<Instance> InstanceRef;
+
 struct Fence {
   typedef Fence Self;
   VkDevice dev;
   VkFence fence;
+  bool should_destroy;
 
-  Fence() : dev(VK_NULL_HANDLE), fence(VK_NULL_HANDLE) {}
+  Fence(VkDevice dev, VkFence fence, bool should_destroy) :
+    dev(dev), fence(fence), should_destroy(should_destroy) {}
   ~Fence() { destroy(); }
 
   static std::shared_ptr<Fence> create(VkDevice dev) {
@@ -60,10 +82,7 @@ struct Fence {
     VkFence fence = VK_NULL_HANDLE;
     VK_ASSERT << vkCreateFence(dev, fci, nullptr, &fence);
 
-    Fence out {};
-    out.dev = dev;
-    out.fence = fence;
-    return std::make_shared<Fence>(std::move(out));
+    return std::make_shared<Fence>(dev, fence, true);
   }
   void destroy() {
     vkDestroyFence(dev, fence, nullptr);
@@ -75,8 +94,10 @@ struct Semaphore {
   typedef Semaphore Self;
   VkDevice dev;
   VkSemaphore sema;
+  bool should_destroy;
 
-  Semaphore() : dev(VK_NULL_HANDLE), sema(VK_NULL_HANDLE) {}
+  Semaphore(VkDevice dev, VkSemaphore sema, bool should_destroy) :
+    dev(dev), sema(sema), should_destroy(should_destroy) {}
   ~Semaphore() { destroy(); }
 
   static std::shared_ptr<Semaphore> create(VkDevice dev) {
@@ -88,10 +109,7 @@ struct Semaphore {
     VkSemaphore sema = VK_NULL_HANDLE;
     VK_ASSERT << vkCreateSemaphore(dev, sci, nullptr, &sema);
 
-    Semaphore out {};
-    out.dev = dev;
-    out.sema = sema;
-    return std::make_shared<Semaphore>(std::move(out));
+    return std::make_shared<Semaphore>(dev, sema, true);
   }
   void destroy() {
     vkDestroySemaphore(dev, sema, nullptr);
