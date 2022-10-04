@@ -655,15 +655,6 @@ double get_invoke_time_us(const Invocation& invoke) {
   return (t[1] - t[0]) * ns_per_tick / 1000.0;
 }
 
-VkSemaphore _create_sema(const Context& ctxt) {
-  VkSemaphoreCreateInfo sci {};
-  sci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-  VkSemaphore sema;
-  VK_ASSERT << vkCreateSemaphore(ctxt.dev, &sci, nullptr, &sema);
-  return sema;
-}
-
 VkCommandPool _create_cmd_pool(const Context& ctxt, SubmitType submit_ty) {
   VkCommandPoolCreateInfo cpci {};
   cpci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
@@ -740,14 +731,14 @@ void _push_transact_submit_detail(
   if (level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
     submit_detail.signal_sema = VK_NULL_HANDLE;
   } else {
-    submit_detail.signal_sema = _create_sema(ctxt);
+    submit_detail.signal_sema = sys::Semaphore::create(ctxt.dev);
   }
 
   submit_details.emplace_back(std::move(submit_detail));
 }
 void _submit_cmdbuf(
   TransactionLike& transact,
-  VkFence fence
+  sys::FenceRef fence
 ) {
   const Context& ctxt = *transact.ctxt;
   TransactionSubmitDetail& submit_detail = transact.submit_details.back();
@@ -762,13 +753,13 @@ void _submit_cmdbuf(
   if (submit_detail.wait_sema != VK_NULL_HANDLE) {
     // Wait for the last submitted command buffer on the device side.
     submit_info.waitSemaphoreCount = 1;
-    submit_info.pWaitSemaphores = &submit_detail.wait_sema;
+    submit_info.pWaitSemaphores = &submit_detail.wait_sema->sema;
     submit_info.pWaitDstStageMask = &stage_mask;
   }
-  submit_info.pSignalSemaphores = &submit_detail.signal_sema;
+  submit_info.pSignalSemaphores = &submit_detail.signal_sema->sema;
 
   // Finish recording and submit the command buffer to the device.
-  VK_ASSERT << vkQueueSubmit(submit_detail.queue, 1, &submit_info, fence);
+  VK_ASSERT << vkQueueSubmit(submit_detail.queue, 1, &submit_info, fence->fence);
 
   submit_detail.is_submitted = true;
 }
@@ -1136,16 +1127,8 @@ void _transit_rscs(
   }
 }
 
-VkFence _create_fence(const Context& ctxt) {
-  VkFenceCreateInfo fci {};
-  fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-
-  VkFence fence;
-  VK_ASSERT << vkCreateFence(ctxt.dev, &fci, nullptr, &fence);
-  return fence;
-}
 // Return true if the invocation forces an termination.
-std::vector<VkFence> _record_invoke_impl(
+std::vector<sys::FenceRef> _record_invoke_impl(
   TransactionLike& transact,
   const Invocation& invoke
 ) {
@@ -1169,8 +1152,8 @@ std::vector<VkFence> _record_invoke_impl(
 
 
     // Present the rendered image.
-    VkFence present_fence = _create_fence(ctxt);
-    VkFence acquire_fence = _create_fence(ctxt);
+    sys::FenceRef present_fence = sys::Fence::create(ctxt.dev);
+    sys::FenceRef acquire_fence = sys::Fence::create(ctxt.dev);
 
     VkResult present_res = VK_SUCCESS;
     VkPresentInfoKHR pi {};
@@ -1187,7 +1170,7 @@ std::vector<VkFence> _record_invoke_impl(
       _submit_cmdbuf(transact, present_fence);
 
       pi.waitSemaphoreCount = 1;
-      pi.pWaitSemaphores = &transact.submit_details.back().signal_sema;
+      pi.pWaitSemaphores = &transact.submit_details.back().signal_sema->sema;
     }
 
     VkQueue queue = ctxt.submit_details.at(L_SUBMIT_TYPE_PRESENT).queue;
@@ -1201,7 +1184,7 @@ std::vector<VkFence> _record_invoke_impl(
 
     img_idx = ~0u;
     VK_ASSERT << vkAcquireNextImageKHR(ctxt.dev, swapchain.swapchain, 0,
-      VK_NULL_HANDLE, acquire_fence, &img_idx);
+      VK_NULL_HANDLE, acquire_fence->fence, &img_idx);
 
     transact.is_frozen = true;
 
@@ -1325,7 +1308,7 @@ std::vector<VkFence> _record_invoke_impl(
 
       const Invocation* subinvoke = pass_detail.subinvokes[i];
       L_ASSERT(subinvoke != nullptr, "null subinvocation is not allowed");
-      std::vector<VkFence> fences = _record_invoke_impl(transact, *subinvoke);
+      std::vector<sys::FenceRef> fences = _record_invoke_impl(transact, *subinvoke);
       if (!fences.empty()) { return fences; }
     }
     vkCmdEndRenderPass(cmdbuf);
@@ -1340,7 +1323,7 @@ std::vector<VkFence> _record_invoke_impl(
     for (size_t i = 0; i < composite_detail.subinvokes.size(); ++i) {
       const Invocation* subinvoke = composite_detail.subinvokes[i];
       L_ASSERT(subinvoke != nullptr, "null subinvocation is not allowed");
-      std::vector<VkFence> fences = _record_invoke_impl(transact, *subinvoke);
+      std::vector<sys::FenceRef> fences = _record_invoke_impl(transact, *subinvoke);
       if (!fences.empty()) { return fences; }
     }
 
@@ -1364,17 +1347,17 @@ std::vector<VkFence> _record_invoke_impl(
 
   return {};
 }
-std::vector<VkFence> _record_invoke(
+std::vector<sys::FenceRef> _record_invoke(
   TransactionLike& transact,
   const Invocation& invoke
 ) {
-  std::vector<VkFence> fences = _record_invoke_impl(transact, invoke);
+  std::vector<sys::FenceRef> fences = _record_invoke_impl(transact, invoke);
   if (fences.empty()) {
     _end_cmdbuf(transact.submit_details.back());
     if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-      VkFence fence = _create_fence(*transact.ctxt);
+      sys::FenceRef fence = sys::Fence::create(transact.ctxt->dev);
       _submit_cmdbuf(transact, fence);
-      fences.emplace_back(fence);
+      fences.emplace_back(std::move(fence));
     }
   }
   return fences;
@@ -1401,7 +1384,7 @@ void bake_invoke(Invocation& invoke) {
   if (!_can_bake_invoke(invoke)) { return; }
 
   TransactionLike transact(*invoke.ctxt, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
-  std::vector<VkFence> fences = _record_invoke(transact, invoke);
+  std::vector<sys::FenceRef> fences = _record_invoke(transact, invoke);
   L_ASSERT(fences.empty());
 
   L_ASSERT(transact.submit_details.size() == 1);
@@ -1427,7 +1410,7 @@ Transaction submit_invoke(const Invocation& invoke) {
   TransactionLike transact(ctxt, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
   util::Timer timer {};
   timer.tic();
-  std::vector<VkFence> fences = _record_invoke(transact, invoke);
+  std::vector<sys::FenceRef> fences = _record_invoke(transact, invoke);
   timer.toc();
 
   Transaction out {};

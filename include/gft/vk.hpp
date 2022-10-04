@@ -10,44 +10,10 @@
 #include "vk_mem_alloc.h"
 #define HAL_IMPL_NAMESPACE vk
 #include "gft/hal/scoped-hal.hpp"
+#include "gft/vk-sys.hpp"
 
 namespace liong {
 namespace vk {
-
-class VkException : public std::exception {
-  std::string msg;
-public:
-  inline VkException(VkResult code) {
-    switch (code) {
-    case VK_ERROR_OUT_OF_HOST_MEMORY: msg = "out of host memory"; break;
-    case VK_ERROR_OUT_OF_DEVICE_MEMORY: msg = "out of device memory"; break;
-    case VK_ERROR_INITIALIZATION_FAILED: msg = "initialization failed"; break;
-    case VK_ERROR_DEVICE_LOST: msg = "device lost"; break;
-    case VK_ERROR_MEMORY_MAP_FAILED: msg = "memory map failed"; break;
-    case VK_ERROR_LAYER_NOT_PRESENT: msg = "layer not supported"; break;
-    case VK_ERROR_EXTENSION_NOT_PRESENT: msg = "extension may present"; break;
-    case VK_ERROR_INCOMPATIBLE_DRIVER: msg = "incompatible driver"; break;
-    case VK_ERROR_TOO_MANY_OBJECTS: msg = "too many objects"; break;
-    case VK_ERROR_FORMAT_NOT_SUPPORTED: msg = "format not supported"; break;
-    case VK_ERROR_FRAGMENTED_POOL: msg = "fragmented pool"; break;
-    case VK_ERROR_OUT_OF_POOL_MEMORY: msg = "out of pool memory"; break;
-    default: msg = std::string("unknown vulkan error: ") + std::to_string(code); break;
-    }
-  }
-
-  inline const char* what() const noexcept override {
-    return msg.c_str(); 
-  }
-};
-struct VkAssert {
-  inline const VkAssert& operator<<(VkResult code) const {
-    if (code != VK_SUCCESS) { throw VkException(code); }
-    return *this;
-  }
-};
-#define VK_ASSERT (::liong::vk::VkAssert{})
-
-
 
 inline VkFormat fmt2vk(fmt::Format fmt, fmt::ColorSpace cspace) {
   using namespace fmt;
@@ -122,14 +88,14 @@ struct TransactionSubmitDetail {
   VkCommandPool cmd_pool;
   VkCommandBuffer cmdbuf;
   VkQueue queue;
-  VkSemaphore wait_sema;
-  VkSemaphore signal_sema;
+  sys::SemaphoreRef wait_sema;
+  sys::SemaphoreRef signal_sema;
   bool is_submitted;
 };
 struct Transaction {
   const Context* ctxt;
   std::vector<TransactionSubmitDetail> submit_details;
-  std::vector<VkFence> fences;
+  std::vector<sys::FenceRef> fences;
 };
 
 
