@@ -426,9 +426,8 @@ Invocation create_comp_invoke(
   comp_detail.task = &task;
   comp_detail.bind_pt = VK_PIPELINE_BIND_POINT_COMPUTE;
   if (task.rsc_detail.desc_pool_sizes.size() > 0) {
-    comp_detail.desc_set_item =
-      std::make_unique<TaskDescriptorSetPoolItemRef>(const_cast<Task*>(&task));
-    _update_desc_set(ctxt, comp_detail.desc_set_item->item.desc_set,
+    comp_detail.desc_set = const_cast<Task&>(task).acquire_desc_set();
+    _update_desc_set(ctxt, comp_detail.desc_set->desc_set,
       task.rsc_detail.rsc_tys, cfg.rsc_views);
   }
   comp_detail.workgrp_count = cfg.workgrp_count;
@@ -478,9 +477,8 @@ Invocation create_graph_invoke(
   graph_detail.task = &task;
   graph_detail.bind_pt = VK_PIPELINE_BIND_POINT_GRAPHICS;
   if (task.rsc_detail.desc_pool_sizes.size() > 0) {
-    graph_detail.desc_set_item =
-      std::make_unique<TaskDescriptorSetPoolItemRef>(const_cast<Task*>(&task));
-    _update_desc_set(ctxt, graph_detail.desc_set_item->item.desc_set,
+    graph_detail.desc_set = const_cast<Task&>(task).acquire_desc_set();
+    _update_desc_set(ctxt, graph_detail.desc_set->desc_set,
       task.rsc_detail.rsc_tys, cfg.rsc_views);
   }
   graph_detail.vert_bufs = std::move(vert_bufs);
@@ -614,12 +612,12 @@ void destroy_invoke(Invocation& invoke) {
   }
   if (invoke.comp_detail) {
     InvocationComputeDetail& comp_detail = *invoke.comp_detail;
-    comp_detail.desc_set_item.reset();
+    comp_detail.desc_set.reset();
     log::debug("destroyed compute invocation '", invoke.label, "'");
   }
   if (invoke.graph_detail) {
     InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
-    graph_detail.desc_set_item.reset();
+    graph_detail.desc_set.reset();
     log::debug("destroyed graphics invocation '", invoke.label, "'");
   }
   if (invoke.pass_detail) {
@@ -655,18 +653,15 @@ double get_invoke_time_us(const Invocation& invoke) {
   return (t[1] - t[0]) * ns_per_tick / 1000.0;
 }
 
-VkCommandPool _create_cmd_pool(const Context& ctxt, SubmitType submit_ty) {
+sys::CommandPoolRef _create_cmd_pool(const Context& ctxt, SubmitType submit_ty) {
   VkCommandPoolCreateInfo cpci {};
   cpci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
   cpci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
   cpci.queueFamilyIndex = ctxt.submit_details.at(submit_ty).qfam_idx;
 
-  VkCommandPool cmd_pool;
-  VK_ASSERT << vkCreateCommandPool(ctxt.dev->dev, &cpci, nullptr, &cmd_pool);
-
-  return cmd_pool;
+  return sys::CommandPool::create(ctxt.dev->dev, &cpci);
 }
-VkCommandBuffer _alloc_cmdbuf(
+sys::CommandBufferRef _alloc_cmdbuf(
   const Context& ctxt,
   VkCommandPool cmd_pool,
   VkCommandBufferLevel level
@@ -677,10 +672,7 @@ VkCommandBuffer _alloc_cmdbuf(
   cbai.commandBufferCount = 1;
   cbai.commandPool = cmd_pool;
 
-  VkCommandBuffer cmdbuf;
-  VK_ASSERT << vkAllocateCommandBuffers(ctxt.dev->dev, &cbai, &cmdbuf);
-
-  return cmdbuf;
+  return sys::CommandBuffer::create(ctxt.dev->dev, &cbai);
 }
 
 
@@ -706,10 +698,10 @@ void _begin_cmdbuf(const TransactionSubmitDetail& submit_detail) {
     cbbi.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
   }
   cbbi.pInheritanceInfo = &cbii;
-  VK_ASSERT << vkBeginCommandBuffer(submit_detail.cmdbuf, &cbbi);
+  VK_ASSERT << vkBeginCommandBuffer(submit_detail.cmdbuf->cmdbuf, &cbbi);
 }
 void _end_cmdbuf(const TransactionSubmitDetail& submit_detail) {
-  VK_ASSERT << vkEndCommandBuffer(submit_detail.cmdbuf);
+  VK_ASSERT << vkEndCommandBuffer(submit_detail.cmdbuf->cmdbuf);
 }
 
 void _push_transact_submit_detail(
@@ -719,7 +711,7 @@ void _push_transact_submit_detail(
   VkCommandBufferLevel level
 ) {
   auto cmd_pool = _create_cmd_pool(ctxt, submit_ty);
-  auto cmdbuf = _alloc_cmdbuf(ctxt, cmd_pool, level);
+  auto cmdbuf = _alloc_cmdbuf(ctxt, cmd_pool->cmd_pool, level);
 
   TransactionSubmitDetail submit_detail {};
   submit_detail.submit_ty = submit_ty;
@@ -748,7 +740,7 @@ void _submit_cmdbuf(
   VkSubmitInfo submit_info {};
   submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
   submit_info.commandBufferCount = 1;
-  submit_info.pCommandBuffers = &submit_detail.cmdbuf;
+  submit_info.pCommandBuffers = &submit_detail.cmdbuf->cmdbuf;
   submit_info.signalSemaphoreCount = 1;
   if (submit_detail.wait_sema != VK_NULL_HANDLE) {
     // Wait for the last submitted command buffer on the device side.
@@ -801,7 +793,7 @@ VkCommandBuffer _get_cmdbuf(
     // still be fed into the last command buffer.
     auto& last_submit = transact.submit_details.back();
     if (submit_detail.queue == last_submit.queue) {
-      return last_submit.cmdbuf;
+      return last_submit.cmdbuf->cmdbuf;
     }
   }
 
@@ -812,7 +804,7 @@ VkCommandBuffer _get_cmdbuf(
   _push_transact_submit_detail(*transact.ctxt, transact.submit_details,
     submit_ty, transact.level);
   _begin_cmdbuf(transact.submit_details.back());
-  return transact.submit_details.back().cmdbuf;
+  return transact.submit_details.back().cmdbuf->cmdbuf;
 }
 
 void _make_buf_barrier_params(
@@ -1240,10 +1232,10 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     const Task& task = *comp_detail.task;
     const DispatchSize& workgrp_count = comp_detail.workgrp_count;
 
-    vkCmdBindPipeline(cmdbuf, comp_detail.bind_pt, task.pipe);
-    if (comp_detail.desc_set_item != VK_NULL_HANDLE) {
+    vkCmdBindPipeline(cmdbuf, comp_detail.bind_pt, task.pipe->pipe);
+    if (comp_detail.desc_set != VK_NULL_HANDLE) {
       vkCmdBindDescriptorSets(cmdbuf, comp_detail.bind_pt,
-        task.rsc_detail.pipe_layout->pipe_layout, 0, 1, &comp_detail.desc_set_item->item.desc_set, 0, nullptr);
+        task.rsc_detail.pipe_layout->pipe_layout, 0, 1, &comp_detail.desc_set->desc_set, 0, nullptr);
     }
     vkCmdDispatch(cmdbuf, workgrp_count.x, workgrp_count.y, workgrp_count.z);
     log::debug("applied compute invocation '", invoke.label, "'");
@@ -1252,10 +1244,10 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     const InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
     const Task& task = *graph_detail.task;
 
-    vkCmdBindPipeline(cmdbuf, graph_detail.bind_pt, task.pipe);
-    if (graph_detail.desc_set_item->item.desc_set != VK_NULL_HANDLE) {
+    vkCmdBindPipeline(cmdbuf, graph_detail.bind_pt, task.pipe->pipe);
+    if (graph_detail.desc_set->desc_set != VK_NULL_HANDLE) {
       vkCmdBindDescriptorSets(cmdbuf, graph_detail.bind_pt,
-        task.rsc_detail.pipe_layout->pipe_layout, 0, 1, &graph_detail.desc_set_item->item.desc_set, 0, nullptr);
+        task.rsc_detail.pipe_layout->pipe_layout, 0, 1, &graph_detail.desc_set->desc_set, 0, nullptr);
     }
     // TODO: (penguinliong) Vertex, index buffer transition.
     vkCmdBindVertexBuffers(cmdbuf, 0, (uint32_t)graph_detail.vert_bufs.size(),
@@ -1393,8 +1385,8 @@ void bake_invoke(Invocation& invoke) {
   L_ASSERT(submit_detail.signal_sema == VK_NULL_HANDLE);
 
   InvocationBakingDetail bake_detail {};
-  bake_detail.cmd_pool = submit_detail.cmd_pool;
-  bake_detail.cmdbuf = submit_detail.cmdbuf;
+  bake_detail.cmd_pool = submit_detail.cmd_pool->cmd_pool;
+  bake_detail.cmdbuf = submit_detail.cmdbuf->cmdbuf;
 
   invoke.bake_detail =
     std::make_unique<InvocationBakingDetail>(std::move(bake_detail));

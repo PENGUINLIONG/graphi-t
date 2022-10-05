@@ -62,12 +62,12 @@ extern VkShaderModule create_shader_mod(
 extern void destroy_shader_mod(VkDevice dev, VkShaderModule shader_mod);
 
 // VkPipeline
-extern sys::Pipeline create_comp_pipe(
+extern sys::PipelineRef create_comp_pipe(
   VkDevice dev,
   VkPipelineLayout pipe_layout,
   const VkPipelineShaderStageCreateInfo& pssci
 );
-extern sys::Pipeline create_graph_pipe(
+extern sys::PipelineRef create_graph_pipe(
   VkDevice dev,
   VkPipelineLayout pipe_layout,
   VkRenderPass pass,

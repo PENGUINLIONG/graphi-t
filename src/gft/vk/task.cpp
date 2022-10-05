@@ -62,7 +62,7 @@ sys::DescriptorPoolRef _create_desc_pool(
   dpci.pPoolSizes = desc_pool_sizes.data();
   dpci.maxSets = 1;
 
-  return sys::DescriptorPool::create(ctxt.dev, &dpci);
+  return sys::DescriptorPool::create(ctxt.dev->dev, &dpci);
 }
 sys::DescriptorSetRef _alloc_desc_set(
   const Context& ctxt,
@@ -75,7 +75,7 @@ sys::DescriptorSetRef _alloc_desc_set(
   dsai.descriptorSetCount = 1;
   dsai.pSetLayouts = &desc_set_layout;
 
-  return sys::DescriptorSet::create(ctxt.dev, &dsai);
+  return sys::DescriptorSet::create(ctxt.dev->dev, &dsai);
 }
 
 Task create_comp_task(
@@ -222,28 +222,26 @@ void destroy_task(Task& task) {
   }
 }
 
-TaskDescriptorSetPoolItemRef::TaskDescriptorSetPoolItemRef(
-  Task* task
-) : task(task), desc_set(task->acquire_desc_set()) {}
-TaskDescriptorSetPoolItemRef::~TaskDescriptorSetPoolItemRef() {
-  task->release_desc_set(std::exchange(desc_set, {}));
-}
-
 sys::DescriptorSetRef Task::acquire_desc_set() {
-  if (rsc_detail.desc_pool_items.size() > 0) {
-    auto back = std::move(rsc_detail.desc_pool_items.back());
-    rsc_detail.desc_pool_items.pop_back();
-    return back;
-  } else {
-    if (rsc_detail.desc_pool_sizes.size() > 0) {
-      return _create_desc_set(*ctxt, rsc_detail.desc_pool_sizes, rsc_detail.desc_set_layout->desc_set_layout);
+  if (rsc_detail.desc_pool_sizes.size() > 0) {
+    if (rsc_detail.free_desc_sets.empty()) {
+      sys::DescriptorPoolRef desc_pool = _create_desc_pool(*ctxt, rsc_detail.desc_pool_sizes);
+      sys::DescriptorSetRef desc_set = _alloc_desc_set(*ctxt, desc_pool->desc_pool, rsc_detail.desc_set_layout->desc_set_layout);
+      rsc_detail.desc_pools.emplace_back(desc_pool);
+      return desc_set;
     } else {
-      return nullptr;
+      auto back = std::move(rsc_detail.free_desc_sets.back());
+      rsc_detail.free_desc_sets.pop_back();
+      return back;
     }
+  } else {
+    return nullptr;
   }
 }
 void Task::release_desc_set(sys::DescriptorSetRef&& item) {
-  rsc_detail.desc_pool_items.emplace_back(std::move(item));
+  if (item != nullptr) {
+    rsc_detail.free_desc_sets.emplace_back(std::move(item));
+  }
 }
 
 } // namespace vk

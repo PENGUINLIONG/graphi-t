@@ -226,7 +226,7 @@ void destroy_shader_mod(VkDevice dev, VkShaderModule shader_mod) {
 
 
 // VkPipeline
-sys::Pipeline create_comp_pipe(
+sys::PipelineRef create_comp_pipe(
   VkDevice dev,
   VkPipelineLayout pipe_layout,
   const VkPipelineShaderStageCreateInfo& pssci
@@ -238,7 +238,7 @@ sys::Pipeline create_comp_pipe(
 
   return sys::Pipeline::create(dev, &cpci);
 }
-sys::Pipeline create_graph_pipe(
+sys::PipelineRef create_graph_pipe(
   VkDevice dev,
   VkPipelineLayout pipe_layout,
   VkRenderPass pass,

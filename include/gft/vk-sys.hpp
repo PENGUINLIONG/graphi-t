@@ -243,7 +243,7 @@ struct DescriptorSet {
     desc_set(desc_set), should_destroy(should_destroy) {}
   ~DescriptorSet() { destroy(); }
 
-  static std::shared_ptr<DescriptorSet> create(VkDevice dev, VkDescriptorPool desc_pool, const VkDescriptorSetAllocateInfo* dsai) {
+  static std::shared_ptr<DescriptorSet> create(VkDevice dev, const VkDescriptorSetAllocateInfo* dsai) {
     VkDescriptorSet desc_set = VK_NULL_HANDLE;
     VK_ASSERT << vkAllocateDescriptorSets(dev, dsai, &desc_set);
     return std::make_shared<DescriptorSet>(desc_set, true);
@@ -251,6 +251,45 @@ struct DescriptorSet {
   void destroy() {}
 };
 typedef std::shared_ptr<DescriptorSet> DescriptorSetRef;
+
+struct CommandPool {
+  typedef CommandPool Self;
+  VkDevice dev;
+  VkCommandPool cmd_pool;
+  bool should_destroy;
+
+  CommandPool(VkDevice dev, VkCommandPool cmd_pool, bool should_destroy) :
+    dev(dev), cmd_pool(cmd_pool), should_destroy(should_destroy) {}
+  ~CommandPool() { destroy(); }
+
+  static std::shared_ptr<CommandPool> create(VkDevice dev, const VkCommandPoolCreateInfo* cpci) {
+    VkCommandPool cmd_pool = VK_NULL_HANDLE;
+    VK_ASSERT << vkCreateCommandPool(dev, cpci, nullptr, &cmd_pool);
+    return std::make_shared<CommandPool>(dev, cmd_pool, true);
+  }
+  void destroy() {
+    vkDestroyCommandPool(dev, cmd_pool, nullptr);
+  }
+};
+typedef std::shared_ptr<CommandPool> CommandPoolRef;
+
+struct CommandBuffer {
+  typedef CommandBuffer Self;
+  VkCommandBuffer cmdbuf;
+  bool should_destroy;
+
+  CommandBuffer(VkCommandBuffer cmdbuf, bool should_destroy) :
+    cmdbuf(cmdbuf), should_destroy(should_destroy) {}
+  ~CommandBuffer() { destroy(); }
+
+  static std::shared_ptr<CommandBuffer> create(VkDevice dev, const VkCommandBufferAllocateInfo* cbai) {
+    VkCommandBuffer cmdbuf = VK_NULL_HANDLE;
+    VK_ASSERT << vkAllocateCommandBuffers(dev, cbai, &cmdbuf);
+    return std::make_shared<CommandBuffer>(cmdbuf, true);
+  }
+  void destroy() {}
+};
+typedef std::shared_ptr<CommandBuffer> CommandBufferRef;
 
 struct Fence {
   typedef Fence Self;

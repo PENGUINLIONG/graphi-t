@@ -85,8 +85,8 @@ enum SubmitType {
 };
 struct TransactionSubmitDetail {
   SubmitType submit_ty;
-  VkCommandPool cmd_pool;
-  VkCommandBuffer cmdbuf;
+  sys::CommandPoolRef cmd_pool;
+  sys::CommandBufferRef cmdbuf;
   VkQueue queue;
   sys::SemaphoreRef wait_sema;
   sys::SemaphoreRef signal_sema;
@@ -199,30 +199,22 @@ struct RenderPass {
 
 
 
-struct TaskDescriptorSetPoolItem {
-  sys::DescriptorPool desc_pool;
-  sys::DescriptorSet desc_set;
-};
-struct TaskDescriptorSetPoolItemRef {
-  Task* task;
-  sys::DescriptorSetRef desc_set;
-  
-  TaskDescriptorSetPoolItemRef(Task* task);
-  ~TaskDescriptorSetPoolItemRef();
-};
 struct TaskResourceDetail {
   sys::DescriptorSetLayoutRef desc_set_layout;
   sys::PipelineLayoutRef pipe_layout;
   std::vector<ResourceType> rsc_tys;
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
-  std::vector<sys::DescriptorSetRef> desc_pool_items;
+  // Descriptor pools to hold references.
+  std::vector<sys::DescriptorPoolRef> desc_pools;
+  // Descriptor sets not yet acquired by invocations.
+  std::vector<sys::DescriptorSetRef> free_desc_sets;
 };
 struct Task {
   std::string label;
   SubmitType submit_ty;
   const Context* ctxt;
   const RenderPass* pass; // Only for graphics task.
-  sys::Pipeline pipe;
+  sys::PipelineRef pipe;
   DispatchSize workgrp_size; // Only for compute task.
   TaskResourceDetail rsc_detail;
 
@@ -276,13 +268,13 @@ struct InvocationCopyImageToImageDetail {
 struct InvocationComputeDetail {
   const Task* task;
   VkPipelineBindPoint bind_pt;
-  sys::DescriptorSetRef desc_set_item;
+  sys::DescriptorSetRef desc_set;
   DispatchSize workgrp_count;
 };
 struct InvocationGraphicsDetail {
   const Task* task;
   VkPipelineBindPoint bind_pt;
-  sys::DescriptorSetRef desc_set_item;
+  sys::DescriptorSetRef desc_set;
   std::vector<VkBuffer> vert_bufs;
   std::vector<VkDeviceSize> vert_buf_offsets;
   VkBuffer idx_buf;

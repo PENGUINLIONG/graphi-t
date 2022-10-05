@@ -6,12 +6,6 @@ namespace vk {
 
 void destroy_transact(Transaction& transact) {
   const Context& ctxt = *transact.ctxt;
-  for (auto& submit_detail : transact.submit_details) {
-    if (submit_detail.cmd_pool != VK_NULL_HANDLE) {
-      vkDestroyCommandPool(ctxt.dev->dev, submit_detail.cmd_pool, nullptr);
-    }
-  }
-
   log::debug("destroyed transaction");
   transact = {};
 }
