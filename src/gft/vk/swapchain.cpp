@@ -96,12 +96,11 @@ VkSwapchainKHR _create_swapchain(
     ivci.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
     ivci.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
 
-    VkImageView img_view;
-    VK_ASSERT << vkCreateImageView(ctxt.dev->dev, &ivci, nullptr, &img_view);
+    sys::ImageViewRef img_view = sys::ImageView::create(ctxt.dev->dev, &ivci);
 
     Image out {};
     out.img = std::make_shared<sys::Image>(ctxt.allocator, img, nullptr, false);
-    out.img_view = img_view;
+    out.img_view = std::move(img_view);
     out.img_cfg.label = util::format(cfg.label, " #", i);
     out.img_cfg.width = width;
     out.img_cfg.height = height;
@@ -166,10 +165,7 @@ void destroy_swapchain(Swapchain& swapchain) {
   if (swapchain.dyn_detail != nullptr) {
     SwapchainDynamicDetail& dyn_detail = *swapchain.dyn_detail;
     dyn_detail.img_idx = nullptr;
-    for (size_t i = 0; i < dyn_detail.imgs.size(); ++i) {
-      const Image& img = dyn_detail.imgs[i];
-      vkDestroyImageView(ctxt.dev->dev, img.img_view, nullptr);
-    }
+    dyn_detail.imgs.clear();
   }
   vkDestroySwapchainKHR(ctxt.dev->dev, swapchain.swapchain, nullptr);
 }

@@ -87,8 +87,7 @@ DepthImage create_depth_img(
   ivci.subresourceRange.baseMipLevel = 0;
   ivci.subresourceRange.levelCount = 1;
 
-  VkImageView img_view;
-  VK_ASSERT << vkCreateImageView(ctxt.dev->dev, &ivci, nullptr, &img_view);
+  sys::ImageViewRef img_view = sys::ImageView::create(ctxt.dev->dev, &ivci);
 
   DepthImageDynamicDetail dyn_detail {};
   dyn_detail.layout = layout;
@@ -97,12 +96,13 @@ DepthImage create_depth_img(
 
   log::debug("created depth image '", depth_img_cfg.label, "'");
   return DepthImage {
-    &ctxt, std::move(img), img_view, depth_img_cfg, std::move(dyn_detail)
+    &ctxt, std::move(img), std::move(img_view), depth_img_cfg, std::move(dyn_detail)
   };
 }
 void destroy_depth_img(DepthImage& depth_img) {
   if (depth_img.img) {
-    vkDestroyImageView(depth_img.ctxt->dev->dev, depth_img.img_view, nullptr);
+    depth_img.img.reset();
+    depth_img.img_view.reset();
 
     log::debug("destroyed depth image '", depth_img.depth_img_cfg.label, "'");
     depth_img = {};

@@ -146,6 +146,31 @@ struct Image {
 };
 typedef std::shared_ptr<Image> ImageRef;
 
+struct ImageView {
+  typedef ImageView Self;
+  VkDevice dev;
+  VkImageView img_view;
+  bool should_destroy;
+
+  ImageView(VkDevice dev, VkImageView img_view, bool should_destroy) :
+    dev(dev), img_view(img_view), should_destroy(should_destroy) {}
+  ~ImageView() { destroy(); }
+
+  operator VkImageView() const {
+    return img_view;
+  }
+
+  static std::shared_ptr<ImageView> create(VkDevice dev, const VkImageViewCreateInfo* ivci) {
+    VkImageView img_view = VK_NULL_HANDLE;
+    VK_ASSERT << vkCreateImageView(dev, ivci, nullptr, &img_view);
+    return std::make_shared<ImageView>(dev, img_view, true);
+  }
+  void destroy() {
+    vkDestroyImageView(dev, img_view, nullptr);
+  }
+};
+typedef std::shared_ptr<ImageView> ImageViewRef;
+
 struct Surface {
   typedef Surface Self;
   VkInstance inst;

@@ -148,7 +148,7 @@ struct ImageDynamicDetail {
 struct Image {
   const Context* ctxt; // Lifetime bound.
   sys::ImageRef img;
-  VkImageView img_view;
+  sys::ImageViewRef img_view;
   ImageConfig img_cfg;
   ImageDynamicDetail dyn_detail;
 };
@@ -163,7 +163,7 @@ struct DepthImageDynamicDetail {
 struct DepthImage {
   const Context* ctxt; // Lifetime bound.
   sys::ImageRef img;
-  VkImageView img_view;
+  sys::ImageViewRef img_view;
   DepthImageConfig depth_img_cfg;
   DepthImageDynamicDetail dyn_detail;
 };

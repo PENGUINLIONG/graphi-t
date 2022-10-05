@@ -104,8 +104,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   ivci.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
   ivci.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
 
-  VkImageView img_view = VK_NULL_HANDLE;
-  VK_ASSERT << vkCreateImageView(ctxt.dev->dev, &ivci, nullptr, &img_view);
+  sys::ImageViewRef img_view = sys::ImageView::create(ctxt.dev->dev, &ivci);
 
   ImageDynamicDetail dyn_detail {};
   dyn_detail.layout = layout;
@@ -115,13 +114,13 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   log::debug("created image '", img_cfg.label, "'");
   uint32_t qfam_idx = ctxt.submit_details.at(init_submit_ty).qfam_idx;
   return Image {
-    &ctxt, std::move(img), img_view, img_cfg, std::move(dyn_detail)
+    &ctxt, std::move(img), std::move(img_view), img_cfg, std::move(dyn_detail)
   };
 }
 void destroy_img(Image& img) {
   if (img.img != VK_NULL_HANDLE) {
-    vkDestroyImageView(img.ctxt->dev->dev, img.img_view, nullptr);
     img.img.reset();
+    img.img_view.reset();
 
     log::debug("destroyed image '", img.img_cfg.label, "'");
     img = {};
