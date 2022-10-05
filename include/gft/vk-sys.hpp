@@ -141,6 +141,7 @@ struct DescriptorSetLayout {
 
   DescriptorSetLayout(VkDevice dev, VkDescriptorSetLayout desc_set_layout, bool should_destroy) :
     dev(dev), desc_set_layout(desc_set_layout), should_destroy(should_destroy) {}
+  ~DescriptorSetLayout() { destroy(); }
 
   operator VkDescriptorSetLayout() {
     return desc_set_layout;
@@ -165,6 +166,7 @@ struct PipelineLayout {
 
   PipelineLayout(VkDevice dev, VkPipelineLayout pipe_layout, bool should_destroy) :
     dev(dev), pipe_layout(pipe_layout), should_destroy(should_destroy) {}
+  ~PipelineLayout() { destroy(); }
 
   operator VkPipelineLayout() {
     return pipe_layout;
@@ -189,6 +191,7 @@ struct Pipeline {
 
   Pipeline(VkDevice dev, VkPipeline pipe, bool should_destroy) :
     dev(dev), pipe(pipe), should_destroy(should_destroy) {}
+  ~Pipeline() { destroy(); }
 
   operator VkPipeline() {
     return pipe;
@@ -209,6 +212,45 @@ struct Pipeline {
   }
 };
 typedef std::shared_ptr<Pipeline> PipelineRef;
+
+struct DescriptorPool {
+  typedef DescriptorPool Self;
+  VkDevice dev;
+  VkDescriptorPool desc_pool;
+  bool should_destroy;
+
+  DescriptorPool(VkDevice dev, VkDescriptorPool desc_pool, bool should_destroy) :
+    dev(dev), desc_pool(desc_pool), should_destroy(should_destroy) {}
+  ~DescriptorPool() { destroy(); }
+
+  static std::shared_ptr<DescriptorPool> create(VkDevice dev, const VkDescriptorPoolCreateInfo* dpci) {
+    VkDescriptorPool desc_pool = VK_NULL_HANDLE;
+    VK_ASSERT << vkCreateDescriptorPool(dev, dpci, nullptr, &desc_pool);
+    return std::make_shared<DescriptorPool>(dev, desc_pool, true);
+  }
+  void destroy() {
+    vkDestroyDescriptorPool(dev, desc_pool, nullptr);
+  }
+};
+typedef std::shared_ptr<DescriptorPool> DescriptorPoolRef;
+
+struct DescriptorSet {
+  typedef DescriptorSet Self;
+  VkDescriptorSet desc_set;
+  bool should_destroy;
+
+  DescriptorSet(VkDescriptorSet desc_set, bool should_destroy) :
+    desc_set(desc_set), should_destroy(should_destroy) {}
+  ~DescriptorSet() { destroy(); }
+
+  static std::shared_ptr<DescriptorSet> create(VkDevice dev, VkDescriptorPool desc_pool, const VkDescriptorSetAllocateInfo* dsai) {
+    VkDescriptorSet desc_set = VK_NULL_HANDLE;
+    VK_ASSERT << vkAllocateDescriptorSets(dev, dsai, &desc_set);
+    return std::make_shared<DescriptorSet>(desc_set, true);
+  }
+  void destroy() {}
+};
+typedef std::shared_ptr<DescriptorSet> DescriptorSetRef;
 
 struct Fence {
   typedef Fence Self;

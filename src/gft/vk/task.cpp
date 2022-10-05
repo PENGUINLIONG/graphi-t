@@ -52,7 +52,7 @@ sys::DescriptorSetLayoutRef _create_desc_set_layout(
   return sys::create_desc_set_layout(ctxt.dev->dev, dslbs);
 }
 
-VkDescriptorPool _create_desc_pool(
+sys::DescriptorPoolRef _create_desc_pool(
   const Context& ctxt,
   const std::vector<VkDescriptorPoolSize>& desc_pool_sizes
 ) {
@@ -62,11 +62,9 @@ VkDescriptorPool _create_desc_pool(
   dpci.pPoolSizes = desc_pool_sizes.data();
   dpci.maxSets = 1;
 
-  VkDescriptorPool desc_pool;
-  VK_ASSERT << vkCreateDescriptorPool(ctxt.dev->dev, &dpci, nullptr, &desc_pool);
-  return desc_pool;
+  return sys::DescriptorPool::create(ctxt.dev, &dpci);
 }
-VkDescriptorSet _alloc_desc_set(
+sys::DescriptorSetRef _alloc_desc_set(
   const Context& ctxt,
   VkDescriptorPool desc_pool,
   VkDescriptorSetLayout desc_set_layout
@@ -77,9 +75,7 @@ VkDescriptorSet _alloc_desc_set(
   dsai.descriptorSetCount = 1;
   dsai.pSetLayouts = &desc_set_layout;
 
-  VkDescriptorSet desc_set;
-  VK_ASSERT << vkAllocateDescriptorSets(ctxt.dev->dev, &dsai, &desc_set);
-  return desc_set;
+  return sys::DescriptorSet::create(ctxt.dev, &dsai);
 }
 
 Task create_comp_task(
@@ -220,13 +216,7 @@ Task create_graph_task(
 void destroy_task(Task& task) {
   VkDevice dev = task.ctxt->dev->dev;
 
-  for (auto& item : task.rsc_detail.desc_pool_items) {
-    vkDestroyDescriptorPool(dev, item.desc_pool, nullptr);
-  }
-
   if (task.pipe != VK_NULL_HANDLE) {
-    sys::destroy_pipe(dev, task.pipe);
-
     log::debug("destroyed task '", task.label, "'");
     task = {};
   }
@@ -234,30 +224,25 @@ void destroy_task(Task& task) {
 
 TaskDescriptorSetPoolItemRef::TaskDescriptorSetPoolItemRef(
   Task* task
-) : task(task), item(task->acquire_desc_set()) {}
+) : task(task), desc_set(task->acquire_desc_set()) {}
 TaskDescriptorSetPoolItemRef::~TaskDescriptorSetPoolItemRef() {
-  task->release_desc_set(std::exchange(item, {}));
+  task->release_desc_set(std::exchange(desc_set, {}));
 }
 
-TaskDescriptorSetPoolItem Task::acquire_desc_set() {
+sys::DescriptorSetRef Task::acquire_desc_set() {
   if (rsc_detail.desc_pool_items.size() > 0) {
     auto back = std::move(rsc_detail.desc_pool_items.back());
     rsc_detail.desc_pool_items.pop_back();
     return back;
   } else {
     if (rsc_detail.desc_pool_sizes.size() > 0) {
-      VkDescriptorPool desc_pool = _create_desc_pool(*ctxt, rsc_detail.desc_pool_sizes);
-      VkDescriptorSet desc_set = _alloc_desc_set(*ctxt, desc_pool, rsc_detail.desc_set_layout->desc_set_layout);
-      TaskDescriptorSetPoolItem item {};
-      item.desc_pool = desc_pool;
-      item.desc_set = desc_set;
-      return item;
+      return _create_desc_set(*ctxt, rsc_detail.desc_pool_sizes, rsc_detail.desc_set_layout->desc_set_layout);
     } else {
-      return {};
+      return nullptr;
     }
   }
 }
-void Task::release_desc_set(TaskDescriptorSetPoolItem&& item) {
+void Task::release_desc_set(sys::DescriptorSetRef&& item) {
   rsc_detail.desc_pool_items.emplace_back(std::move(item));
 }
 
