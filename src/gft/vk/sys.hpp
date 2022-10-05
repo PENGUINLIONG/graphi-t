@@ -42,23 +42,15 @@ extern VkSampler create_sampler(
 extern void destroy_sampler(VkDevice dev, VkSampler sampler);
 
 // VkDescriptorSetLayout
-extern VkDescriptorSetLayout create_desc_set_layout(
+extern sys::DescriptorSetLayoutRef create_desc_set_layout(
   VkDevice dev,
   const std::vector<VkDescriptorSetLayoutBinding>& dslbs
 );
-extern void destroy_desc_set_layout(
-  VkDevice dev,
-  VkDescriptorSetLayout desc_set_layout
-);
 
 // VkPipelineLayout
-extern VkPipelineLayout create_pipe_layout(
+extern sys::PipelineLayoutRef create_pipe_layout(
   VkDevice dev,
   VkDescriptorSetLayout desc_set_layout
-);
-extern void destroy_pipe_layout(
-  VkDevice dev,
-  VkPipelineLayout pipe_layout
 );
 
 // VkShaderModule

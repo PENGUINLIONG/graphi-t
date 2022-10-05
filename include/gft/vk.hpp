@@ -211,8 +211,8 @@ struct TaskDescriptorSetPoolItemRef {
   ~TaskDescriptorSetPoolItemRef();
 };
 struct TaskResourceDetail {
-  VkDescriptorSetLayout desc_set_layout;
-  VkPipelineLayout pipe_layout;
+  sys::DescriptorSetLayoutRef desc_set_layout;
+  sys::PipelineLayoutRef pipe_layout;
   std::vector<ResourceType> rsc_tys;
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   std::vector<TaskDescriptorSetPoolItem> desc_pool_items;

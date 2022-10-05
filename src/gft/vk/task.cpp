@@ -5,7 +5,7 @@
 namespace liong {
 namespace vk {
 
-VkDescriptorSetLayout _create_desc_set_layout(
+sys::DescriptorSetLayoutRef _create_desc_set_layout(
   const Context& ctxt,
   const std::vector<ResourceType>& rsc_tys,
   std::vector<VkDescriptorPoolSize>& desc_pool_sizes
@@ -49,9 +49,7 @@ VkDescriptorSetLayout _create_desc_set_layout(
     }
   }
 
-  VkDescriptorSetLayout desc_set_layout =
-    sys::create_desc_set_layout(ctxt.dev->dev, dslbs);
-  return desc_set_layout;
+  return sys::create_desc_set_layout(ctxt.dev->dev, dslbs);
 }
 
 VkDescriptorPool _create_desc_pool(
@@ -91,10 +89,10 @@ Task create_comp_task(
   L_ASSERT(cfg.workgrp_size.x * cfg.workgrp_size.y * cfg.workgrp_size.z != 0,
     "workgroup size cannot be zero");
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
-  VkDescriptorSetLayout desc_set_layout = _create_desc_set_layout(ctxt,
+  sys::DescriptorSetLayoutRef desc_set_layout = _create_desc_set_layout(ctxt,
     cfg.rsc_tys, desc_pool_sizes);
-  VkPipelineLayout pipe_layout = sys::create_pipe_layout(ctxt.dev->dev,
-    desc_set_layout);
+  sys::PipelineLayoutRef pipe_layout = sys::create_pipe_layout(ctxt.dev->dev,
+    desc_set_layout->desc_set_layout);
   VkShaderModule shader_mod = sys::create_shader_mod(ctxt.dev->dev,
     (const uint32_t*)cfg.code, cfg.code_size);
 
@@ -117,13 +115,13 @@ Task create_comp_task(
   pssci.module = shader_mod;
   pssci.pSpecializationInfo = &spec_info;
 
-  VkPipeline pipe = sys::create_comp_pipe(ctxt.dev->dev, pipe_layout, pssci);
+  VkPipeline pipe = sys::create_comp_pipe(ctxt.dev->dev, pipe_layout->pipe_layout, pssci);
 
   sys::destroy_shader_mod(ctxt.dev->dev, shader_mod);
 
   TaskResourceDetail rsc_detail {};
-  rsc_detail.desc_set_layout = desc_set_layout;
-  rsc_detail.pipe_layout = pipe_layout;
+  rsc_detail.desc_set_layout = std::move(desc_set_layout);
+  rsc_detail.pipe_layout = std::move(pipe_layout);
   rsc_detail.rsc_tys = cfg.rsc_tys;
   rsc_detail.desc_pool_sizes = std::move(desc_pool_sizes);
 
@@ -143,10 +141,10 @@ Task create_graph_task(
   const Context& ctxt = *pass.ctxt;
 
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
-  VkDescriptorSetLayout desc_set_layout =
+  sys::DescriptorSetLayoutRef desc_set_layout =
     _create_desc_set_layout(ctxt, cfg.rsc_tys, desc_pool_sizes);
-  VkPipelineLayout pipe_layout = sys::create_pipe_layout(ctxt.dev->dev,
-    desc_set_layout);
+  sys::PipelineLayoutRef pipe_layout = sys::create_pipe_layout(ctxt.dev->dev,
+    desc_set_layout->desc_set_layout);
   VkShaderModule vert_shader_mod = sys::create_shader_mod(ctxt.dev->dev,
     (const uint32_t*)cfg.vert_code, cfg.vert_code_size);
   VkShaderModule frag_shader_mod = sys::create_shader_mod(ctxt.dev->dev,
@@ -200,15 +198,16 @@ Task create_graph_task(
     pssci.module = frag_shader_mod;
   }
 
-  VkPipeline pipe = sys::create_graph_pipe(ctxt.dev->dev, pipe_layout, pass.pass,
-    pass.width, pass.height, piasci, prsci, psscis);
+  VkPipeline pipe = sys::create_graph_pipe(ctxt.dev->dev,
+    pipe_layout->pipe_layout, pass.pass, pass.width, pass.height, piasci, prsci,
+    psscis);
 
   sys::destroy_shader_mod(ctxt.dev->dev, vert_shader_mod);
   sys::destroy_shader_mod(ctxt.dev->dev, frag_shader_mod);
 
   TaskResourceDetail rsc_detail {};
-  rsc_detail.desc_set_layout = desc_set_layout;
-  rsc_detail.pipe_layout = pipe_layout;
+  rsc_detail.desc_set_layout = std::move(desc_set_layout);
+  rsc_detail.pipe_layout = std::move(pipe_layout);
   rsc_detail.rsc_tys = cfg.rsc_tys;
   rsc_detail.desc_pool_sizes = std::move(desc_pool_sizes);
 
@@ -227,8 +226,6 @@ void destroy_task(Task& task) {
 
   if (task.pipe != VK_NULL_HANDLE) {
     sys::destroy_pipe(dev, task.pipe);
-    sys::destroy_pipe_layout(dev, task.rsc_detail.pipe_layout);
-    sys::destroy_desc_set_layout(dev, task.rsc_detail.desc_set_layout);
 
     log::debug("destroyed task '", task.label, "'");
     task = {};
@@ -250,7 +247,7 @@ TaskDescriptorSetPoolItem Task::acquire_desc_set() {
   } else {
     if (rsc_detail.desc_pool_sizes.size() > 0) {
       VkDescriptorPool desc_pool = _create_desc_pool(*ctxt, rsc_detail.desc_pool_sizes);
-      VkDescriptorSet desc_set = _alloc_desc_set(*ctxt, desc_pool, rsc_detail.desc_set_layout);
+      VkDescriptorSet desc_set = _alloc_desc_set(*ctxt, desc_pool, rsc_detail.desc_set_layout->desc_set_layout);
       TaskDescriptorSetPoolItem item {};
       item.desc_pool = desc_pool;
       item.desc_set = desc_set;

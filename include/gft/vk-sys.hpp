@@ -133,6 +133,54 @@ struct Surface {
 };
 typedef std::shared_ptr<Surface> SurfaceRef;
 
+struct DescriptorSetLayout {
+  typedef DescriptorSetLayout Self;
+  VkDevice dev;
+  VkDescriptorSetLayout desc_set_layout;
+  bool should_destroy;
+
+  DescriptorSetLayout(VkDevice dev, VkDescriptorSetLayout desc_set_layout, bool should_destroy) :
+    dev(dev), desc_set_layout(desc_set_layout), should_destroy(should_destroy) {}
+
+  operator VkDescriptorSetLayout() {
+    return desc_set_layout;
+  }
+
+  static std::shared_ptr<DescriptorSetLayout> create(VkDevice dev, const VkDescriptorSetLayoutCreateInfo* dslci) {
+    VkDescriptorSetLayout desc_set_layout = VK_NULL_HANDLE;
+    VK_ASSERT << vkCreateDescriptorSetLayout(dev, dslci, nullptr, &desc_set_layout);
+    return std::make_shared<DescriptorSetLayout>(dev, desc_set_layout, true);
+  }
+  void destroy() {
+    vkDestroyDescriptorSetLayout(dev, desc_set_layout, nullptr);
+  }
+};
+typedef std::shared_ptr<DescriptorSetLayout> DescriptorSetLayoutRef;
+
+struct PipelineLayout {
+  typedef PipelineLayout Self;
+  VkDevice dev;
+  VkPipelineLayout pipe_layout;
+  bool should_destroy;
+
+  PipelineLayout(VkDevice dev, VkPipelineLayout pipe_layout, bool should_destroy) :
+    dev(dev), pipe_layout(pipe_layout), should_destroy(should_destroy) {}
+
+  operator VkPipelineLayout() {
+    return pipe_layout;
+  }
+
+  static std::shared_ptr<PipelineLayout> create(VkDevice dev, const VkPipelineLayoutCreateInfo* plci) {
+    VkPipelineLayout pipe_layout = VK_NULL_HANDLE;
+    VK_ASSERT << vkCreatePipelineLayout(dev, plci, nullptr, &pipe_layout);
+    return std::make_shared<PipelineLayout>(dev, pipe_layout, true);
+  }
+  void destroy() {
+    vkDestroyPipelineLayout(dev, pipe_layout, nullptr);
+  }
+};
+typedef std::shared_ptr<PipelineLayout> PipelineLayoutRef;
+
 struct Fence {
   typedef Fence Self;
   VkDevice dev;

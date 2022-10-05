@@ -177,7 +177,7 @@ void destroy_sampler(VkDevice dev, VkSampler sampler) {
 
 
 // VkDescriptorSetLayout
-VkDescriptorSetLayout create_desc_set_layout(
+sys::DescriptorSetLayoutRef create_desc_set_layout(
   VkDevice dev,
   const std::vector<VkDescriptorSetLayoutBinding>& dslbs
 ) {
@@ -186,22 +186,12 @@ VkDescriptorSetLayout create_desc_set_layout(
   dslci.bindingCount = (uint32_t)dslbs.size();
   dslci.pBindings = dslbs.data();
 
-  VkDescriptorSetLayout desc_set_layout;
-  VK_ASSERT <<
-    vkCreateDescriptorSetLayout(dev, &dslci, nullptr, &desc_set_layout);
-
-  return desc_set_layout;
-}
-void destroy_desc_set_layout(
-  VkDevice dev,
-  VkDescriptorSetLayout desc_set_layout
-) {
-  vkDestroyDescriptorSetLayout(dev, desc_set_layout, nullptr);
+  return sys::DescriptorSetLayout::create(dev, &dslci);
 }
 
 
 // VkPipelineLayout
-VkPipelineLayout create_pipe_layout(
+sys::PipelineLayoutRef create_pipe_layout(
   VkDevice dev,
   VkDescriptorSetLayout desc_set_layout
 ) {
@@ -210,12 +200,7 @@ VkPipelineLayout create_pipe_layout(
   plci.setLayoutCount = 1;
   plci.pSetLayouts = &desc_set_layout;
 
-  VkPipelineLayout pipe_layout;
-  VK_ASSERT << vkCreatePipelineLayout(dev, &plci, nullptr, &pipe_layout);
-  return pipe_layout;
-}
-void destroy_pipe_layout(VkDevice dev, VkPipelineLayout pipe_layout) {
-  vkDestroyPipelineLayout(dev, pipe_layout, nullptr);
+  return sys::PipelineLayout::create(dev, &plci);
 }
 
 

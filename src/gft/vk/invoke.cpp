@@ -1243,7 +1243,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     vkCmdBindPipeline(cmdbuf, comp_detail.bind_pt, task.pipe);
     if (comp_detail.desc_set_item != VK_NULL_HANDLE) {
       vkCmdBindDescriptorSets(cmdbuf, comp_detail.bind_pt,
-        task.rsc_detail.pipe_layout, 0, 1, &comp_detail.desc_set_item->item.desc_set, 0, nullptr);
+        task.rsc_detail.pipe_layout->pipe_layout, 0, 1, &comp_detail.desc_set_item->item.desc_set, 0, nullptr);
     }
     vkCmdDispatch(cmdbuf, workgrp_count.x, workgrp_count.y, workgrp_count.z);
     log::debug("applied compute invocation '", invoke.label, "'");
@@ -1255,7 +1255,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     vkCmdBindPipeline(cmdbuf, graph_detail.bind_pt, task.pipe);
     if (graph_detail.desc_set_item->item.desc_set != VK_NULL_HANDLE) {
       vkCmdBindDescriptorSets(cmdbuf, graph_detail.bind_pt,
-        task.rsc_detail.pipe_layout, 0, 1, &graph_detail.desc_set_item->item.desc_set, 0, nullptr);
+        task.rsc_detail.pipe_layout->pipe_layout, 0, 1, &graph_detail.desc_set_item->item.desc_set, 0, nullptr);
     }
     // TODO: (penguinliong) Vertex, index buffer transition.
     vkCmdBindVertexBuffers(cmdbuf, 0, (uint32_t)graph_detail.vert_bufs.size(),
