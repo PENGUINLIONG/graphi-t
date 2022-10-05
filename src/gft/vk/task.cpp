@@ -115,7 +115,7 @@ Task create_comp_task(
   pssci.module = shader_mod;
   pssci.pSpecializationInfo = &spec_info;
 
-  VkPipeline pipe = sys::create_comp_pipe(ctxt.dev->dev, pipe_layout->pipe_layout, pssci);
+  sys::PipelineRef pipe = sys::create_comp_pipe(ctxt.dev->dev, pipe_layout->pipe_layout, pssci);
 
   sys::destroy_shader_mod(ctxt.dev->dev, shader_mod);
 
@@ -127,7 +127,7 @@ Task create_comp_task(
 
   log::debug("created compute task '", cfg.label, "'");
   return Task {
-    cfg.label, L_SUBMIT_TYPE_COMPUTE, &ctxt, nullptr, pipe,
+    cfg.label, L_SUBMIT_TYPE_COMPUTE, &ctxt, nullptr, std::move(pipe),
     cfg.workgrp_size, std::move(rsc_detail)
   };
 }
@@ -198,7 +198,7 @@ Task create_graph_task(
     pssci.module = frag_shader_mod;
   }
 
-  VkPipeline pipe = sys::create_graph_pipe(ctxt.dev->dev,
+  sys::PipelineRef pipe = sys::create_graph_pipe(ctxt.dev->dev,
     pipe_layout->pipe_layout, pass.pass, pass.width, pass.height, piasci, prsci,
     psscis);
 
@@ -213,7 +213,7 @@ Task create_graph_task(
 
   log::debug("created graphics task '", cfg.label, "'");
   return Task {
-    cfg.label, L_SUBMIT_TYPE_GRAPHICS, &ctxt, &pass, pipe, {},
+    cfg.label, L_SUBMIT_TYPE_GRAPHICS, &ctxt, &pass, std::move(pipe), {},
     std::move(rsc_detail)
   };
 }

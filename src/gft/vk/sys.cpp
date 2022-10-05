@@ -226,7 +226,7 @@ void destroy_shader_mod(VkDevice dev, VkShaderModule shader_mod) {
 
 
 // VkPipeline
-VkPipeline create_comp_pipe(
+sys::Pipeline create_comp_pipe(
   VkDevice dev,
   VkPipelineLayout pipe_layout,
   const VkPipelineShaderStageCreateInfo& pssci
@@ -236,12 +236,9 @@ VkPipeline create_comp_pipe(
   cpci.stage = pssci;
   cpci.layout = pipe_layout;
 
-  VkPipeline pipe;
-  VK_ASSERT << vkCreateComputePipelines(dev, VK_NULL_HANDLE, 1, &cpci,
-    nullptr, &pipe);
-  return pipe;
+  return sys::Pipeline::create(dev, &cpci);
 }
-VkPipeline create_graph_pipe(
+sys::Pipeline create_graph_pipe(
   VkDevice dev,
   VkPipelineLayout pipe_layout,
   VkRenderPass pass,
@@ -334,13 +331,7 @@ VkPipeline create_graph_pipe(
   gpci.renderPass = pass;
   gpci.subpass = 0;
 
-  VkPipeline pipe;
-  VK_ASSERT << vkCreateGraphicsPipelines(dev, VK_NULL_HANDLE, 1, &gpci,
-    nullptr, &pipe);
-  return pipe;
-}
-void destroy_pipe(VkDevice dev, VkPipeline pipe) {
-  vkDestroyPipeline(dev, pipe, nullptr);
+  return sys::Pipeline::create(dev, &gpci);
 }
 
 

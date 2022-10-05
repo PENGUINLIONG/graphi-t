@@ -181,6 +181,35 @@ struct PipelineLayout {
 };
 typedef std::shared_ptr<PipelineLayout> PipelineLayoutRef;
 
+struct Pipeline {
+  typedef Pipeline Self;
+  VkDevice dev;
+  VkPipeline pipe;
+  bool should_destroy;
+
+  Pipeline(VkDevice dev, VkPipeline pipe, bool should_destroy) :
+    dev(dev), pipe(pipe), should_destroy(should_destroy) {}
+
+  operator VkPipeline() {
+    return pipe;
+  }
+
+  static std::shared_ptr<Pipeline> create(VkDevice dev, const VkComputePipelineCreateInfo* cpci) {
+    VkPipeline pipe = VK_NULL_HANDLE;
+    VK_ASSERT << vkCreateComputePipelines(dev, VK_NULL_HANDLE, 1, cpci, nullptr, &pipe);
+    return std::make_shared<Pipeline>(dev, pipe, true);
+  }
+  static std::shared_ptr<Pipeline> create(VkDevice dev, const VkGraphicsPipelineCreateInfo* gpci) {
+    VkPipeline pipe = VK_NULL_HANDLE;
+    VK_ASSERT << vkCreateGraphicsPipelines(dev, VK_NULL_HANDLE, 1, gpci, nullptr, &pipe);
+    return std::make_shared<Pipeline>(dev, pipe, true);
+  }
+  void destroy() {
+    vkDestroyPipeline(dev, pipe, nullptr);
+  }
+};
+typedef std::shared_ptr<Pipeline> PipelineRef;
+
 struct Fence {
   typedef Fence Self;
   VkDevice dev;

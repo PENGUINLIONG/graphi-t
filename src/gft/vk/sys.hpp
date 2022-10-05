@@ -62,12 +62,12 @@ extern VkShaderModule create_shader_mod(
 extern void destroy_shader_mod(VkDevice dev, VkShaderModule shader_mod);
 
 // VkPipeline
-extern VkPipeline create_comp_pipe(
+extern sys::Pipeline create_comp_pipe(
   VkDevice dev,
   VkPipelineLayout pipe_layout,
   const VkPipelineShaderStageCreateInfo& pssci
 );
-extern VkPipeline create_graph_pipe(
+extern sys::Pipeline create_graph_pipe(
   VkDevice dev,
   VkPipelineLayout pipe_layout,
   VkRenderPass pass,
@@ -77,7 +77,6 @@ extern VkPipeline create_graph_pipe(
   const VkPipelineRasterizationStateCreateInfo& prsci,
   const std::array<VkPipelineShaderStageCreateInfo, 2> psscis
 );
-extern void destroy_pipe(VkDevice dev, VkPipeline pipe);
 
 
 } // namespace sys

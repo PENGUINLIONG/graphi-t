@@ -222,7 +222,7 @@ struct Task {
   SubmitType submit_ty;
   const Context* ctxt;
   const RenderPass* pass; // Only for graphics task.
-  VkPipeline pipe;
+  sys::Pipeline pipe;
   DispatchSize workgrp_size; // Only for compute task.
   TaskResourceDetail rsc_detail;
 
