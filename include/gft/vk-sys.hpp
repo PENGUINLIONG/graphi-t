@@ -92,6 +92,60 @@ struct Device {
 };
 typedef std::shared_ptr<Device> DeviceRef;
 
+struct Buffer {
+  typedef Device Self;
+  VmaAllocator allocator;
+  VkBuffer buf;
+  VmaAllocation alloc;
+  bool should_destroy;
+
+  Buffer(VmaAllocator allocator, VkBuffer buf, VmaAllocation alloc, bool should_destroy) :
+    allocator(allocator), buf(buf), alloc(alloc), should_destroy(should_destroy) {}
+  ~Buffer() { destroy(); }
+
+  operator VkBuffer() const {
+    return buf;
+  }
+
+  static std::shared_ptr<Buffer> create(VmaAllocator allocator, const VkBufferCreateInfo* bci, const VmaAllocationCreateInfo* aci) {
+    VkBuffer buf = VK_NULL_HANDLE;
+    VmaAllocation alloc = VK_NULL_HANDLE;
+    VK_ASSERT << vmaCreateBuffer(allocator, bci, aci, &buf, &alloc, nullptr);
+    return std::make_shared<Buffer>(allocator, buf, alloc, true);
+  }
+  void destroy() {
+    vmaDestroyBuffer(allocator, buf, alloc);
+  }
+};
+typedef std::shared_ptr<Buffer> BufferRef;
+
+struct Image {
+  typedef Device Self;
+  VmaAllocator allocator;
+  VkImage img;
+  VmaAllocation alloc;
+  bool should_destroy;
+
+  Image(VmaAllocator allocator, VkImage img, VmaAllocation alloc, bool should_destroy) :
+    allocator(allocator), img(img), alloc(alloc), should_destroy(should_destroy) {}
+  ~Image() { destroy(); }
+
+  operator VkImage() const {
+    return img;
+  }
+
+  static std::shared_ptr<Image> create(VmaAllocator allocator, const VkImageCreateInfo* ici, const VmaAllocationCreateInfo* aci) {
+    VkImage img = VK_NULL_HANDLE;
+    VmaAllocation alloc = VK_NULL_HANDLE;
+    VK_ASSERT << vmaCreateImage(allocator, ici, aci, &img, &alloc, nullptr);
+    return std::make_shared<Image>(allocator, img, alloc, true);
+  }
+  void destroy() {
+    vmaDestroyImage(allocator, img, alloc);
+  }
+};
+typedef std::shared_ptr<Image> ImageRef;
+
 struct Surface {
   typedef Surface Self;
   VkInstance inst;

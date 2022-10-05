@@ -80,26 +80,24 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   ici.initialLayout = layout;
 
   bool is_tile_mem = img_cfg.usage & L_IMAGE_USAGE_TILE_MEMORY_BIT;
-  VkImage img;
-  VmaAllocation alloc;
+  sys::ImageRef img = nullptr;
   VmaAllocationCreateInfo aci {};
   VkResult res = VK_ERROR_OUT_OF_DEVICE_MEMORY;
   if (is_tile_mem) {
     aci.usage = VMA_MEMORY_USAGE_GPU_LAZILY_ALLOCATED;
-    res = vmaCreateImage(ctxt.allocator, &ici, &aci, &img, &alloc, nullptr);
+    img = sys::Image::create(ctxt.allocator, &ici, &aci);
   }
   if (res != VK_SUCCESS) {
     if (is_tile_mem) {
       log::warn("tile-memory is unsupported, fall back to regular memory");
     }
     aci.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    VK_ASSERT <<
-      vmaCreateImage(ctxt.allocator, &ici, &aci, &img, &alloc, nullptr);
+    img = sys::Image::create(ctxt.allocator, &ici, &aci);
   }
 
   VkImageViewCreateInfo ivci {};
   ivci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-  ivci.image = img;
+  ivci.image = img->img;
   ivci.viewType = img_view_ty;
   ivci.format = fmt;
   ivci.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
@@ -117,13 +115,13 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   log::debug("created image '", img_cfg.label, "'");
   uint32_t qfam_idx = ctxt.submit_details.at(init_submit_ty).qfam_idx;
   return Image {
-    &ctxt, alloc, img, img_view, img_cfg, std::move(dyn_detail)
+    &ctxt, std::move(img), img_view, img_cfg, std::move(dyn_detail)
   };
 }
 void destroy_img(Image& img) {
   if (img.img != VK_NULL_HANDLE) {
     vkDestroyImageView(img.ctxt->dev->dev, img.img_view, nullptr);
-    vmaDestroyImage(img.ctxt->allocator, img.img, img.alloc);
+    img.img.reset();
 
     log::debug("destroyed image '", img.img_cfg.label, "'");
     img = {};
@@ -148,11 +146,11 @@ void map_img_mem(
   is.mipLevel = 0;
 
   VkSubresourceLayout sl {};
-  vkGetImageSubresourceLayout(img.img->ctxt->dev->dev, img.img->img, &is, &sl);
+  vkGetImageSubresourceLayout(img.img->ctxt->dev->dev, img.img->img->img, &is, &sl);
   size_t offset = sl.offset;
   size_t size = sl.size;
 
-  VK_ASSERT << vmaMapMemory(img.img->ctxt->allocator, img.img->alloc, &mapped);
+  VK_ASSERT << vmaMapMemory(img.img->ctxt->allocator, img.img->img->alloc, &mapped);
   row_pitch = sl.rowPitch;
 
   auto& dyn_detail = (ImageDynamicDetail&)(img.img->dyn_detail);
@@ -171,7 +169,7 @@ void unmap_img_mem(
   void* mapped
 ) {
   unimplemented();
-  vmaUnmapMemory(img.img->ctxt->allocator, img.img->alloc);
+  vmaUnmapMemory(img.img->ctxt->allocator, img.img->img->alloc);
   log::debug("unmapped image '", img.img->img_cfg.label, "'");
 }
 

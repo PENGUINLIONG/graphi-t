@@ -100,8 +100,7 @@ VkSwapchainKHR _create_swapchain(
     VK_ASSERT << vkCreateImageView(ctxt.dev->dev, &ivci, nullptr, &img_view);
 
     Image out {};
-    out.alloc = {};
-    out.img = img;
+    out.img = std::make_shared<sys::Image>(ctxt.allocator, img, nullptr, false);
     out.img_view = img_view;
     out.img_cfg.label = util::format(cfg.label, " #", i);
     out.img_cfg.width = width;

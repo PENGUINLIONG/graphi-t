@@ -133,8 +133,7 @@ struct BufferDynamicDetail {
 };
 struct Buffer {
   const Context* ctxt; // Lifetime bound.
-  VmaAllocation alloc;
-  VkBuffer buf;
+  sys::BufferRef buf;
   BufferConfig buf_cfg;
   BufferDynamicDetail dyn_detail;
 };
@@ -148,8 +147,7 @@ struct ImageDynamicDetail {
 };
 struct Image {
   const Context* ctxt; // Lifetime bound.
-  VmaAllocation alloc;
-  VkImage img;
+  sys::ImageRef img;
   VkImageView img_view;
   ImageConfig img_cfg;
   ImageDynamicDetail dyn_detail;
@@ -164,8 +162,7 @@ struct DepthImageDynamicDetail {
 };
 struct DepthImage {
   const Context* ctxt; // Lifetime bound.
-  VmaAllocation alloc;
-  VkImage img;
+  sys::ImageRef img;
   VkImageView img_view;
   DepthImageConfig depth_img_cfg;
   DepthImageDynamicDetail dyn_detail;
@@ -247,23 +244,23 @@ struct InvocationTransitionDetail {
 };
 struct InvocationCopyBufferToBufferDetail {
   VkBufferCopy bc;
-  VkBuffer src;
-  VkBuffer dst;
+  sys::BufferRef src;
+  sys::BufferRef dst;
 };
 struct InvocationCopyBufferToImageDetail {
   VkBufferImageCopy bic;
-  VkBuffer src;
-  VkImage dst;
+  sys::BufferRef src;
+  sys::ImageRef dst;
 };
 struct InvocationCopyImageToBufferDetail {
   VkBufferImageCopy bic;
-  VkImage src;
-  VkBuffer dst;
+  sys::ImageRef src;
+  sys::BufferRef dst;
 };
 struct InvocationCopyImageToImageDetail {
   VkImageCopy ic;
-  VkImage src;
-  VkImage dst;
+  sys::ImageRef src;
+  sys::ImageRef dst;
 };
 struct InvocationComputeDetail {
   const Task* task;
@@ -275,9 +272,9 @@ struct InvocationGraphicsDetail {
   const Task* task;
   VkPipelineBindPoint bind_pt;
   sys::DescriptorSetRef desc_set;
-  std::vector<VkBuffer> vert_bufs;
+  std::vector<sys::BufferRef> vert_bufs;
   std::vector<VkDeviceSize> vert_buf_offsets;
-  VkBuffer idx_buf;
+  sys::BufferRef idx_buf;
   VkDeviceSize idx_buf_offset;
   uint32_t ninst;
   uint32_t nvert;

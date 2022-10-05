@@ -22,7 +22,7 @@ void _update_desc_set(
     const BufferView& buf_view = rsc_view.buf_view;
 
     VkDescriptorBufferInfo dbi {};
-    dbi.buffer = buf_view.buf->buf;
+    dbi.buffer = buf_view.buf->buf->buf;
     dbi.offset = buf_view.offset;
     dbi.range = buf_view.size;
     dbis.emplace_back(std::move(dbi));
@@ -463,7 +463,7 @@ Invocation create_graph_invoke(
   }
   out.transit_detail = std::move(transit_detail);
 
-  std::vector<VkBuffer> vert_bufs;
+  std::vector<sys::BufferRef> vert_bufs;
   std::vector<VkDeviceSize> vert_buf_offsets;
   vert_bufs.reserve(cfg.vert_bufs.size());
   vert_buf_offsets.reserve(cfg.vert_bufs.size());
@@ -957,7 +957,7 @@ const BufferView& _transit_rsc(
 
   VkBufferMemoryBarrier bmb {};
   bmb.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-  bmb.buffer = buf_view.buf->buf;
+  bmb.buffer = buf_view.buf->buf->buf;
   bmb.srcAccessMask = src_access;
   bmb.dstAccessMask = dst_access;
   bmb.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -1010,7 +1010,7 @@ const ImageView& _transit_rsc(
 
   VkImageMemoryBarrier imb {};
   imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  imb.image = img_view.img->img;
+  imb.image = img_view.img->img->img;
   imb.srcAccessMask = src_access;
   imb.dstAccessMask = dst_access;
   imb.oldLayout = src_layout;
@@ -1071,7 +1071,7 @@ const DepthImageView& _transit_rsc(
 
   VkImageMemoryBarrier imb {};
   imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  imb.image = depth_img_view.depth_img->img;
+  imb.image = depth_img_view.depth_img->img->img;
   imb.srcAccessMask = src_access;
   imb.dstAccessMask = dst_access;
   imb.oldLayout = src_layout;
@@ -1206,25 +1206,25 @@ std::vector<sys::FenceRef> _record_invoke_impl(
   if (invoke.b2b_detail) {
     const InvocationCopyBufferToBufferDetail& b2b_detail =
       *invoke.b2b_detail;
-    vkCmdCopyBuffer(cmdbuf, b2b_detail.src, b2b_detail.dst, 1, &b2b_detail.bc);
+    vkCmdCopyBuffer(cmdbuf, b2b_detail.src->buf, b2b_detail.dst->buf, 1, &b2b_detail.bc);
     log::debug("applied transfer invocation '", invoke.label, "'");
 
   } else if (invoke.b2i_detail) {
     const InvocationCopyBufferToImageDetail& b2i_detail = *invoke.b2i_detail;
-    vkCmdCopyBufferToImage(cmdbuf, b2i_detail.src, b2i_detail.dst,
+    vkCmdCopyBufferToImage(cmdbuf, b2i_detail.src->buf, b2i_detail.dst->img,
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b2i_detail.bic);
     log::debug("applied transfer invocation '", invoke.label, "'");
 
   } else if (invoke.i2b_detail) {
     const InvocationCopyImageToBufferDetail& i2b_detail = *invoke.i2b_detail;
-    vkCmdCopyImageToBuffer(cmdbuf, i2b_detail.src,
-      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, i2b_detail.dst, 1, &i2b_detail.bic);
+    vkCmdCopyImageToBuffer(cmdbuf, i2b_detail.src->img,
+      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, i2b_detail.dst->buf, 1, &i2b_detail.bic);
     log::debug("applied transfer invocation '", invoke.label, "'");
 
   } else if (invoke.i2i_detail) {
     const InvocationCopyImageToImageDetail& i2i_detail = *invoke.i2i_detail;
-    vkCmdCopyImage(cmdbuf, i2i_detail.src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-      i2i_detail.dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &i2i_detail.ic);
+    vkCmdCopyImage(cmdbuf, i2i_detail.src->img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+      i2i_detail.dst->img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &i2i_detail.ic);
     log::debug("applied transfer invocation '", invoke.label, "'");
 
   } else if (invoke.comp_detail) {
@@ -1244,14 +1244,19 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     const InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
     const Task& task = *graph_detail.task;
 
+    std::vector<VkBuffer> vert_bufs {};
+    for (const auto& vert_buf : graph_detail.vert_bufs) {
+      vert_bufs.emplace_back(vert_buf->buf);
+    }
+
     vkCmdBindPipeline(cmdbuf, graph_detail.bind_pt, task.pipe->pipe);
     if (graph_detail.desc_set->desc_set != VK_NULL_HANDLE) {
       vkCmdBindDescriptorSets(cmdbuf, graph_detail.bind_pt,
         task.rsc_detail.pipe_layout->pipe_layout, 0, 1, &graph_detail.desc_set->desc_set, 0, nullptr);
     }
     // TODO: (penguinliong) Vertex, index buffer transition.
-    vkCmdBindVertexBuffers(cmdbuf, 0, (uint32_t)graph_detail.vert_bufs.size(),
-      graph_detail.vert_bufs.data(), graph_detail.vert_buf_offsets.data());
+    vkCmdBindVertexBuffers(cmdbuf, 0, (uint32_t)vert_bufs.size(),
+      vert_bufs.data(), graph_detail.vert_buf_offsets.data());
     if (invoke.graph_detail->nidx != 0) {
       VkIndexType idx_ty {};
       switch (invoke.graph_detail->idx_ty) {
@@ -1259,7 +1264,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
       case L_INDEX_TYPE_UINT32: idx_ty = VK_INDEX_TYPE_UINT32; break;
       default: panic("unexpected index type");
       }
-      vkCmdBindIndexBuffer(cmdbuf, graph_detail.idx_buf,
+      vkCmdBindIndexBuffer(cmdbuf, graph_detail.idx_buf->buf,
         graph_detail.idx_buf_offset, idx_ty);
       vkCmdDrawIndexed(cmdbuf, graph_detail.nidx, graph_detail.ninst,
         0, 0, 0);
