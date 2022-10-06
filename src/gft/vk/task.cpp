@@ -195,8 +195,8 @@ Task create_graph_task(
   }
 
   sys::PipelineRef pipe = sys::create_graph_pipe(ctxt.dev->dev,
-    pipe_layout->pipe_layout, pass.pass, pass.width, pass.height, piasci, prsci,
-    psscis);
+    pipe_layout->pipe_layout, pass.pass->pass, pass.width, pass.height, piasci,
+    prsci, psscis);
 
   sys::destroy_shader_mod(ctxt.dev->dev, vert_shader_mod);
   sys::destroy_shader_mod(ctxt.dev->dev, frag_shader_mod);

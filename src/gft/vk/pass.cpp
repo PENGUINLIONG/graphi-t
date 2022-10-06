@@ -19,7 +19,7 @@ VkAttachmentStoreOp _get_store_op(AttachmentAccess attm_access) {
   }
   return VK_ATTACHMENT_STORE_OP_DONT_CARE;
 }
-VkRenderPass _create_pass(
+sys::RenderPassRef _create_pass(
   const Context& ctxt,
   const std::vector<AttachmentConfig>& attm_cfgs
 ) {
@@ -95,14 +95,11 @@ VkRenderPass _create_pass(
   rpci.dependencyCount = 0;
   rpci.pDependencies = nullptr;
 
-  VkRenderPass pass;
-  VK_ASSERT << vkCreateRenderPass(ctxt.dev->dev, &rpci, nullptr, &pass);
-
-  return pass;
+  return sys::RenderPass::create(ctxt.dev->dev, &rpci);
 }
 
 RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg) {
-  VkRenderPass pass = _create_pass(ctxt, cfg.attm_cfgs);
+  sys::RenderPassRef pass = _create_pass(ctxt, cfg.attm_cfgs);
 
   VkRect2D viewport {};
   viewport.extent.width = cfg.width;
@@ -128,10 +125,10 @@ RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg) {
   }
 
   log::debug("created render pass '", cfg.label, "'");
-  return RenderPass { &ctxt, cfg.width, cfg.height, pass, cfg, clear_values };
+  return RenderPass { &ctxt, cfg.width, cfg.height, std::move(pass), cfg, clear_values };
 }
 void destroy_pass(RenderPass& pass) {
-  vkDestroyRenderPass(pass.ctxt->dev->dev, pass.pass, nullptr);
+  pass.pass.reset();
   log::debug("destroyed render pass '", pass.pass_cfg.label, "'");
 }
 

@@ -96,7 +96,7 @@ void _update_desc_set(
   vkUpdateDescriptorSets(ctxt.dev->dev, (uint32_t)wdss.size(), wdss.data(), 0,
     nullptr);
 }
-VkFramebuffer _create_framebuf(
+sys::FramebufferRef _create_framebuf(
   const RenderPass& pass,
   const std::vector<ResourceView>& attms
 ) {
@@ -140,17 +140,14 @@ VkFramebuffer _create_framebuf(
 
   VkFramebufferCreateInfo fci {};
   fci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-  fci.renderPass = pass.pass;
+  fci.renderPass = pass.pass->pass;
   fci.attachmentCount = (uint32_t)attm_img_views.size();
   fci.pAttachments = attm_img_views.data();
   fci.width = width;
   fci.height = height;
   fci.layers = 1;
 
-  VkFramebuffer framebuf;
-  VK_ASSERT << vkCreateFramebuffer(pass.ctxt->dev->dev, &fci, nullptr, &framebuf);
-
-  return framebuf;
+  return sys::Framebuffer::create(pass.ctxt->dev->dev, &fci);
 }
 VkQueryPool _create_query_pool(
   const Context& ctxt,
@@ -621,8 +618,8 @@ void destroy_invoke(Invocation& invoke) {
     log::debug("destroyed graphics invocation '", invoke.label, "'");
   }
   if (invoke.pass_detail) {
-    const InvocationRenderPassDetail& pass_detail = *invoke.pass_detail;
-    vkDestroyFramebuffer(ctxt.dev->dev, pass_detail.framebuf, nullptr);
+    InvocationRenderPassDetail& pass_detail = *invoke.pass_detail;
+    pass_detail.framebuf.reset();
     log::debug("destroyed render pass invocation '", invoke.label, "'");
   }
   if (invoke.composite_detail) {
@@ -1282,8 +1279,8 @@ std::vector<sys::FenceRef> _record_invoke_impl(
 
     VkRenderPassBeginInfo rpbi {};
     rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    rpbi.renderPass = pass.pass;
-    rpbi.framebuffer = pass_detail.framebuf;
+    rpbi.renderPass = pass.pass->pass;
+    rpbi.framebuffer = pass_detail.framebuf->framebuf;
     rpbi.renderArea.extent.width = pass.width;
     rpbi.renderArea.extent.height = pass.height;
     rpbi.clearValueCount = (uint32_t)pass.clear_values.size();

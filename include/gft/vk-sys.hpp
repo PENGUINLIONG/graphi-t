@@ -292,6 +292,56 @@ struct Pipeline {
 };
 typedef std::shared_ptr<Pipeline> PipelineRef;
 
+struct RenderPass {
+  typedef RenderPass Self;
+  VkDevice dev;
+  VkRenderPass pass;
+  bool should_destroy;
+
+  RenderPass(VkDevice dev, VkRenderPass pass, bool should_destroy) :
+    dev(dev), pass(pass), should_destroy(should_destroy) {}
+  ~RenderPass() { destroy(); }
+
+  operator VkRenderPass() {
+    return pass;
+  }
+
+  static std::shared_ptr<RenderPass> create(VkDevice dev, const VkRenderPassCreateInfo* rpci) {
+    VkRenderPass pass = VK_NULL_HANDLE;
+    VK_ASSERT << vkCreateRenderPass(dev, rpci, nullptr, &pass);
+    return std::make_shared<RenderPass>(dev, pass, true);
+  }
+  void destroy() {
+    vkDestroyRenderPass(dev, pass, nullptr);
+  }
+};
+typedef std::shared_ptr<RenderPass> RenderPassRef;
+
+struct Framebuffer {
+  typedef Framebuffer Self;
+  VkDevice dev;
+  VkFramebuffer framebuf;
+  bool should_destroy;
+
+  Framebuffer(VkDevice dev, VkFramebuffer framebuf, bool should_destroy) :
+    dev(dev), framebuf(framebuf), should_destroy(should_destroy) {}
+  ~Framebuffer() { destroy(); }
+
+  operator VkFramebuffer() {
+    return framebuf;
+  }
+
+  static std::shared_ptr<Framebuffer> create(VkDevice dev, const VkFramebufferCreateInfo* fci) {
+    VkFramebuffer framebuf = VK_NULL_HANDLE;
+    VK_ASSERT << vkCreateFramebuffer(dev, fci, nullptr, &framebuf);
+    return std::make_shared<Framebuffer>(dev, framebuf, true);
+  }
+  void destroy() {
+    vkDestroyFramebuffer(dev, framebuf, nullptr);
+  }
+};
+typedef std::shared_ptr<Framebuffer> FramebufferRef;
+
 struct DescriptorPool {
   typedef DescriptorPool Self;
   VkDevice dev;

@@ -189,7 +189,7 @@ struct RenderPass {
   const Context* ctxt;
   uint32_t width;
   uint32_t height;
-  VkRenderPass pass;
+  sys::RenderPassRef pass;
   RenderPassConfig pass_cfg;
   std::vector<VkClearValue> clear_values;
 };
@@ -283,7 +283,7 @@ struct InvocationGraphicsDetail {
 };
 struct InvocationRenderPassDetail {
   const RenderPass* pass;
-  VkFramebuffer framebuf;
+  sys::FramebufferRef framebuf;
   bool is_baked;
   std::vector<const Invocation*> subinvokes;
 };
