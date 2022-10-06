@@ -635,8 +635,6 @@ void destroy_invoke(Invocation& invoke) {
   }
 
   if (invoke.bake_detail) {
-    const InvocationBakingDetail& bake_detail = *invoke.bake_detail;
-    vkDestroyCommandPool(ctxt.dev->dev, bake_detail.cmd_pool, nullptr);
     log::debug("destroyed baking artifacts");
   }
 
@@ -1189,7 +1187,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
   // If the invocation has been baked, simply inline the baked secondary command
   // buffer.
   if (invoke.bake_detail) {
-    vkCmdExecuteCommands(cmdbuf, 1, &invoke.bake_detail->cmdbuf);
+    vkCmdExecuteCommands(cmdbuf, 1, &invoke.bake_detail->cmdbuf->cmdbuf);
     return {};
   }
 
@@ -1390,8 +1388,8 @@ void bake_invoke(Invocation& invoke) {
   L_ASSERT(submit_detail.signal_sema == VK_NULL_HANDLE);
 
   InvocationBakingDetail bake_detail {};
-  bake_detail.cmd_pool = submit_detail.cmd_pool->cmd_pool;
-  bake_detail.cmdbuf = submit_detail.cmdbuf->cmdbuf;
+  bake_detail.cmd_pool = submit_detail.cmd_pool;
+  bake_detail.cmdbuf = submit_detail.cmdbuf;
 
   invoke.bake_detail =
     std::make_unique<InvocationBakingDetail>(std::move(bake_detail));

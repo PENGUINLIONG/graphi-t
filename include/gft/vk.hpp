@@ -294,8 +294,8 @@ struct InvocationCompositeDetail {
   std::vector<const Invocation*> subinvokes;
 };
 struct InvocationBakingDetail {
-  VkCommandPool cmd_pool;
-  VkCommandBuffer cmdbuf;
+  sys::CommandPoolRef cmd_pool;
+  sys::CommandBufferRef cmdbuf;
 };
 struct Invocation {
   std::string label;
