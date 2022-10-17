@@ -96,59 +96,6 @@ void _update_desc_set(
   vkUpdateDescriptorSets(ctxt.dev->dev, (uint32_t)wdss.size(), wdss.data(), 0,
     nullptr);
 }
-sys::FramebufferRef _create_framebuf(
-  const RenderPass& pass,
-  const std::vector<ResourceView>& attms
-) {
-  const RenderPassConfig& pass_cfg = pass.pass_cfg;
-
-  L_ASSERT(pass_cfg.attm_cfgs.size() == attms.size(),
-    "number of provided attachments mismatches render pass requirement");
-  std::vector<VkImageView> attm_img_views;
-
-  uint32_t width = pass_cfg.width;
-  uint32_t height = pass_cfg.height;
-
-  for (size_t i = 0; i < attms.size(); ++i) {
-    const AttachmentConfig& attm_cfg = pass_cfg.attm_cfgs[i];
-    const ResourceView& attm = attms[i];
-
-    switch (attm_cfg.attm_ty) {
-    case L_ATTACHMENT_TYPE_COLOR:
-    {
-      const Image& img = *attm.img_view.img;
-      const ImageConfig& img_cfg = img.img_cfg;
-      L_ASSERT(attm.rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE);
-      L_ASSERT(img_cfg.width == width && img_cfg.height == height,
-        "color attachment size mismatches framebuffer size");
-      attm_img_views.emplace_back(img.img_view->img_view);
-      break;
-    }
-    case L_ATTACHMENT_TYPE_DEPTH:
-    {
-      const DepthImage& depth_img = *attm.depth_img_view.depth_img;
-      const DepthImageConfig& depth_img_cfg = depth_img.depth_img_cfg;
-      L_ASSERT(attm.rsc_view_ty == L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE);
-      L_ASSERT(depth_img_cfg.width == width && depth_img_cfg.height == height,
-        "depth attachment size mismatches framebuffer size");
-      attm_img_views.emplace_back(depth_img.img_view->img_view);
-      break;
-    }
-    default: panic("unexpected attachment type");
-    }
-  }
-
-  VkFramebufferCreateInfo fci {};
-  fci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-  fci.renderPass = pass.pass->pass;
-  fci.attachmentCount = (uint32_t)attm_img_views.size();
-  fci.pAttachments = attm_img_views.data();
-  fci.width = width;
-  fci.height = height;
-  fci.layers = 1;
-
-  return sys::Framebuffer::create(pass.ctxt->dev->dev, &fci);
-}
 VkQueryPool _create_query_pool(
   const Context& ctxt,
   VkQueryType query_ty,
@@ -528,7 +475,7 @@ Invocation create_pass_invoke(
 
   InvocationRenderPassDetail pass_detail {};
   pass_detail.pass = &pass;
-  pass_detail.framebuf = _create_framebuf(pass, cfg.attms);
+  pass_detail.framebuf = const_cast<RenderPass&>(pass).acquire_framebuf(cfg.attms);
   // TODO: (penguinliong) Command buffer baking.
   pass_detail.is_baked = false;
   pass_detail.subinvokes = cfg.invokes;
@@ -619,7 +566,7 @@ void destroy_invoke(Invocation& invoke) {
   }
   if (invoke.pass_detail) {
     InvocationRenderPassDetail& pass_detail = *invoke.pass_detail;
-    pass_detail.framebuf.reset();
+    pass_detail.framebuf.release();
     log::debug("destroyed render pass invocation '", invoke.label, "'");
   }
   if (invoke.composite_detail) {
@@ -1280,11 +1227,21 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     VkRenderPassBeginInfo rpbi {};
     rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
     rpbi.renderPass = pass.pass->pass;
-    rpbi.framebuffer = pass_detail.framebuf->framebuf;
+    rpbi.framebuffer = pass_detail.framebuf.value()->framebuf;
     rpbi.renderArea.extent.width = pass.width;
     rpbi.renderArea.extent.height = pass.height;
     rpbi.clearValueCount = (uint32_t)pass.clear_values.size();
     rpbi.pClearValues = pass.clear_values.data();
+
+    std::vector<VkImageView> img_views(pass_detail.attms.size());
+    for (size_t i = 0; i < pass_detail.attms.size(); ++i) {
+      img_views.at(i) = pass_detail.attms.at(i)->img_view;
+    }
+
+    VkRenderPassAttachmentBeginInfo rpabi {};
+    rpabi.attachmentCount = img_views.size();
+    rpabi.pAttachments = img_views.data();
+
     vkCmdBeginRenderPass(cmdbuf, &rpbi, sc);
     log::debug("render pass invocation '", invoke.label, "' began");
 

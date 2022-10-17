@@ -11,6 +11,7 @@
 #define HAL_IMPL_NAMESPACE vk
 #include "gft/hal/scoped-hal.hpp"
 #include "gft/vk-sys.hpp"
+#include "gft/pool.hpp"
 
 namespace liong {
 namespace vk {
@@ -185,6 +186,36 @@ struct Swapchain {
 
 
 
+struct FramebufferKey {
+  VkRenderPass pass;
+  std::vector<VkImageView> img_views;
+
+  static FramebufferKey create(
+    const RenderPass& pass,
+    const std::vector<ResourceView>& rsc_views);
+
+  friend inline bool operator<(const FramebufferKey& a, const FramebufferKey& b) {
+    if (a.pass < b.pass) {
+      return true;
+    }
+    if (a.img_views.size() < b.img_views.size()) {
+      return true;
+    }
+    for (size_t i = 0; i < a.img_views.size(); ++i) {
+      VkImageView bx = VK_NULL_HANDLE;
+      if (i < b.img_views.size()) {
+        bx = b.img_views.at(i);
+      }
+      if (a.img_views.at(i) < bx) {
+        return true;
+      }
+    }
+    return false;
+  }
+};
+
+typedef pool::Pool<FramebufferKey, sys::FramebufferRef> FramebufferPool;
+typedef pool::PoolItem<FramebufferKey, sys::FramebufferRef> FramebufferPoolItem;
 struct RenderPass {
   const Context* ctxt;
   uint32_t width;
@@ -192,6 +223,9 @@ struct RenderPass {
   sys::RenderPassRef pass;
   RenderPassConfig pass_cfg;
   std::vector<VkClearValue> clear_values;
+
+  FramebufferPool framebuf_pool;
+  FramebufferPoolItem acquire_framebuf(const std::vector<ResourceView>& attms);
 };
 
 
@@ -283,7 +317,8 @@ struct InvocationGraphicsDetail {
 };
 struct InvocationRenderPassDetail {
   const RenderPass* pass;
-  sys::FramebufferRef framebuf;
+  FramebufferPoolItem framebuf;
+  std::vector<sys::ImageViewRef> attms;
   bool is_baked;
   std::vector<const Invocation*> subinvokes;
 };
