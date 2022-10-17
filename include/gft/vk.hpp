@@ -19,13 +19,13 @@ namespace vk {
 inline VkFormat fmt2vk(fmt::Format fmt, fmt::ColorSpace cspace) {
   using namespace fmt;
   switch (fmt) {
-  case L_FORMAT_R8G8B8A8_UNORM_PACK32:
+  case L_FORMAT_R8G8B8A8_UNORM:
     if (cspace == L_COLOR_SPACE_SRGB) {
       return VK_FORMAT_R8G8B8A8_SRGB;
     } else {
       return VK_FORMAT_R8G8B8A8_UNORM;
     }
-  case L_FORMAT_B8G8R8A8_UNORM_PACK32:
+  case L_FORMAT_B8G8R8A8_UNORM:
     if (cspace == L_COLOR_SPACE_SRGB) {
       return VK_FORMAT_B8G8R8A8_SRGB;
     } else {

@@ -636,7 +636,8 @@ struct SwapchainBuilder {
   ) : parent(ctxt), inner() {
     inner.label = label;
     inner.nimg = 3;
-    inner.fmt = fmt::L_FORMAT_B8G8R8A8_UNORM_PACK32;
+    inner.fmts.emplace_back(fmt::L_FORMAT_B8G8R8A8_UNORM);
+    inner.fmts.emplace_back(fmt::L_FORMAT_R8G8B8A8_UNORM);
     inner.cspace = fmt::L_COLOR_SPACE_SRGB;
   }
 
@@ -645,7 +646,7 @@ struct SwapchainBuilder {
     return *this;
   }
   inline Self& fmt(fmt::Format fmt) {
-    inner.fmt = fmt;
+    inner.fmts.emplace_back(fmt);
     return *this;
   }
   inline Self& cspace(fmt::ColorSpace cspace) {

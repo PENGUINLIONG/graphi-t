@@ -10,8 +10,9 @@ namespace liong {
 namespace fmt {
 
 enum Format {
-  L_FORMAT_R8G8B8A8_UNORM_PACK32,
-  L_FORMAT_B8G8R8A8_UNORM_PACK32,
+  L_FORMAT_UNDEFINED,
+  L_FORMAT_R8G8B8A8_UNORM,
+  L_FORMAT_B8G8R8A8_UNORM,
   L_FORMAT_B10G11R11_UFLOAT_PACK32,
   L_FORMAT_R16G16B16A16_SFLOAT,
   L_FORMAT_R32_SFLOAT,
@@ -20,6 +21,7 @@ enum Format {
 };
 
 enum DepthFormat {
+  L_DEPTH_FORMAT_UNDEFINED,
   L_DEPTH_FORMAT_D16_UNORM,
   L_DEPTH_FORMAT_D32_SFLOAT,
 };
@@ -28,8 +30,8 @@ enum DepthFormat {
 
 constexpr size_t get_fmt_size(Format fmt) {
   return
-    fmt == L_FORMAT_R8G8B8A8_UNORM_PACK32 ? 4 :
-    fmt == L_FORMAT_B8G8R8A8_UNORM_PACK32 ? 4 :
+    fmt == L_FORMAT_R8G8B8A8_UNORM ? 4 :
+    fmt == L_FORMAT_B8G8R8A8_UNORM ? 4 :
     fmt == L_FORMAT_B10G11R11_UFLOAT_PACK32 ? 4 :
     fmt == L_FORMAT_R16G16B16A16_SFLOAT ? 8 :
     fmt == L_FORMAT_R32_SFLOAT ? 4 :
@@ -51,7 +53,7 @@ template<Format Fmt>
 struct FormatCodec {};
 
 template<>
-struct FormatCodec<L_FORMAT_R8G8B8A8_UNORM_PACK32> {
+struct FormatCodec<L_FORMAT_R8G8B8A8_UNORM> {
   static void encode(const glm::vec4* src, const void* dst, uint32_t npx) {
     for (uint32_t i = 0; i < npx; ++i) {
       glm::vec4 vec = src[i];
