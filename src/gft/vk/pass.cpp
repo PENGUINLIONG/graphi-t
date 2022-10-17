@@ -19,7 +19,7 @@ VkAttachmentStoreOp _get_store_op(AttachmentAccess attm_access) {
   }
   return VK_ATTACHMENT_STORE_OP_DONT_CARE;
 }
-VkRenderPass _create_pass(
+sys::RenderPassRef _create_pass(
   const Context& ctxt,
   const std::vector<AttachmentConfig>& attm_cfgs
 ) {
@@ -95,14 +95,48 @@ VkRenderPass _create_pass(
   rpci.dependencyCount = 0;
   rpci.pDependencies = nullptr;
 
-  VkRenderPass pass;
-  VK_ASSERT << vkCreateRenderPass(ctxt.dev, &rpci, nullptr, &pass);
+  return sys::RenderPass::create(ctxt.dev->dev, &rpci);
+}
 
-  return pass;
+sys::FramebufferRef _create_framebuf(
+  const RenderPass& pass,
+  const std::vector<ResourceView>& attms
+) {
+  const RenderPassConfig& pass_cfg = pass.pass_cfg;
+  L_ASSERT(pass_cfg.attm_cfgs.size() == attms.size());
+
+  uint32_t width = pass_cfg.width;
+  uint32_t height = pass_cfg.height;
+
+  std::vector<VkImageView> img_views(attms.size());
+  for (size_t i = 0; i < attms.size(); ++i) {
+    const ResourceView& attm = attms.at(i);
+    switch (attm.rsc_view_ty) {
+    case L_RESOURCE_VIEW_TYPE_IMAGE:
+      img_views.at(i) = *attm.img_view.img->img_view;
+      break;
+    case L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE:
+      img_views.at(i) = *attm.depth_img_view.depth_img->img_view;
+      break;
+    default:
+      L_PANIC("unexpected attachment resource view type");
+    }
+  }
+
+  VkFramebufferCreateInfo fci {};
+  fci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+  fci.attachmentCount = img_views.size();
+  fci.pAttachments = img_views.data();
+  fci.renderPass = pass.pass->pass;
+  fci.width = width;
+  fci.height = height;
+  fci.layers = 1;
+
+  return sys::Framebuffer::create(pass.ctxt->dev->dev, &fci);
 }
 
 RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg) {
-  VkRenderPass pass = _create_pass(ctxt, cfg.attm_cfgs);
+  sys::RenderPassRef pass = _create_pass(ctxt, cfg.attm_cfgs);
 
   VkRect2D viewport {};
   viewport.extent.width = cfg.width;
@@ -128,11 +162,43 @@ RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg) {
   }
 
   log::debug("created render pass '", cfg.label, "'");
-  return RenderPass { &ctxt, cfg.width, cfg.height, pass, cfg, clear_values };
+  return RenderPass { &ctxt, cfg.width, cfg.height, std::move(pass), cfg, clear_values };
 }
 void destroy_pass(RenderPass& pass) {
-  vkDestroyRenderPass(pass.ctxt->dev, pass.pass, nullptr);
+  pass.pass.reset();
   log::debug("destroyed render pass '", pass.pass_cfg.label, "'");
+}
+
+FramebufferKey FramebufferKey::create(
+  const RenderPass& pass,
+  const std::vector<ResourceView>& rsc_views
+) {
+  const RenderPassConfig& pass_cfg = pass.pass_cfg;
+  FramebufferKey key {};
+  key.pass = *pass.pass;
+  for (const auto& rsc_view : rsc_views) {
+    switch (rsc_view.rsc_view_ty) {
+    case L_RESOURCE_VIEW_TYPE_IMAGE:
+      key.img_views.emplace_back(rsc_view.img_view.img->img_view->img_view);
+      break;
+    case L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE:
+      key.img_views.emplace_back(rsc_view.depth_img_view.depth_img->img_view->img_view);
+      break;
+    default: L_PANIC("unsupported resource type as an attachment");
+    }
+  }
+  return key;
+}
+
+FramebufferPoolItem RenderPass::acquire_framebuf(
+  const std::vector<ResourceView>& attms
+) {
+  FramebufferKey key = FramebufferKey::create(*this, attms);
+  if (framebuf_pool.has_free_item(key)) {
+    return framebuf_pool.acquire(std::move(key));
+  } else {
+    return framebuf_pool.create(std::move(key), _create_framebuf(*this, attms));
+  }
 }
 
 } // namespace vk

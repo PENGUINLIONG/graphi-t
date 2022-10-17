@@ -8,7 +8,7 @@ namespace vk {
 namespace sys {
 
 // VkInstance
-VkInstance create_inst(uint32_t api_ver) {
+sys::InstanceRef create_inst(uint32_t api_ver) {
   VkApplicationInfo app_info {};
   app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
   app_info.apiVersion = api_ver;
@@ -57,13 +57,7 @@ VkInstance create_inst(uint32_t api_ver) {
   ici.ppEnabledExtensionNames = inst_ext_names.data();
   ici.enabledLayerCount = (uint32_t)layers.size();
   ici.ppEnabledLayerNames = layers.data();
-
-  VkInstance inst;
-  VK_ASSERT << vkCreateInstance(&ici, nullptr, &inst);
-  return inst;
-}
-void destroy_inst(VkInstance inst) {
-  vkDestroyInstance(inst, nullptr);
+  return sys::Instance::create(&ici);
 }
 
 
@@ -125,7 +119,7 @@ std::vector<VkQueueFamilyProperties> collect_qfam_props(
 
 
 // VkDevice
-VkDevice create_dev(
+sys::DeviceRef create_dev(
   VkPhysicalDevice physdev,
   const std::vector<VkDeviceQueueCreateInfo> dqcis,
   const std::vector<const char*> enabled_ext_names,
@@ -139,12 +133,7 @@ VkDevice create_dev(
   dci.enabledExtensionCount = (uint32_t)enabled_ext_names.size();
   dci.ppEnabledExtensionNames = enabled_ext_names.data();
 
-  VkDevice dev;
-  VK_ASSERT << vkCreateDevice(physdev, &dci, nullptr, &dev);
-  return dev;
-}
-void destroy_dev(VkDevice dev) {
-  vkDestroyDevice(dev, nullptr);
+  return sys::Device::create(physdev, &dci);
 }
 VkQueue get_dev_queue(VkDevice dev, uint32_t qfam_idx, uint32_t queue_idx) {
   VkQueue queue;
@@ -188,7 +177,7 @@ void destroy_sampler(VkDevice dev, VkSampler sampler) {
 
 
 // VkDescriptorSetLayout
-VkDescriptorSetLayout create_desc_set_layout(
+sys::DescriptorSetLayoutRef create_desc_set_layout(
   VkDevice dev,
   const std::vector<VkDescriptorSetLayoutBinding>& dslbs
 ) {
@@ -197,22 +186,12 @@ VkDescriptorSetLayout create_desc_set_layout(
   dslci.bindingCount = (uint32_t)dslbs.size();
   dslci.pBindings = dslbs.data();
 
-  VkDescriptorSetLayout desc_set_layout;
-  VK_ASSERT <<
-    vkCreateDescriptorSetLayout(dev, &dslci, nullptr, &desc_set_layout);
-
-  return desc_set_layout;
-}
-void destroy_desc_set_layout(
-  VkDevice dev,
-  VkDescriptorSetLayout desc_set_layout
-) {
-  vkDestroyDescriptorSetLayout(dev, desc_set_layout, nullptr);
+  return sys::DescriptorSetLayout::create(dev, &dslci);
 }
 
 
 // VkPipelineLayout
-VkPipelineLayout create_pipe_layout(
+sys::PipelineLayoutRef create_pipe_layout(
   VkDevice dev,
   VkDescriptorSetLayout desc_set_layout
 ) {
@@ -221,12 +200,7 @@ VkPipelineLayout create_pipe_layout(
   plci.setLayoutCount = 1;
   plci.pSetLayouts = &desc_set_layout;
 
-  VkPipelineLayout pipe_layout;
-  VK_ASSERT << vkCreatePipelineLayout(dev, &plci, nullptr, &pipe_layout);
-  return pipe_layout;
-}
-void destroy_pipe_layout(VkDevice dev, VkPipelineLayout pipe_layout) {
-  vkDestroyPipelineLayout(dev, pipe_layout, nullptr);
+  return sys::PipelineLayout::create(dev, &plci);
 }
 
 
@@ -252,7 +226,7 @@ void destroy_shader_mod(VkDevice dev, VkShaderModule shader_mod) {
 
 
 // VkPipeline
-VkPipeline create_comp_pipe(
+sys::PipelineRef create_comp_pipe(
   VkDevice dev,
   VkPipelineLayout pipe_layout,
   const VkPipelineShaderStageCreateInfo& pssci
@@ -262,12 +236,9 @@ VkPipeline create_comp_pipe(
   cpci.stage = pssci;
   cpci.layout = pipe_layout;
 
-  VkPipeline pipe;
-  VK_ASSERT << vkCreateComputePipelines(dev, VK_NULL_HANDLE, 1, &cpci,
-    nullptr, &pipe);
-  return pipe;
+  return sys::Pipeline::create(dev, &cpci);
 }
-VkPipeline create_graph_pipe(
+sys::PipelineRef create_graph_pipe(
   VkDevice dev,
   VkPipelineLayout pipe_layout,
   VkRenderPass pass,
@@ -360,13 +331,7 @@ VkPipeline create_graph_pipe(
   gpci.renderPass = pass;
   gpci.subpass = 0;
 
-  VkPipeline pipe;
-  VK_ASSERT << vkCreateGraphicsPipelines(dev, VK_NULL_HANDLE, 1, &gpci,
-    nullptr, &pipe);
-  return pipe;
-}
-void destroy_pipe(VkDevice dev, VkPipeline pipe) {
-  vkDestroyPipeline(dev, pipe, nullptr);
+  return sys::Pipeline::create(dev, &gpci);
 }
 
 

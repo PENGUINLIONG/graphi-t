@@ -4,35 +4,6 @@
 namespace liong {
 namespace vk {
 
-VkDescriptorPool _create_desc_pool(
-  const Context& ctxt,
-  const std::vector<VkDescriptorPoolSize>& desc_pool_sizes
-) {
-  VkDescriptorPoolCreateInfo dpci {};
-  dpci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-  dpci.poolSizeCount = static_cast<uint32_t>(desc_pool_sizes.size());
-  dpci.pPoolSizes = desc_pool_sizes.data();
-  dpci.maxSets = 1;
-
-  VkDescriptorPool desc_pool;
-  VK_ASSERT << vkCreateDescriptorPool(ctxt.dev, &dpci, nullptr, &desc_pool);
-  return desc_pool;
-}
-VkDescriptorSet _alloc_desc_set(
-  const Context& ctxt,
-  VkDescriptorPool desc_pool,
-  VkDescriptorSetLayout desc_set_layout
-) {
-  VkDescriptorSetAllocateInfo dsai {};
-  dsai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-  dsai.descriptorPool = desc_pool;
-  dsai.descriptorSetCount = 1;
-  dsai.pSetLayouts = &desc_set_layout;
-
-  VkDescriptorSet desc_set;
-  VK_ASSERT << vkAllocateDescriptorSets(ctxt.dev, &dsai, &desc_set);
-  return desc_set;
-}
 void _update_desc_set(
   const Context& ctxt,
   VkDescriptorSet desc_set,
@@ -51,7 +22,7 @@ void _update_desc_set(
     const BufferView& buf_view = rsc_view.buf_view;
 
     VkDescriptorBufferInfo dbi {};
-    dbi.buffer = buf_view.buf->buf;
+    dbi.buffer = buf_view.buf->buf->buf;
     dbi.offset = buf_view.offset;
     dbi.range = buf_view.size;
     dbis.emplace_back(std::move(dbi));
@@ -66,7 +37,7 @@ void _update_desc_set(
     if (rsc_view.rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE) {
       const ImageView& img_view = rsc_view.img_view;
       dii.sampler = ctxt.img_samplers.at(img_view.sampler);
-      dii.imageView = img_view.img->img_view;
+      dii.imageView = img_view.img->img_view->img_view;
       dii.imageLayout = layout;
       diis.emplace_back(std::move(dii));
 
@@ -76,7 +47,7 @@ void _update_desc_set(
       const DepthImageView& depth_img_view = rsc_view.depth_img_view;
 
       dii.sampler = ctxt.depth_img_samplers.at(depth_img_view.sampler);
-      dii.imageView = depth_img_view.depth_img->img_view;
+      dii.imageView = depth_img_view.depth_img->img_view->img_view;
       dii.imageLayout = layout;
       diis.emplace_back(std::move(dii));
 
@@ -122,64 +93,8 @@ void _update_desc_set(
     wdss.emplace_back(std::move(wds));
   }
 
-  vkUpdateDescriptorSets(ctxt.dev, (uint32_t)wdss.size(), wdss.data(), 0,
+  vkUpdateDescriptorSets(ctxt.dev->dev, (uint32_t)wdss.size(), wdss.data(), 0,
     nullptr);
-}
-VkFramebuffer _create_framebuf(
-  const RenderPass& pass,
-  const std::vector<ResourceView>& attms
-) {
-  const RenderPassConfig& pass_cfg = pass.pass_cfg;
-
-  L_ASSERT(pass_cfg.attm_cfgs.size() == attms.size(),
-    "number of provided attachments mismatches render pass requirement");
-  std::vector<VkImageView> attm_img_views;
-
-  uint32_t width = pass_cfg.width;
-  uint32_t height = pass_cfg.height;
-
-  for (size_t i = 0; i < attms.size(); ++i) {
-    const AttachmentConfig& attm_cfg = pass_cfg.attm_cfgs[i];
-    const ResourceView& attm = attms[i];
-
-    switch (attm_cfg.attm_ty) {
-    case L_ATTACHMENT_TYPE_COLOR:
-    {
-      const Image& img = *attm.img_view.img;
-      const ImageConfig& img_cfg = img.img_cfg;
-      L_ASSERT(attm.rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE);
-      L_ASSERT(img_cfg.width == width && img_cfg.height == height,
-        "color attachment size mismatches framebuffer size");
-      attm_img_views.emplace_back(img.img_view);
-      break;
-    }
-    case L_ATTACHMENT_TYPE_DEPTH:
-    {
-      const DepthImage& depth_img = *attm.depth_img_view.depth_img;
-      const DepthImageConfig& depth_img_cfg = depth_img.depth_img_cfg;
-      L_ASSERT(attm.rsc_view_ty == L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE);
-      L_ASSERT(depth_img_cfg.width == width && depth_img_cfg.height == height,
-        "depth attachment size mismatches framebuffer size");
-      attm_img_views.emplace_back(depth_img.img_view);
-      break;
-    }
-    default: panic("unexpected attachment type");
-    }
-  }
-
-  VkFramebufferCreateInfo fci {};
-  fci.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
-  fci.renderPass = pass.pass;
-  fci.attachmentCount = (uint32_t)attm_img_views.size();
-  fci.pAttachments = attm_img_views.data();
-  fci.width = width;
-  fci.height = height;
-  fci.layers = 1;
-
-  VkFramebuffer framebuf;
-  VK_ASSERT << vkCreateFramebuffer(pass.ctxt->dev, &fci, nullptr, &framebuf);
-
-  return framebuf;
 }
 VkQueryPool _create_query_pool(
   const Context& ctxt,
@@ -192,7 +107,7 @@ VkQueryPool _create_query_pool(
   qpci.queryCount = nquery;
 
   VkQueryPool query_pool;
-  VK_ASSERT << vkCreateQueryPool(ctxt.dev, &qpci, nullptr, &query_pool);
+  VK_ASSERT << vkCreateQueryPool(ctxt.dev->dev, &qpci, nullptr, &query_pool);
 
   return query_pool;
 }
@@ -455,10 +370,9 @@ Invocation create_comp_invoke(
   comp_detail.task = &task;
   comp_detail.bind_pt = VK_PIPELINE_BIND_POINT_COMPUTE;
   if (task.rsc_detail.desc_pool_sizes.size() > 0) {
-    comp_detail.desc_pool = _create_desc_pool(ctxt, task.rsc_detail.desc_pool_sizes);
-    comp_detail.desc_set =
-      _alloc_desc_set(ctxt, comp_detail.desc_pool, task.rsc_detail.desc_set_layout);
-    _update_desc_set(ctxt, comp_detail.desc_set, task.rsc_detail.rsc_tys, cfg.rsc_views);
+    comp_detail.desc_set = const_cast<Task&>(task).acquire_desc_set();
+    _update_desc_set(ctxt, comp_detail.desc_set->desc_set,
+      task.rsc_detail.rsc_tys, cfg.rsc_views);
   }
   comp_detail.workgrp_count = cfg.workgrp_count;
 
@@ -493,7 +407,7 @@ Invocation create_graph_invoke(
   }
   out.transit_detail = std::move(transit_detail);
 
-  std::vector<VkBuffer> vert_bufs;
+  std::vector<sys::BufferRef> vert_bufs;
   std::vector<VkDeviceSize> vert_buf_offsets;
   vert_bufs.reserve(cfg.vert_bufs.size());
   vert_buf_offsets.reserve(cfg.vert_bufs.size());
@@ -507,10 +421,9 @@ Invocation create_graph_invoke(
   graph_detail.task = &task;
   graph_detail.bind_pt = VK_PIPELINE_BIND_POINT_GRAPHICS;
   if (task.rsc_detail.desc_pool_sizes.size() > 0) {
-    graph_detail.desc_pool = _create_desc_pool(ctxt, task.rsc_detail.desc_pool_sizes);
-    graph_detail.desc_set =
-      _alloc_desc_set(ctxt, graph_detail.desc_pool, task.rsc_detail.desc_set_layout);
-    _update_desc_set(ctxt, graph_detail.desc_set, task.rsc_detail.rsc_tys, cfg.rsc_views);
+    graph_detail.desc_set = const_cast<Task&>(task).acquire_desc_set();
+    _update_desc_set(ctxt, graph_detail.desc_set->desc_set,
+      task.rsc_detail.rsc_tys, cfg.rsc_views);
   }
   graph_detail.vert_bufs = std::move(vert_bufs);
   graph_detail.vert_buf_offsets = std::move(vert_buf_offsets);
@@ -562,7 +475,7 @@ Invocation create_pass_invoke(
 
   InvocationRenderPassDetail pass_detail {};
   pass_detail.pass = &pass;
-  pass_detail.framebuf = _create_framebuf(pass, cfg.attms);
+  pass_detail.framebuf = const_cast<RenderPass&>(pass).acquire_framebuf(cfg.attms);
   // TODO: (penguinliong) Command buffer baking.
   pass_detail.is_baked = false;
   pass_detail.subinvokes = cfg.invokes;
@@ -642,18 +555,18 @@ void destroy_invoke(Invocation& invoke) {
     log::debug("destroyed transfer invocation '", invoke.label, "'");
   }
   if (invoke.comp_detail) {
-    const InvocationComputeDetail& comp_detail = *invoke.comp_detail;
-    vkDestroyDescriptorPool(ctxt.dev, comp_detail.desc_pool, nullptr);
+    InvocationComputeDetail& comp_detail = *invoke.comp_detail;
+    comp_detail.desc_set.reset();
     log::debug("destroyed compute invocation '", invoke.label, "'");
   }
   if (invoke.graph_detail) {
-    const InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
-    vkDestroyDescriptorPool(ctxt.dev, graph_detail.desc_pool, nullptr);
+    InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
+    graph_detail.desc_set.reset();
     log::debug("destroyed graphics invocation '", invoke.label, "'");
   }
   if (invoke.pass_detail) {
-    const InvocationRenderPassDetail& pass_detail = *invoke.pass_detail;
-    vkDestroyFramebuffer(ctxt.dev, pass_detail.framebuf, nullptr);
+    InvocationRenderPassDetail& pass_detail = *invoke.pass_detail;
+    pass_detail.framebuf.release();
     log::debug("destroyed render pass invocation '", invoke.label, "'");
   }
   if (invoke.composite_detail) {
@@ -661,13 +574,11 @@ void destroy_invoke(Invocation& invoke) {
   }
 
   if (invoke.query_pool != VK_NULL_HANDLE) {
-    vkDestroyQueryPool(ctxt.dev, invoke.query_pool, nullptr);
+    vkDestroyQueryPool(ctxt.dev->dev, invoke.query_pool, nullptr);
     log::debug("destroyed timing objects");
   }
 
   if (invoke.bake_detail) {
-    const InvocationBakingDetail& bake_detail = *invoke.bake_detail;
-    vkDestroyCommandPool(ctxt.dev, bake_detail.cmd_pool, nullptr);
     log::debug("destroyed baking artifacts");
   }
 
@@ -677,34 +588,22 @@ void destroy_invoke(Invocation& invoke) {
 double get_invoke_time_us(const Invocation& invoke) {
   if (invoke.query_pool == VK_NULL_HANDLE) { return 0.0; }
   uint64_t t[2];
-  VK_ASSERT << vkGetQueryPoolResults(invoke.ctxt->dev, invoke.query_pool,
+  VK_ASSERT << vkGetQueryPoolResults(invoke.ctxt->dev->dev, invoke.query_pool,
     0, 2, sizeof(uint64_t) * 2, &t, sizeof(uint64_t),
     VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT); // Wait till ready.
   double ns_per_tick = invoke.ctxt->physdev_prop().limits.timestampPeriod;
   return (t[1] - t[0]) * ns_per_tick / 1000.0;
 }
 
-VkSemaphore _create_sema(const Context& ctxt) {
-  VkSemaphoreCreateInfo sci {};
-  sci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
-
-  VkSemaphore sema;
-  VK_ASSERT << vkCreateSemaphore(ctxt.dev, &sci, nullptr, &sema);
-  return sema;
-}
-
-VkCommandPool _create_cmd_pool(const Context& ctxt, SubmitType submit_ty) {
+sys::CommandPoolRef _create_cmd_pool(const Context& ctxt, SubmitType submit_ty) {
   VkCommandPoolCreateInfo cpci {};
   cpci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
   cpci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
   cpci.queueFamilyIndex = ctxt.submit_details.at(submit_ty).qfam_idx;
 
-  VkCommandPool cmd_pool;
-  VK_ASSERT << vkCreateCommandPool(ctxt.dev, &cpci, nullptr, &cmd_pool);
-
-  return cmd_pool;
+  return sys::CommandPool::create(ctxt.dev->dev, &cpci);
 }
-VkCommandBuffer _alloc_cmdbuf(
+sys::CommandBufferRef _alloc_cmdbuf(
   const Context& ctxt,
   VkCommandPool cmd_pool,
   VkCommandBufferLevel level
@@ -715,10 +614,7 @@ VkCommandBuffer _alloc_cmdbuf(
   cbai.commandBufferCount = 1;
   cbai.commandPool = cmd_pool;
 
-  VkCommandBuffer cmdbuf;
-  VK_ASSERT << vkAllocateCommandBuffers(ctxt.dev, &cbai, &cmdbuf);
-
-  return cmdbuf;
+  return sys::CommandBuffer::create(ctxt.dev->dev, &cbai);
 }
 
 
@@ -744,10 +640,10 @@ void _begin_cmdbuf(const TransactionSubmitDetail& submit_detail) {
     cbbi.flags = VK_COMMAND_BUFFER_USAGE_RENDER_PASS_CONTINUE_BIT;
   }
   cbbi.pInheritanceInfo = &cbii;
-  VK_ASSERT << vkBeginCommandBuffer(submit_detail.cmdbuf, &cbbi);
+  VK_ASSERT << vkBeginCommandBuffer(submit_detail.cmdbuf->cmdbuf, &cbbi);
 }
 void _end_cmdbuf(const TransactionSubmitDetail& submit_detail) {
-  VK_ASSERT << vkEndCommandBuffer(submit_detail.cmdbuf);
+  VK_ASSERT << vkEndCommandBuffer(submit_detail.cmdbuf->cmdbuf);
 }
 
 void _push_transact_submit_detail(
@@ -757,7 +653,7 @@ void _push_transact_submit_detail(
   VkCommandBufferLevel level
 ) {
   auto cmd_pool = _create_cmd_pool(ctxt, submit_ty);
-  auto cmdbuf = _alloc_cmdbuf(ctxt, cmd_pool, level);
+  auto cmdbuf = _alloc_cmdbuf(ctxt, cmd_pool->cmd_pool, level);
 
   TransactionSubmitDetail submit_detail {};
   submit_detail.submit_ty = submit_ty;
@@ -769,14 +665,14 @@ void _push_transact_submit_detail(
   if (level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
     submit_detail.signal_sema = VK_NULL_HANDLE;
   } else {
-    submit_detail.signal_sema = _create_sema(ctxt);
+    submit_detail.signal_sema = sys::Semaphore::create(ctxt.dev->dev);
   }
 
   submit_details.emplace_back(std::move(submit_detail));
 }
 void _submit_cmdbuf(
   TransactionLike& transact,
-  VkFence fence
+  sys::FenceRef fence
 ) {
   const Context& ctxt = *transact.ctxt;
   TransactionSubmitDetail& submit_detail = transact.submit_details.back();
@@ -786,18 +682,18 @@ void _submit_cmdbuf(
   VkSubmitInfo submit_info {};
   submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
   submit_info.commandBufferCount = 1;
-  submit_info.pCommandBuffers = &submit_detail.cmdbuf;
+  submit_info.pCommandBuffers = &submit_detail.cmdbuf->cmdbuf;
   submit_info.signalSemaphoreCount = 1;
   if (submit_detail.wait_sema != VK_NULL_HANDLE) {
     // Wait for the last submitted command buffer on the device side.
     submit_info.waitSemaphoreCount = 1;
-    submit_info.pWaitSemaphores = &submit_detail.wait_sema;
+    submit_info.pWaitSemaphores = &submit_detail.wait_sema->sema;
     submit_info.pWaitDstStageMask = &stage_mask;
   }
-  submit_info.pSignalSemaphores = &submit_detail.signal_sema;
+  submit_info.pSignalSemaphores = &submit_detail.signal_sema->sema;
 
   // Finish recording and submit the command buffer to the device.
-  VK_ASSERT << vkQueueSubmit(submit_detail.queue, 1, &submit_info, fence);
+  VK_ASSERT << vkQueueSubmit(submit_detail.queue, 1, &submit_info, fence->fence);
 
   submit_detail.is_submitted = true;
 }
@@ -839,7 +735,7 @@ VkCommandBuffer _get_cmdbuf(
     // still be fed into the last command buffer.
     auto& last_submit = transact.submit_details.back();
     if (submit_detail.queue == last_submit.queue) {
-      return last_submit.cmdbuf;
+      return last_submit.cmdbuf->cmdbuf;
     }
   }
 
@@ -850,7 +746,7 @@ VkCommandBuffer _get_cmdbuf(
   _push_transact_submit_detail(*transact.ctxt, transact.submit_details,
     submit_ty, transact.level);
   _begin_cmdbuf(transact.submit_details.back());
-  return transact.submit_details.back().cmdbuf;
+  return transact.submit_details.back().cmdbuf->cmdbuf;
 }
 
 void _make_buf_barrier_params(
@@ -1003,7 +899,7 @@ const BufferView& _transit_rsc(
 
   VkBufferMemoryBarrier bmb {};
   bmb.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-  bmb.buffer = buf_view.buf->buf;
+  bmb.buffer = buf_view.buf->buf->buf;
   bmb.srcAccessMask = src_access;
   bmb.dstAccessMask = dst_access;
   bmb.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -1056,7 +952,7 @@ const ImageView& _transit_rsc(
 
   VkImageMemoryBarrier imb {};
   imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  imb.image = img_view.img->img;
+  imb.image = img_view.img->img->img;
   imb.srcAccessMask = src_access;
   imb.dstAccessMask = dst_access;
   imb.oldLayout = src_layout;
@@ -1117,7 +1013,7 @@ const DepthImageView& _transit_rsc(
 
   VkImageMemoryBarrier imb {};
   imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  imb.image = depth_img_view.depth_img->img;
+  imb.image = depth_img_view.depth_img->img->img;
   imb.srcAccessMask = src_access;
   imb.dstAccessMask = dst_access;
   imb.oldLayout = src_layout;
@@ -1165,16 +1061,8 @@ void _transit_rscs(
   }
 }
 
-VkFence _create_fence(const Context& ctxt) {
-  VkFenceCreateInfo fci {};
-  fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-
-  VkFence fence;
-  VK_ASSERT << vkCreateFence(ctxt.dev, &fci, nullptr, &fence);
-  return fence;
-}
 // Return true if the invocation forces an termination.
-std::vector<VkFence> _record_invoke_impl(
+std::vector<sys::FenceRef> _record_invoke_impl(
   TransactionLike& transact,
   const Invocation& invoke
 ) {
@@ -1198,8 +1086,8 @@ std::vector<VkFence> _record_invoke_impl(
 
 
     // Present the rendered image.
-    VkFence present_fence = _create_fence(ctxt);
-    VkFence acquire_fence = _create_fence(ctxt);
+    sys::FenceRef present_fence = sys::Fence::create(ctxt.dev->dev);
+    sys::FenceRef acquire_fence = sys::Fence::create(ctxt.dev->dev);
 
     VkResult present_res = VK_SUCCESS;
     VkPresentInfoKHR pi {};
@@ -1216,7 +1104,7 @@ std::vector<VkFence> _record_invoke_impl(
       _submit_cmdbuf(transact, present_fence);
 
       pi.waitSemaphoreCount = 1;
-      pi.pWaitSemaphores = &transact.submit_details.back().signal_sema;
+      pi.pWaitSemaphores = &transact.submit_details.back().signal_sema->sema;
     }
 
     VkQueue queue = ctxt.submit_details.at(L_SUBMIT_TYPE_PRESENT).queue;
@@ -1229,8 +1117,8 @@ std::vector<VkFence> _record_invoke_impl(
     VK_ASSERT << res;
 
     img_idx = ~0u;
-    VK_ASSERT << vkAcquireNextImageKHR(ctxt.dev, swapchain.swapchain, 0,
-      VK_NULL_HANDLE, acquire_fence, &img_idx);
+    VK_ASSERT << vkAcquireNextImageKHR(ctxt.dev->dev, swapchain.swapchain, 0,
+      VK_NULL_HANDLE, acquire_fence->fence, &img_idx);
 
     transact.is_frozen = true;
 
@@ -1243,7 +1131,7 @@ std::vector<VkFence> _record_invoke_impl(
   // If the invocation has been baked, simply inline the baked secondary command
   // buffer.
   if (invoke.bake_detail) {
-    vkCmdExecuteCommands(cmdbuf, 1, &invoke.bake_detail->cmdbuf);
+    vkCmdExecuteCommands(cmdbuf, 1, &invoke.bake_detail->cmdbuf->cmdbuf);
     return {};
   }
 
@@ -1260,25 +1148,25 @@ std::vector<VkFence> _record_invoke_impl(
   if (invoke.b2b_detail) {
     const InvocationCopyBufferToBufferDetail& b2b_detail =
       *invoke.b2b_detail;
-    vkCmdCopyBuffer(cmdbuf, b2b_detail.src, b2b_detail.dst, 1, &b2b_detail.bc);
+    vkCmdCopyBuffer(cmdbuf, b2b_detail.src->buf, b2b_detail.dst->buf, 1, &b2b_detail.bc);
     log::debug("applied transfer invocation '", invoke.label, "'");
 
   } else if (invoke.b2i_detail) {
     const InvocationCopyBufferToImageDetail& b2i_detail = *invoke.b2i_detail;
-    vkCmdCopyBufferToImage(cmdbuf, b2i_detail.src, b2i_detail.dst,
+    vkCmdCopyBufferToImage(cmdbuf, b2i_detail.src->buf, b2i_detail.dst->img,
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b2i_detail.bic);
     log::debug("applied transfer invocation '", invoke.label, "'");
 
   } else if (invoke.i2b_detail) {
     const InvocationCopyImageToBufferDetail& i2b_detail = *invoke.i2b_detail;
-    vkCmdCopyImageToBuffer(cmdbuf, i2b_detail.src,
-      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, i2b_detail.dst, 1, &i2b_detail.bic);
+    vkCmdCopyImageToBuffer(cmdbuf, i2b_detail.src->img,
+      VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, i2b_detail.dst->buf, 1, &i2b_detail.bic);
     log::debug("applied transfer invocation '", invoke.label, "'");
 
   } else if (invoke.i2i_detail) {
     const InvocationCopyImageToImageDetail& i2i_detail = *invoke.i2i_detail;
-    vkCmdCopyImage(cmdbuf, i2i_detail.src, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
-      i2i_detail.dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &i2i_detail.ic);
+    vkCmdCopyImage(cmdbuf, i2i_detail.src->img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
+      i2i_detail.dst->img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &i2i_detail.ic);
     log::debug("applied transfer invocation '", invoke.label, "'");
 
   } else if (invoke.comp_detail) {
@@ -1286,10 +1174,10 @@ std::vector<VkFence> _record_invoke_impl(
     const Task& task = *comp_detail.task;
     const DispatchSize& workgrp_count = comp_detail.workgrp_count;
 
-    vkCmdBindPipeline(cmdbuf, comp_detail.bind_pt, task.pipe);
+    vkCmdBindPipeline(cmdbuf, comp_detail.bind_pt, task.pipe->pipe);
     if (comp_detail.desc_set != VK_NULL_HANDLE) {
       vkCmdBindDescriptorSets(cmdbuf, comp_detail.bind_pt,
-        task.rsc_detail.pipe_layout, 0, 1, &comp_detail.desc_set, 0, nullptr);
+        task.rsc_detail.pipe_layout->pipe_layout, 0, 1, &comp_detail.desc_set->desc_set, 0, nullptr);
     }
     vkCmdDispatch(cmdbuf, workgrp_count.x, workgrp_count.y, workgrp_count.z);
     log::debug("applied compute invocation '", invoke.label, "'");
@@ -1298,14 +1186,19 @@ std::vector<VkFence> _record_invoke_impl(
     const InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
     const Task& task = *graph_detail.task;
 
-    vkCmdBindPipeline(cmdbuf, graph_detail.bind_pt, task.pipe);
-    if (graph_detail.desc_set != VK_NULL_HANDLE) {
+    std::vector<VkBuffer> vert_bufs {};
+    for (const auto& vert_buf : graph_detail.vert_bufs) {
+      vert_bufs.emplace_back(vert_buf->buf);
+    }
+
+    vkCmdBindPipeline(cmdbuf, graph_detail.bind_pt, task.pipe->pipe);
+    if (graph_detail.desc_set->desc_set != VK_NULL_HANDLE) {
       vkCmdBindDescriptorSets(cmdbuf, graph_detail.bind_pt,
-        task.rsc_detail.pipe_layout, 0, 1, &graph_detail.desc_set, 0, nullptr);
+        task.rsc_detail.pipe_layout->pipe_layout, 0, 1, &graph_detail.desc_set->desc_set, 0, nullptr);
     }
     // TODO: (penguinliong) Vertex, index buffer transition.
-    vkCmdBindVertexBuffers(cmdbuf, 0, (uint32_t)graph_detail.vert_bufs.size(),
-      graph_detail.vert_bufs.data(), graph_detail.vert_buf_offsets.data());
+    vkCmdBindVertexBuffers(cmdbuf, 0, (uint32_t)vert_bufs.size(),
+      vert_bufs.data(), graph_detail.vert_buf_offsets.data());
     if (invoke.graph_detail->nidx != 0) {
       VkIndexType idx_ty {};
       switch (invoke.graph_detail->idx_ty) {
@@ -1313,7 +1206,7 @@ std::vector<VkFence> _record_invoke_impl(
       case L_INDEX_TYPE_UINT32: idx_ty = VK_INDEX_TYPE_UINT32; break;
       default: panic("unexpected index type");
       }
-      vkCmdBindIndexBuffer(cmdbuf, graph_detail.idx_buf,
+      vkCmdBindIndexBuffer(cmdbuf, graph_detail.idx_buf->buf,
         graph_detail.idx_buf_offset, idx_ty);
       vkCmdDrawIndexed(cmdbuf, graph_detail.nidx, graph_detail.ninst,
         0, 0, 0);
@@ -1333,12 +1226,22 @@ std::vector<VkFence> _record_invoke_impl(
 
     VkRenderPassBeginInfo rpbi {};
     rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    rpbi.renderPass = pass.pass;
-    rpbi.framebuffer = pass_detail.framebuf;
+    rpbi.renderPass = pass.pass->pass;
+    rpbi.framebuffer = pass_detail.framebuf.value()->framebuf;
     rpbi.renderArea.extent.width = pass.width;
     rpbi.renderArea.extent.height = pass.height;
     rpbi.clearValueCount = (uint32_t)pass.clear_values.size();
     rpbi.pClearValues = pass.clear_values.data();
+
+    std::vector<VkImageView> img_views(pass_detail.attms.size());
+    for (size_t i = 0; i < pass_detail.attms.size(); ++i) {
+      img_views.at(i) = pass_detail.attms.at(i)->img_view;
+    }
+
+    VkRenderPassAttachmentBeginInfo rpabi {};
+    rpabi.attachmentCount = img_views.size();
+    rpabi.pAttachments = img_views.data();
+
     vkCmdBeginRenderPass(cmdbuf, &rpbi, sc);
     log::debug("render pass invocation '", invoke.label, "' began");
 
@@ -1354,7 +1257,7 @@ std::vector<VkFence> _record_invoke_impl(
 
       const Invocation* subinvoke = pass_detail.subinvokes[i];
       L_ASSERT(subinvoke != nullptr, "null subinvocation is not allowed");
-      std::vector<VkFence> fences = _record_invoke_impl(transact, *subinvoke);
+      std::vector<sys::FenceRef> fences = _record_invoke_impl(transact, *subinvoke);
       if (!fences.empty()) { return fences; }
     }
     vkCmdEndRenderPass(cmdbuf);
@@ -1369,7 +1272,7 @@ std::vector<VkFence> _record_invoke_impl(
     for (size_t i = 0; i < composite_detail.subinvokes.size(); ++i) {
       const Invocation* subinvoke = composite_detail.subinvokes[i];
       L_ASSERT(subinvoke != nullptr, "null subinvocation is not allowed");
-      std::vector<VkFence> fences = _record_invoke_impl(transact, *subinvoke);
+      std::vector<sys::FenceRef> fences = _record_invoke_impl(transact, *subinvoke);
       if (!fences.empty()) { return fences; }
     }
 
@@ -1393,17 +1296,17 @@ std::vector<VkFence> _record_invoke_impl(
 
   return {};
 }
-std::vector<VkFence> _record_invoke(
+std::vector<sys::FenceRef> _record_invoke(
   TransactionLike& transact,
   const Invocation& invoke
 ) {
-  std::vector<VkFence> fences = _record_invoke_impl(transact, invoke);
+  std::vector<sys::FenceRef> fences = _record_invoke_impl(transact, invoke);
   if (fences.empty()) {
     _end_cmdbuf(transact.submit_details.back());
     if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-      VkFence fence = _create_fence(*transact.ctxt);
+      sys::FenceRef fence = sys::Fence::create(transact.ctxt->dev->dev);
       _submit_cmdbuf(transact, fence);
-      fences.emplace_back(fence);
+      fences.emplace_back(std::move(fence));
     }
   }
   return fences;
@@ -1430,7 +1333,7 @@ void bake_invoke(Invocation& invoke) {
   if (!_can_bake_invoke(invoke)) { return; }
 
   TransactionLike transact(*invoke.ctxt, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
-  std::vector<VkFence> fences = _record_invoke(transact, invoke);
+  std::vector<sys::FenceRef> fences = _record_invoke(transact, invoke);
   L_ASSERT(fences.empty());
 
   L_ASSERT(transact.submit_details.size() == 1);
@@ -1456,7 +1359,7 @@ Transaction submit_invoke(const Invocation& invoke) {
   TransactionLike transact(ctxt, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
   util::Timer timer {};
   timer.tic();
-  std::vector<VkFence> fences = _record_invoke(transact, invoke);
+  std::vector<sys::FenceRef> fences = _record_invoke(transact, invoke);
   timer.toc();
 
   Transaction out {};

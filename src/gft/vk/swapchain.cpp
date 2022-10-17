@@ -14,7 +14,7 @@ VkSwapchainKHR _create_swapchain(
 
   VkSurfaceCapabilitiesKHR sc {};
   VK_ASSERT <<
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physdev, ctxt.surf, &sc);
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physdev, ctxt.surf->surf, &sc);
   log::debug("current surface image size is (", sc.currentExtent.width, ", ",
     sc.currentExtent.height, ")");
 
@@ -31,11 +31,11 @@ VkSwapchainKHR _create_swapchain(
 
   uint32_t nsurf_fmt = 0;
   VK_ASSERT << vkGetPhysicalDeviceSurfaceFormatsKHR(physdev,
-    ctxt.surf, &nsurf_fmt, nullptr);
+    ctxt.surf->surf, &nsurf_fmt, nullptr);
   std::vector<VkSurfaceFormatKHR> surf_fmts;
   surf_fmts.resize(nsurf_fmt);
   VK_ASSERT << vkGetPhysicalDeviceSurfaceFormatsKHR(physdev,
-    ctxt.surf, &nsurf_fmt, surf_fmts.data());
+    ctxt.surf->surf, &nsurf_fmt, surf_fmts.data());
 
   VkFormat fmt = fmt2vk(cfg.fmt, fmt::L_COLOR_SPACE_LINEAR);
   VkColorSpaceKHR cspace = cspace2vk(cfg.cspace);
@@ -51,7 +51,7 @@ VkSwapchainKHR _create_swapchain(
 
   VkSwapchainCreateInfoKHR sci {};
   sci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
-  sci.surface = ctxt.surf;
+  sci.surface = ctxt.surf->surf;
   sci.oldSwapchain = old_swapchain;
   sci.minImageCount = nimg;
   sci.imageFormat = fmt;
@@ -70,17 +70,17 @@ VkSwapchainKHR _create_swapchain(
   sci.clipped = VK_TRUE;
 
   VkSwapchainKHR swapchain;
-  VK_ASSERT << vkCreateSwapchainKHR(ctxt.dev, &sci, nullptr, &swapchain);
+  VK_ASSERT << vkCreateSwapchainKHR(ctxt.dev->dev, &sci, nullptr, &swapchain);
 
   // Collect swapchain images.
   std::vector<VkImage> imgs;
   {
     uint32_t nimg2;
-    VK_ASSERT << vkGetSwapchainImagesKHR(ctxt.dev, swapchain, &nimg2, nullptr);
+    VK_ASSERT << vkGetSwapchainImagesKHR(ctxt.dev->dev, swapchain, &nimg2, nullptr);
     L_ASSERT(nimg == nimg2, "expected ", nimg, "swapchain images, but actually "
       "get ", nimg2, " images");
     imgs.resize(nimg2);
-    VK_ASSERT << vkGetSwapchainImagesKHR(ctxt.dev, swapchain, &nimg2, imgs.data());
+    VK_ASSERT << vkGetSwapchainImagesKHR(ctxt.dev->dev, swapchain, &nimg2, imgs.data());
   }
 
   std::vector<Image> swapchain_imgs;
@@ -96,13 +96,11 @@ VkSwapchainKHR _create_swapchain(
     ivci.subresourceRange.layerCount = VK_REMAINING_ARRAY_LAYERS;
     ivci.subresourceRange.levelCount = VK_REMAINING_MIP_LEVELS;
 
-    VkImageView img_view;
-    VK_ASSERT << vkCreateImageView(ctxt.dev, &ivci, nullptr, &img_view);
+    sys::ImageViewRef img_view = sys::ImageView::create(ctxt.dev->dev, &ivci);
 
     Image out {};
-    out.alloc = {};
-    out.img = img;
-    out.img_view = img_view;
+    out.img = std::make_shared<sys::Image>(ctxt.allocator, img, nullptr, false);
+    out.img_view = std::move(img_view);
     out.img_cfg.label = util::format(cfg.label, " #", i);
     out.img_cfg.width = width;
     out.img_cfg.height = height;
@@ -139,16 +137,16 @@ void _init_swapchain(Swapchain& swapchain) {
   fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
 
   VkFence fence;
-  VK_ASSERT << vkCreateFence(ctxt.dev, &fci, nullptr, &fence);
+  VK_ASSERT << vkCreateFence(ctxt.dev->dev, &fci, nullptr, &fence);
 
-  VkResult acq_res = vkAcquireNextImageKHR(ctxt.dev, swapchain.swapchain, 0,
+  VkResult acq_res = vkAcquireNextImageKHR(ctxt.dev->dev, swapchain.swapchain, 0,
     VK_NULL_HANDLE, fence, &*dyn_detail.img_idx);
   L_ASSERT(acq_res >= 0, "failed to initiate swapchain image acquisition");
 
   // Ensure the first image is acquired. It shouldn't take long.
-  VK_ASSERT << vkWaitForFences(ctxt.dev, 1, &fence, VK_TRUE, 1000);
+  VK_ASSERT << vkWaitForFences(ctxt.dev->dev, 1, &fence, VK_TRUE, 1000);
 
-  vkDestroyFence(ctxt.dev, fence, nullptr);
+  vkDestroyFence(ctxt.dev->dev, fence, nullptr);
 }
 Swapchain create_swapchain(const Context& ctxt, const SwapchainConfig& cfg) {
   SwapchainDynamicDetail dyn_detail;
@@ -167,12 +165,9 @@ void destroy_swapchain(Swapchain& swapchain) {
   if (swapchain.dyn_detail != nullptr) {
     SwapchainDynamicDetail& dyn_detail = *swapchain.dyn_detail;
     dyn_detail.img_idx = nullptr;
-    for (size_t i = 0; i < dyn_detail.imgs.size(); ++i) {
-      const Image& img = dyn_detail.imgs[i];
-      vkDestroyImageView(ctxt.dev, img.img_view, nullptr);
-    }
+    dyn_detail.imgs.clear();
   }
-  vkDestroySwapchainKHR(ctxt.dev, swapchain.swapchain, nullptr);
+  vkDestroySwapchainKHR(ctxt.dev->dev, swapchain.swapchain, nullptr);
 }
 
 const Image& get_swapchain_img(const Swapchain& swapchain) {

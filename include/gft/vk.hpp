@@ -10,44 +10,11 @@
 #include "vk_mem_alloc.h"
 #define HAL_IMPL_NAMESPACE vk
 #include "gft/hal/scoped-hal.hpp"
+#include "gft/vk-sys.hpp"
+#include "gft/pool.hpp"
 
 namespace liong {
 namespace vk {
-
-class VkException : public std::exception {
-  std::string msg;
-public:
-  inline VkException(VkResult code) {
-    switch (code) {
-    case VK_ERROR_OUT_OF_HOST_MEMORY: msg = "out of host memory"; break;
-    case VK_ERROR_OUT_OF_DEVICE_MEMORY: msg = "out of device memory"; break;
-    case VK_ERROR_INITIALIZATION_FAILED: msg = "initialization failed"; break;
-    case VK_ERROR_DEVICE_LOST: msg = "device lost"; break;
-    case VK_ERROR_MEMORY_MAP_FAILED: msg = "memory map failed"; break;
-    case VK_ERROR_LAYER_NOT_PRESENT: msg = "layer not supported"; break;
-    case VK_ERROR_EXTENSION_NOT_PRESENT: msg = "extension may present"; break;
-    case VK_ERROR_INCOMPATIBLE_DRIVER: msg = "incompatible driver"; break;
-    case VK_ERROR_TOO_MANY_OBJECTS: msg = "too many objects"; break;
-    case VK_ERROR_FORMAT_NOT_SUPPORTED: msg = "format not supported"; break;
-    case VK_ERROR_FRAGMENTED_POOL: msg = "fragmented pool"; break;
-    case VK_ERROR_OUT_OF_POOL_MEMORY: msg = "out of pool memory"; break;
-    default: msg = std::string("unknown vulkan error: ") + std::to_string(code); break;
-    }
-  }
-
-  inline const char* what() const noexcept override {
-    return msg.c_str(); 
-  }
-};
-struct VkAssert {
-  inline const VkAssert& operator<<(VkResult code) const {
-    if (code != VK_SUCCESS) { throw VkException(code); }
-    return *this;
-  }
-};
-#define VK_ASSERT (::liong::vk::VkAssert{})
-
-
 
 inline VkFormat fmt2vk(fmt::Format fmt, fmt::ColorSpace cspace) {
   using namespace fmt;
@@ -101,7 +68,7 @@ struct InstancePhysicalDeviceDetail {
 };
 struct Instance {
   uint32_t api_ver;
-  VkInstance inst;
+  sys::InstanceRef inst;
   std::vector<InstancePhysicalDeviceDetail> physdev_details;
   bool is_imported;
 };
@@ -119,17 +86,17 @@ enum SubmitType {
 };
 struct TransactionSubmitDetail {
   SubmitType submit_ty;
-  VkCommandPool cmd_pool;
-  VkCommandBuffer cmdbuf;
+  sys::CommandPoolRef cmd_pool;
+  sys::CommandBufferRef cmdbuf;
   VkQueue queue;
-  VkSemaphore wait_sema;
-  VkSemaphore signal_sema;
+  sys::SemaphoreRef wait_sema;
+  sys::SemaphoreRef signal_sema;
   bool is_submitted;
 };
 struct Transaction {
   const Context* ctxt;
   std::vector<TransactionSubmitDetail> submit_details;
-  std::vector<VkFence> fences;
+  std::vector<sys::FenceRef> fences;
 };
 
 
@@ -141,8 +108,8 @@ struct ContextSubmitDetail {
 struct Context {
   std::string label;
   uint32_t iphysdev;
-  VkDevice dev;
-  VkSurfaceKHR surf;
+  sys::DeviceRef dev;
+  sys::SurfaceRef surf;
   std::map<SubmitType, ContextSubmitDetail> submit_details;
   std::map<ImageSampler, VkSampler> img_samplers;
   std::map<DepthImageSampler, VkSampler> depth_img_samplers;
@@ -167,8 +134,7 @@ struct BufferDynamicDetail {
 };
 struct Buffer {
   const Context* ctxt; // Lifetime bound.
-  VmaAllocation alloc;
-  VkBuffer buf;
+  sys::BufferRef buf;
   BufferConfig buf_cfg;
   BufferDynamicDetail dyn_detail;
 };
@@ -182,9 +148,8 @@ struct ImageDynamicDetail {
 };
 struct Image {
   const Context* ctxt; // Lifetime bound.
-  VmaAllocation alloc;
-  VkImage img;
-  VkImageView img_view;
+  sys::ImageRef img;
+  sys::ImageViewRef img_view;
   ImageConfig img_cfg;
   ImageDynamicDetail dyn_detail;
 };
@@ -198,9 +163,8 @@ struct DepthImageDynamicDetail {
 };
 struct DepthImage {
   const Context* ctxt; // Lifetime bound.
-  VmaAllocation alloc;
-  VkImage img;
-  VkImageView img_view;
+  sys::ImageRef img;
+  sys::ImageViewRef img_view;
   DepthImageConfig depth_img_cfg;
   DepthImageDynamicDetail dyn_detail;
 };
@@ -222,31 +186,71 @@ struct Swapchain {
 
 
 
+struct FramebufferKey {
+  VkRenderPass pass;
+  std::vector<VkImageView> img_views;
+
+  static FramebufferKey create(
+    const RenderPass& pass,
+    const std::vector<ResourceView>& rsc_views);
+
+  friend inline bool operator<(const FramebufferKey& a, const FramebufferKey& b) {
+    if (a.pass < b.pass) {
+      return true;
+    }
+    if (a.img_views.size() < b.img_views.size()) {
+      return true;
+    }
+    for (size_t i = 0; i < a.img_views.size(); ++i) {
+      VkImageView bx = VK_NULL_HANDLE;
+      if (i < b.img_views.size()) {
+        bx = b.img_views.at(i);
+      }
+      if (a.img_views.at(i) < bx) {
+        return true;
+      }
+    }
+    return false;
+  }
+};
+
+typedef pool::Pool<FramebufferKey, sys::FramebufferRef> FramebufferPool;
+typedef pool::PoolItem<FramebufferKey, sys::FramebufferRef> FramebufferPoolItem;
 struct RenderPass {
   const Context* ctxt;
   uint32_t width;
   uint32_t height;
-  VkRenderPass pass;
+  sys::RenderPassRef pass;
   RenderPassConfig pass_cfg;
   std::vector<VkClearValue> clear_values;
+
+  FramebufferPool framebuf_pool;
+  FramebufferPoolItem acquire_framebuf(const std::vector<ResourceView>& attms);
 };
 
 
 
 struct TaskResourceDetail {
-  VkDescriptorSetLayout desc_set_layout;
-  VkPipelineLayout pipe_layout;
+  sys::DescriptorSetLayoutRef desc_set_layout;
+  sys::PipelineLayoutRef pipe_layout;
   std::vector<ResourceType> rsc_tys;
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
+  // Descriptor pools to hold references.
+  std::vector<sys::DescriptorPoolRef> desc_pools;
+  // Descriptor sets not yet acquired by invocations.
+  std::vector<sys::DescriptorSetRef> free_desc_sets;
 };
 struct Task {
   std::string label;
   SubmitType submit_ty;
   const Context* ctxt;
   const RenderPass* pass; // Only for graphics task.
-  VkPipeline pipe;
+  sys::PipelineRef pipe;
   DispatchSize workgrp_size; // Only for compute task.
   TaskResourceDetail rsc_detail;
+
+  sys::DescriptorSetRef acquire_desc_set();
+  void release_desc_set(sys::DescriptorSetRef&& item);
 };
 
 
@@ -274,39 +278,37 @@ struct InvocationTransitionDetail {
 };
 struct InvocationCopyBufferToBufferDetail {
   VkBufferCopy bc;
-  VkBuffer src;
-  VkBuffer dst;
+  sys::BufferRef src;
+  sys::BufferRef dst;
 };
 struct InvocationCopyBufferToImageDetail {
   VkBufferImageCopy bic;
-  VkBuffer src;
-  VkImage dst;
+  sys::BufferRef src;
+  sys::ImageRef dst;
 };
 struct InvocationCopyImageToBufferDetail {
   VkBufferImageCopy bic;
-  VkImage src;
-  VkBuffer dst;
+  sys::ImageRef src;
+  sys::BufferRef dst;
 };
 struct InvocationCopyImageToImageDetail {
   VkImageCopy ic;
-  VkImage src;
-  VkImage dst;
+  sys::ImageRef src;
+  sys::ImageRef dst;
 };
 struct InvocationComputeDetail {
   const Task* task;
   VkPipelineBindPoint bind_pt;
-  VkDescriptorPool desc_pool;
-  VkDescriptorSet desc_set;
+  sys::DescriptorSetRef desc_set;
   DispatchSize workgrp_count;
 };
 struct InvocationGraphicsDetail {
   const Task* task;
   VkPipelineBindPoint bind_pt;
-  VkDescriptorPool desc_pool;
-  VkDescriptorSet desc_set;
-  std::vector<VkBuffer> vert_bufs;
+  sys::DescriptorSetRef desc_set;
+  std::vector<sys::BufferRef> vert_bufs;
   std::vector<VkDeviceSize> vert_buf_offsets;
-  VkBuffer idx_buf;
+  sys::BufferRef idx_buf;
   VkDeviceSize idx_buf_offset;
   uint32_t ninst;
   uint32_t nvert;
@@ -315,7 +317,8 @@ struct InvocationGraphicsDetail {
 };
 struct InvocationRenderPassDetail {
   const RenderPass* pass;
-  VkFramebuffer framebuf;
+  FramebufferPoolItem framebuf;
+  std::vector<sys::ImageViewRef> attms;
   bool is_baked;
   std::vector<const Invocation*> subinvokes;
 };
@@ -326,8 +329,8 @@ struct InvocationCompositeDetail {
   std::vector<const Invocation*> subinvokes;
 };
 struct InvocationBakingDetail {
-  VkCommandPool cmd_pool;
-  VkCommandBuffer cmdbuf;
+  sys::CommandPoolRef cmd_pool;
+  sys::CommandBufferRef cmdbuf;
 };
 struct Invocation {
   std::string label;
