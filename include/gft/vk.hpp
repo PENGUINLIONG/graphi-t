@@ -77,9 +77,6 @@ extern const Instance& get_inst();
 
 
 
-typedef pool::Pool<SubmitType, sys::CommandPoolRef> CommandPoolPool;
-typedef pool::PoolItem<SubmitType, sys::CommandPoolRef> CommandPoolPoolItem;
-
 enum SubmitType {
   L_SUBMIT_TYPE_ANY,
   L_SUBMIT_TYPE_COMPUTE,
@@ -87,6 +84,10 @@ enum SubmitType {
   L_SUBMIT_TYPE_TRANSFER,
   L_SUBMIT_TYPE_PRESENT,
 };
+
+typedef pool::Pool<SubmitType, sys::CommandPoolRef> CommandPoolPool;
+typedef pool::PoolItem<SubmitType, sys::CommandPoolRef> CommandPoolPoolItem;
+
 struct TransactionSubmitDetail {
   SubmitType submit_ty;
   CommandPoolPoolItem cmd_pool;
