@@ -488,6 +488,31 @@ struct Semaphore {
 };
 typedef std::shared_ptr<Semaphore> SemaphoreRef;
 
+struct QueryPool {
+  typedef QueryPool Self;
+  VkDevice dev;
+  VkQueryPool query_pool;
+  bool should_destroy;
+
+  QueryPool(VkDevice dev, VkQueryPool query_pool, bool should_destroy) :
+    dev(dev), query_pool(query_pool), should_destroy(should_destroy) {}
+  ~QueryPool() { destroy(); }
+
+  operator VkQueryPool() const {
+    return query_pool;
+  }
+
+  static std::shared_ptr<QueryPool> create(VkDevice dev, const VkQueryPoolCreateInfo* qpci) {
+    VkQueryPool query_pool;
+    VK_ASSERT << vkCreateQueryPool(dev, qpci, nullptr, &query_pool);
+    return std::make_shared<QueryPool>(dev, query_pool, true);
+  }
+  void destroy() {
+    vkDestroyQueryPool(dev, query_pool, nullptr);
+  }
+};
+typedef std::shared_ptr<QueryPool> QueryPoolRef;
+
 } // namespace sys
 } // namespace vk
 } // namespace liong::vk::sys

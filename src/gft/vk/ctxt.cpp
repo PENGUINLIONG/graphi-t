@@ -301,7 +301,7 @@ Context _create_ctxt(
     inst.physdev_details.at(dev_idx).desc);
   return Context {
     label, dev_idx, std::move(dev), surf, std::move(submit_details),
-    img_samplers, depth_img_samplers, {}, {}, allocator
+    img_samplers, depth_img_samplers, {}, {}, {}, allocator
   };
 
 }
@@ -494,6 +494,27 @@ CommandPoolPoolItem Context::acquire_cmd_pool(SubmitType submit_ty) {
   }
 }
 
+
+sys::QueryPoolRef _create_query_pool(
+  const Context& ctxt,
+  VkQueryType query_ty,
+  uint32_t nquery
+) {
+  VkQueryPoolCreateInfo qpci {};
+  qpci.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
+  qpci.queryType = query_ty;
+  qpci.queryCount = nquery;
+  return sys::QueryPool::create(*ctxt.dev, &qpci);
+}
+
+QueryPoolPoolItem Context::acquire_query_pool() {
+  if (query_pool_pool.has_free_item(0)) {
+    return query_pool_pool.acquire(0);
+  } else {
+    sys::QueryPoolRef query_pool = _create_query_pool(*this, VK_QUERY_TYPE_TIMESTAMP, 2);
+    return query_pool_pool.create(0, std::move(query_pool));
+  }
+}
 
 } // namespace vk
 } // namespace liong

@@ -96,21 +96,6 @@ void _update_desc_set(
   vkUpdateDescriptorSets(ctxt.dev->dev, (uint32_t)wdss.size(), wdss.data(), 0,
     nullptr);
 }
-VkQueryPool _create_query_pool(
-  const Context& ctxt,
-  VkQueryType query_ty,
-  uint32_t nquery
-) {
-  VkQueryPoolCreateInfo qpci {};
-  qpci.sType = VK_STRUCTURE_TYPE_QUERY_POOL_CREATE_INFO;
-  qpci.queryType = query_ty;
-  qpci.queryCount = nquery;
-
-  VkQueryPool query_pool;
-  VK_ASSERT << vkCreateQueryPool(ctxt.dev->dev, &qpci, nullptr, &query_pool);
-
-  return query_pool;
-}
 void _collect_task_invoke_transit(
   const std::vector<ResourceView> rsc_views,
   const std::vector<ResourceType> rsc_tys,
@@ -313,8 +298,7 @@ Invocation create_trans_invoke(
   out.label = cfg.label;
   out.ctxt = &ctxt;
   out.submit_ty = L_SUBMIT_TYPE_TRANSFER;
-  out.query_pool = cfg.is_timed ?
-    _create_query_pool(ctxt, VK_QUERY_TYPE_TIMESTAMP, 2) : VK_NULL_HANDLE;
+  out.query_pool = cfg.is_timed ? const_cast<Context&>(ctxt).acquire_query_pool() : QueryPoolPoolItem {};
 
   if (
     src_rsc_view_ty == L_RESOURCE_VIEW_TYPE_BUFFER &&
@@ -359,8 +343,7 @@ Invocation create_comp_invoke(
   out.label = cfg.label;
   out.ctxt = &ctxt;
   out.submit_ty = L_SUBMIT_TYPE_COMPUTE;
-  out.query_pool = cfg.is_timed ?
-    _create_query_pool(ctxt, VK_QUERY_TYPE_TIMESTAMP, 2) : VK_NULL_HANDLE;
+  out.query_pool = cfg.is_timed ? const_cast<Context&>(ctxt).acquire_query_pool() : QueryPoolPoolItem {};
 
   InvocationTransitionDetail transit_detail {};
   _collect_task_invoke_transit(cfg.rsc_views, task.rsc_detail.rsc_tys, transit_detail);
@@ -395,8 +378,7 @@ Invocation create_graph_invoke(
   out.label = cfg.label;
   out.ctxt = &ctxt;
   out.submit_ty = L_SUBMIT_TYPE_GRAPHICS;
-  out.query_pool = cfg.is_timed ?
-    _create_query_pool(ctxt, VK_QUERY_TYPE_TIMESTAMP, 2) : VK_NULL_HANDLE;
+  out.query_pool = cfg.is_timed ? const_cast<Context&>(ctxt).acquire_query_pool() : QueryPoolPoolItem {};
 
   InvocationTransitionDetail transit_detail {};
   _collect_task_invoke_transit(cfg.rsc_views, task.rsc_detail.rsc_tys, transit_detail);
@@ -454,8 +436,7 @@ Invocation create_pass_invoke(
   out.label = cfg.label;
   out.ctxt = &ctxt;
   out.submit_ty = L_SUBMIT_TYPE_GRAPHICS;
-  out.query_pool = cfg.is_timed ?
-    _create_query_pool(ctxt, VK_QUERY_TYPE_TIMESTAMP, 2) : VK_NULL_HANDLE;
+  out.query_pool = cfg.is_timed ? const_cast<Context&>(ctxt).acquire_query_pool() : QueryPoolPoolItem {};
 
   InvocationTransitionDetail transit_detail {};
   for (size_t i = 0; i < cfg.attms.size(); ++i) {
@@ -509,7 +490,7 @@ Invocation create_present_invoke(const Swapchain& swapchain) {
   out.label = util::format(swapchain.swapchain_cfg.label);
   out.ctxt = &ctxt;
   out.submit_ty = L_SUBMIT_TYPE_PRESENT;
-  out.query_pool = VK_NULL_HANDLE;
+  out.query_pool = QueryPoolPoolItem {};
 
   InvocationPresentDetail present_detail {};
   present_detail.swapchain = &swapchain;
@@ -528,8 +509,7 @@ Invocation create_composite_invoke(
   out.label = cfg.label;
   out.ctxt = &ctxt;
   out.submit_ty = _infer_submit_ty(cfg.invokes);
-  out.query_pool = cfg.is_timed ?
-    _create_query_pool(ctxt, VK_QUERY_TYPE_TIMESTAMP, 2) : VK_NULL_HANDLE;
+  out.query_pool = cfg.is_timed ? const_cast<Context&>(ctxt).acquire_query_pool() : QueryPoolPoolItem {};
 
   InvocationTransitionDetail transit_detail {};
   _merge_subinvoke_transits(cfg.invokes, transit_detail);
@@ -573,10 +553,7 @@ void destroy_invoke(Invocation& invoke) {
     log::debug("destroyed composite invocation '", invoke.label, "'");
   }
 
-  if (invoke.query_pool != VK_NULL_HANDLE) {
-    vkDestroyQueryPool(ctxt.dev->dev, invoke.query_pool, nullptr);
-    log::debug("destroyed timing objects");
-  }
+  invoke.query_pool = QueryPoolPoolItem {};
 
   if (invoke.bake_detail) {
     log::debug("destroyed baking artifacts");
@@ -586,10 +563,11 @@ void destroy_invoke(Invocation& invoke) {
 }
 
 double get_invoke_time_us(const Invocation& invoke) {
-  if (invoke.query_pool == VK_NULL_HANDLE) { return 0.0; }
+  if (invoke.query_pool.is_valid()) { return 0.0; }
   uint64_t t[2];
-  VK_ASSERT << vkGetQueryPoolResults(invoke.ctxt->dev->dev, invoke.query_pool,
-    0, 2, sizeof(uint64_t) * 2, &t, sizeof(uint64_t),
+  VK_ASSERT << vkGetQueryPoolResults(invoke.ctxt->dev->dev,
+    *invoke.query_pool.value(), 0, 2, sizeof(uint64_t) * 2, &t,
+    sizeof(uint64_t),
     VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT); // Wait till ready.
   double ns_per_tick = invoke.ctxt->physdev_prop().limits.timestampPeriod;
   return (t[1] - t[0]) * ns_per_tick / 1000.0;
@@ -1131,10 +1109,10 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     return {};
   }
 
-  if (invoke.query_pool != VK_NULL_HANDLE) {
-    vkCmdResetQueryPool(cmdbuf, invoke.query_pool, 0, 2);
+  if (invoke.query_pool.is_valid()) {
+    vkCmdResetQueryPool(cmdbuf, *invoke.query_pool.value(), 0, 2);
     vkCmdWriteTimestamp(cmdbuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-      invoke.query_pool, 0);
+      *invoke.query_pool.value(), 0);
 
     log::debug("invocation '", invoke.label, "' will be timed");
   }
@@ -1274,14 +1252,14 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     unreachable();
   }
 
-  if (invoke.query_pool != VK_NULL_HANDLE) {
+  if (invoke.query_pool.is_valid()) {
     VkCommandBuffer cmdbuf2 = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
     if (cmdbuf != cmdbuf2) {
       log::warn("begin and end timestamps are recorded in different command "
         "buffers, timing accuracy might be compromised");
     }
     vkCmdWriteTimestamp(cmdbuf2, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
-      invoke.query_pool, 1);
+      *invoke.query_pool.value(), 1);
   }
 
   log::debug("scheduled invocation '", invoke.label, "' for execution");

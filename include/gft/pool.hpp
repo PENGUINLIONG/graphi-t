@@ -4,13 +4,14 @@
 #include <map>
 #include <memory>
 #include <vector>
+#include <array>
 
 namespace liong {
 namespace pool {
 
 template<typename TKey, typename TValue>
 struct PoolInner {
-  std::map<TKey, std::vector<TValue>> items;
+    std::map<TKey, std::vector<TValue>> items;
 };
 
 template<typename TKey, typename TValue>
@@ -34,6 +35,10 @@ struct PoolItem {
   PoolItem(PoolInner<TKey, TValue>* pool, TKey&& key, TValue&& value) :
     inner(std::make_shared<PoolItemInner<TKey, TValue>>(
       pool, std::move(key), std::move(value))) {}
+
+  inline bool is_valid() const {
+    return inner != nullptr;
+  }
 
   inline TValue& value() {
     return inner->value;
