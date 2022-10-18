@@ -19,13 +19,13 @@ namespace vk {
 inline VkFormat fmt2vk(fmt::Format fmt, fmt::ColorSpace cspace) {
   using namespace fmt;
   switch (fmt) {
-  case L_FORMAT_R8G8B8A8_UNORM_PACK32:
+  case L_FORMAT_R8G8B8A8_UNORM:
     if (cspace == L_COLOR_SPACE_SRGB) {
       return VK_FORMAT_R8G8B8A8_SRGB;
     } else {
       return VK_FORMAT_R8G8B8A8_UNORM;
     }
-  case L_FORMAT_B8G8R8A8_UNORM_PACK32:
+  case L_FORMAT_B8G8R8A8_UNORM:
     if (cspace == L_COLOR_SPACE_SRGB) {
       return VK_FORMAT_B8G8R8A8_SRGB;
     } else {
@@ -101,9 +101,27 @@ struct Transaction {
 
 
 
+struct DescriptorSetKey {
+  std::string inner;
+
+  static DescriptorSetKey create(const std::vector<ResourceType>& rsc_tys);
+
+  inline friend bool operator<(const DescriptorSetKey& a, const DescriptorSetKey& b) {
+    return a.inner < b.inner;
+  }
+};
+typedef pool::Pool<DescriptorSetKey, sys::DescriptorSetRef> DescriptorSetPool;
+typedef pool::PoolItem<DescriptorSetKey, sys::DescriptorSetRef> DescriptorSetPoolItem;
+
 struct ContextSubmitDetail {
   uint32_t qfam_idx;
   VkQueue queue;
+};
+struct ContextDescriptorSetDetail {
+  std::map<DescriptorSetKey, sys::DescriptorSetLayoutRef> desc_set_layouts;
+  // Descriptor pools to hold references.
+  std::vector<sys::DescriptorPoolRef> desc_pools;
+  DescriptorSetPool desc_set_pool;
 };
 struct Context {
   std::string label;
@@ -113,6 +131,7 @@ struct Context {
   std::map<SubmitType, ContextSubmitDetail> submit_details;
   std::map<ImageSampler, VkSampler> img_samplers;
   std::map<DepthImageSampler, VkSampler> depth_img_samplers;
+  ContextDescriptorSetDetail desc_set_detail;
   VmaAllocator allocator;
 
   inline VkPhysicalDevice physdev() const {
@@ -124,6 +143,9 @@ struct Context {
   inline const VkPhysicalDeviceFeatures& physdev_feat() const {
     return get_inst().physdev_details.at(iphysdev).feat;
   }
+
+  sys::DescriptorSetLayoutRef get_desc_set_layout(const std::vector<ResourceType>& rsc_tys);
+  DescriptorSetPoolItem acquire_desc_set(const std::vector<ResourceType>& rsc_tys);
 };
 
 
@@ -187,30 +209,14 @@ struct Swapchain {
 
 
 struct FramebufferKey {
-  VkRenderPass pass;
-  std::vector<VkImageView> img_views;
+  std::string inner;
 
   static FramebufferKey create(
     const RenderPass& pass,
     const std::vector<ResourceView>& rsc_views);
 
   friend inline bool operator<(const FramebufferKey& a, const FramebufferKey& b) {
-    if (a.pass < b.pass) {
-      return true;
-    }
-    if (a.img_views.size() < b.img_views.size()) {
-      return true;
-    }
-    for (size_t i = 0; i < a.img_views.size(); ++i) {
-      VkImageView bx = VK_NULL_HANDLE;
-      if (i < b.img_views.size()) {
-        bx = b.img_views.at(i);
-      }
-      if (a.img_views.at(i) < bx) {
-        return true;
-      }
-    }
-    return false;
+    return a.inner < b.inner;
   }
 };
 
@@ -231,14 +237,8 @@ struct RenderPass {
 
 
 struct TaskResourceDetail {
-  sys::DescriptorSetLayoutRef desc_set_layout;
   sys::PipelineLayoutRef pipe_layout;
   std::vector<ResourceType> rsc_tys;
-  std::vector<VkDescriptorPoolSize> desc_pool_sizes;
-  // Descriptor pools to hold references.
-  std::vector<sys::DescriptorPoolRef> desc_pools;
-  // Descriptor sets not yet acquired by invocations.
-  std::vector<sys::DescriptorSetRef> free_desc_sets;
 };
 struct Task {
   std::string label;
@@ -248,9 +248,6 @@ struct Task {
   sys::PipelineRef pipe;
   DispatchSize workgrp_size; // Only for compute task.
   TaskResourceDetail rsc_detail;
-
-  sys::DescriptorSetRef acquire_desc_set();
-  void release_desc_set(sys::DescriptorSetRef&& item);
 };
 
 
@@ -299,13 +296,13 @@ struct InvocationCopyImageToImageDetail {
 struct InvocationComputeDetail {
   const Task* task;
   VkPipelineBindPoint bind_pt;
-  sys::DescriptorSetRef desc_set;
+  DescriptorSetPoolItem desc_set;
   DispatchSize workgrp_count;
 };
 struct InvocationGraphicsDetail {
   const Task* task;
   VkPipelineBindPoint bind_pt;
-  sys::DescriptorSetRef desc_set;
+  DescriptorSetPoolItem desc_set;
   std::vector<sys::BufferRef> vert_bufs;
   std::vector<VkDeviceSize> vert_buf_offsets;
   sys::BufferRef idx_buf;

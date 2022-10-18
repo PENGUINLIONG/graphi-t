@@ -72,7 +72,7 @@ sys::SurfaceRef _create_surf_metal(const ContextMetalConfig& cfg) {
   auto physdev = get_inst().physdev_details.at(cfg.dev_idx);
 
   VkMetalSurfaceCreateInfoEXT msci {};
-  msci.sType = VK_STRUCTURE_TYPE_MACOS_SURFACE_CREATE_INFO_MVK;
+  msci.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
   msci.pLayer = (const CAMetalLayer*)cfg.metal_layer;
   sys::SurfaceRef surf = sys::Surface::create(get_inst().inst->inst, &msci);
 
@@ -300,8 +300,8 @@ Context _create_ctxt(
   log::debug("created vulkan context '", label, "' on device #", dev_idx, ": ",
     inst.physdev_details.at(dev_idx).desc);
   return Context {
-    label, dev_idx, std::move(dev), surf,
-    std::move(submit_details), img_samplers, depth_img_samplers, allocator
+    label, dev_idx, std::move(dev), surf, std::move(submit_details),
+    img_samplers, depth_img_samplers, {}, allocator
   };
 
 }
@@ -333,6 +333,144 @@ void destroy_ctxt(Context& ctxt) {
     log::debug("destroyed vulkan context '", ctxt.label, "'");
   }
   ctxt = {};
+}
+
+
+sys::DescriptorSetLayoutRef _create_desc_set_layout(
+  const Context& ctxt,
+  const std::vector<ResourceType>& rsc_tys
+) {
+  std::vector<VkDescriptorSetLayoutBinding> dslbs;
+  for (auto i = 0; i < rsc_tys.size(); ++i) {
+    const auto& rsc_ty = rsc_tys[i];
+
+    VkDescriptorSetLayoutBinding dslb {};
+    dslb.binding = i;
+    dslb.descriptorCount = 1;
+    dslb.stageFlags =
+      VK_SHADER_STAGE_ALL_GRAPHICS | VK_SHADER_STAGE_COMPUTE_BIT;
+    switch (rsc_ty) {
+    case L_RESOURCE_TYPE_UNIFORM_BUFFER:
+      dslb.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+      break;
+    case L_RESOURCE_TYPE_STORAGE_BUFFER:
+      dslb.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
+      break;
+    case L_RESOURCE_TYPE_SAMPLED_IMAGE:
+      dslb.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+      break;
+    case L_RESOURCE_TYPE_STORAGE_IMAGE:
+      dslb.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+      break;
+    default:
+      panic("unexpected resource type");
+    }
+
+    dslbs.emplace_back(std::move(dslb));
+  }
+
+  return sys::create_desc_set_layout(ctxt.dev->dev, dslbs);
+}
+
+sys::DescriptorSetLayoutRef Context::get_desc_set_layout(
+  const std::vector<ResourceType>& rsc_tys
+) {
+  DescriptorSetKey desc_set_key = DescriptorSetKey::create(rsc_tys);
+  auto it = desc_set_detail.desc_set_layouts.find(desc_set_key);
+  if (it != desc_set_detail.desc_set_layouts.end()) {
+    return it->second;
+  } else {
+    sys::DescriptorSetLayoutRef desc_set_layout =
+      _create_desc_set_layout(*this, rsc_tys);
+    desc_set_detail.desc_set_layouts[desc_set_key] = desc_set_layout;
+    return desc_set_layout;
+  }
+}
+
+sys::DescriptorPoolRef _create_desc_pool(
+  const Context& ctxt,
+  const std::vector<ResourceType>& rsc_tys
+) {
+  if (rsc_tys.empty()) {
+    return {};
+  }
+
+  std::map<VkDescriptorType, uint32_t> desc_counter;
+  for (auto i = 0; i < rsc_tys.size(); ++i) {
+    const auto& rsc_ty = rsc_tys[i];
+
+    switch (rsc_ty) {
+    case L_RESOURCE_TYPE_UNIFORM_BUFFER:
+      desc_counter[VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER] += 1;
+      break;
+    case L_RESOURCE_TYPE_STORAGE_BUFFER:
+      desc_counter[VK_DESCRIPTOR_TYPE_STORAGE_BUFFER] += 1;
+      break;
+    case L_RESOURCE_TYPE_SAMPLED_IMAGE:
+      desc_counter[VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER] += 1;
+      break;
+    case L_RESOURCE_TYPE_STORAGE_IMAGE:
+      desc_counter[VK_DESCRIPTOR_TYPE_STORAGE_IMAGE] += 1;
+      break;
+    default:
+      panic("unexpected resource type");
+    }
+  }
+
+  // Collect `desc_pool_sizes` for checks on resource bindings.
+  std::vector<VkDescriptorPoolSize> desc_pool_sizes;
+  for (const auto& pair : desc_counter) {
+    VkDescriptorPoolSize desc_pool_size {};
+    desc_pool_size.type = pair.first;
+    desc_pool_size.descriptorCount = pair.second;
+    desc_pool_sizes.emplace_back(std::move(desc_pool_size));
+  }
+
+  VkDescriptorPoolCreateInfo dpci {};
+  dpci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+  dpci.poolSizeCount = static_cast<uint32_t>(desc_pool_sizes.size());
+  dpci.pPoolSizes = desc_pool_sizes.data();
+  dpci.maxSets = 1;
+
+  return sys::DescriptorPool::create(ctxt.dev->dev, &dpci);
+}
+sys::DescriptorSetRef _alloc_desc_set(
+  const Context& ctxt,
+  VkDescriptorPool desc_pool,
+  VkDescriptorSetLayout desc_set_layout
+) {
+  VkDescriptorSetAllocateInfo dsai {};
+  dsai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+  dsai.descriptorPool = desc_pool;
+  dsai.descriptorSetCount = 1;
+  dsai.pSetLayouts = &desc_set_layout;
+
+return sys::DescriptorSet::create(ctxt.dev->dev, &dsai);
+}
+
+DescriptorSetKey DescriptorSetKey::create(
+  const std::vector<ResourceType>& rsc_tys
+) {
+  std::stringstream ss;
+  for (ResourceType rsc_ty : rsc_tys) {
+    ss << (uint32_t)rsc_ty << ",";
+  }
+  return { ss.str() };
+}
+
+
+DescriptorSetPoolItem Context::acquire_desc_set(const std::vector<ResourceType>& rsc_tys) {
+  L_ASSERT(!rsc_tys.empty());
+  DescriptorSetKey key = DescriptorSetKey::create(rsc_tys);
+  if (desc_set_detail.desc_set_pool.has_free_item(key)) {
+    return desc_set_detail.desc_set_pool.acquire(std::move(key));
+  } else {
+    sys::DescriptorPoolRef desc_pool = _create_desc_pool(*this, rsc_tys);
+    sys::DescriptorSetLayoutRef desc_set_layout = get_desc_set_layout(rsc_tys);
+    sys::DescriptorSetRef desc_set = _alloc_desc_set(*this, desc_pool->desc_pool, desc_set_layout->desc_set_layout);
+    desc_set_detail.desc_pools.emplace_back(std::move(desc_pool));
+    return desc_set_detail.desc_set_pool.create(std::move(key), std::move(desc_set));
+  }
 }
 
 

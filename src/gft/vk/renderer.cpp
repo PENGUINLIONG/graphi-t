@@ -203,7 +203,7 @@ TextureGpu::TextureGpu(
   tex = ctxt.build_img()
     .width(width)
     .height(height)
-    .fmt(fmt::L_FORMAT_R8G8B8A8_UNORM_PACK32)
+    .fmt(fmt::L_FORMAT_R8G8B8A8_UNORM)
     .sampled()
     .storage()
     .build();
@@ -257,7 +257,7 @@ scoped::RenderPass create_pass(
   uint32_t height
 ) {
   scoped::RenderPass pass = ctxt.build_pass()
-    .clear_store_attm(fmt::L_FORMAT_B8G8R8A8_UNORM_PACK32)
+    .clear_store_attm(fmt::L_FORMAT_B8G8R8A8_UNORM)
     .clear_store_attm(fmt::L_DEPTH_FORMAT_D32_SFLOAT)
     .width(width)
     .height(height)

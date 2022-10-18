@@ -190,7 +190,7 @@ void guarded_main() {
   scoped::RenderPass pass = ctxt.build_pass("pass")
     .width(swapchain.width())
     .height(swapchain.height())
-    .clear_store_attm(L_FORMAT_B8G8R8A8_UNORM_PACK32)
+    .clear_store_attm(L_FORMAT_B8G8R8A8_UNORM)
     .build();
 
   scoped::Task task = pass.build_graph_task("graph_task")

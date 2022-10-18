@@ -310,8 +310,9 @@ struct SwapchainConfig {
   std::string label;
   // Number of image for multibuffering, can be 1, 2 or 3.
   uint32_t nimg;
-  // Image color format.
-  fmt::Format fmt;
+  // Candidate image color formats. The format is selected based on platform
+  // availability.
+  std::vector<fmt::Format> fmts;
   // Render output color space. Note that the color space is specified for
   // presentation. The rendering output should always be linear colors.
   fmt::ColorSpace cspace;

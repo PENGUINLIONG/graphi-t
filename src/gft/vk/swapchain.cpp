@@ -37,17 +37,27 @@ VkSwapchainKHR _create_swapchain(
   VK_ASSERT << vkGetPhysicalDeviceSurfaceFormatsKHR(physdev,
     ctxt.surf->surf, &nsurf_fmt, surf_fmts.data());
 
-  VkFormat fmt = fmt2vk(cfg.fmt, fmt::L_COLOR_SPACE_LINEAR);
   VkColorSpaceKHR cspace = cspace2vk(cfg.cspace);
+  VkFormat fmt = VK_FORMAT_UNDEFINED;
+  fmt::Format selected_fmt2 = fmt::L_FORMAT_UNDEFINED;
+  for (fmt::Format fmt2 : cfg.fmts) {
+    VkFormat candidate_fmt = fmt2vk(fmt2, fmt::L_COLOR_SPACE_LINEAR);
 
-  bool found = false;
-  for (const VkSurfaceFormatKHR& surf_fmt : surf_fmts) {
-    if (surf_fmt.format == fmt && surf_fmt.colorSpace == cspace) {
-      found = true;
+    bool found = false;
+    for (const VkSurfaceFormatKHR& surf_fmt : surf_fmts) {
+      if (surf_fmt.format == candidate_fmt && surf_fmt.colorSpace == cspace) {
+        fmt = candidate_fmt;
+        selected_fmt2 = fmt2;
+        found = true;
+        break;
+      }
+    }
+
+    if (found) {
       break;
     }
   }
-  L_ASSERT(found, "surface format is not supported by the underlying platform");
+  L_ASSERT(fmt != VK_FORMAT_UNDEFINED, "surface format is not supported by the underlying platform");
 
   VkSwapchainCreateInfoKHR sci {};
   sci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -107,7 +117,7 @@ VkSwapchainKHR _create_swapchain(
     out.img_cfg.usage =
       L_IMAGE_USAGE_ATTACHMENT_BIT |
       L_IMAGE_USAGE_PRESENT_BIT;
-    out.img_cfg.fmt = cfg.fmt;
+    out.img_cfg.fmt = selected_fmt2;
     out.dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
     out.dyn_detail.layout = VK_IMAGE_LAYOUT_UNDEFINED;
     out.dyn_detail.access = 0;
