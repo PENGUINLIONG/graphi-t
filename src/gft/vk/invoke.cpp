@@ -595,28 +595,6 @@ double get_invoke_time_us(const Invocation& invoke) {
   return (t[1] - t[0]) * ns_per_tick / 1000.0;
 }
 
-sys::CommandPoolRef _create_cmd_pool(const Context& ctxt, SubmitType submit_ty) {
-  VkCommandPoolCreateInfo cpci {};
-  cpci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-  cpci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-  cpci.queueFamilyIndex = ctxt.submit_details.at(submit_ty).qfam_idx;
-
-  return sys::CommandPool::create(ctxt.dev->dev, &cpci);
-}
-sys::CommandBufferRef _alloc_cmdbuf(
-  const Context& ctxt,
-  VkCommandPool cmd_pool,
-  VkCommandBufferLevel level
-) {
-  VkCommandBufferAllocateInfo cbai {};
-  cbai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
-  cbai.level = level;
-  cbai.commandBufferCount = 1;
-  cbai.commandPool = cmd_pool;
-
-  return sys::CommandBuffer::create(ctxt.dev->dev, &cbai);
-}
-
 
 
 struct TransactionLike {
@@ -646,14 +624,28 @@ void _end_cmdbuf(const TransactionSubmitDetail& submit_detail) {
   VK_ASSERT << vkEndCommandBuffer(submit_detail.cmdbuf->cmdbuf);
 }
 
+sys::CommandBufferRef _alloc_cmdbuf(
+  const Context& ctxt,
+  VkCommandPool cmd_pool,
+  VkCommandBufferLevel level
+) {
+  VkCommandBufferAllocateInfo cbai {};
+  cbai.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+  cbai.level = level;
+  cbai.commandBufferCount = 1;
+  cbai.commandPool = cmd_pool;
+
+  return sys::CommandBuffer::create(ctxt.dev->dev, &cbai);
+}
+
 void _push_transact_submit_detail(
   const Context& ctxt,
   std::vector<TransactionSubmitDetail>& submit_details,
   SubmitType submit_ty,
   VkCommandBufferLevel level
 ) {
-  auto cmd_pool = _create_cmd_pool(ctxt, submit_ty);
-  auto cmdbuf = _alloc_cmdbuf(ctxt, cmd_pool->cmd_pool, level);
+  auto cmd_pool = const_cast<Context&>(ctxt).acquire_cmd_pool(submit_ty);
+  auto cmdbuf = _alloc_cmdbuf(ctxt, *cmd_pool.value(), level);
 
   TransactionSubmitDetail submit_detail {};
   submit_detail.submit_ty = submit_ty;

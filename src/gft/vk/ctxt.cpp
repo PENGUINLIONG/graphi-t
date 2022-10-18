@@ -301,7 +301,7 @@ Context _create_ctxt(
     inst.physdev_details.at(dev_idx).desc);
   return Context {
     label, dev_idx, std::move(dev), surf, std::move(submit_details),
-    img_samplers, depth_img_samplers, {}, allocator
+    img_samplers, depth_img_samplers, {}, {}, allocator
   };
 
 }
@@ -445,7 +445,7 @@ sys::DescriptorSetRef _alloc_desc_set(
   dsai.descriptorSetCount = 1;
   dsai.pSetLayouts = &desc_set_layout;
 
-return sys::DescriptorSet::create(ctxt.dev->dev, &dsai);
+  return sys::DescriptorSet::create(ctxt.dev->dev, &dsai);
 }
 
 DescriptorSetKey DescriptorSetKey::create(
@@ -470,6 +470,27 @@ DescriptorSetPoolItem Context::acquire_desc_set(const std::vector<ResourceType>&
     sys::DescriptorSetRef desc_set = _alloc_desc_set(*this, desc_pool->desc_pool, desc_set_layout->desc_set_layout);
     desc_set_detail.desc_pools.emplace_back(std::move(desc_pool));
     return desc_set_detail.desc_set_pool.create(std::move(key), std::move(desc_set));
+  }
+}
+
+sys::CommandPoolRef _create_cmd_pool(const Context& ctxt, SubmitType submit_ty) {
+  VkCommandPoolCreateInfo cpci {};
+  cpci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+  cpci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+  cpci.queueFamilyIndex = ctxt.submit_details.at(submit_ty).qfam_idx;
+
+  return sys::CommandPool::create(ctxt.dev->dev, &cpci);
+}
+
+CommandPoolPoolItem Context::acquire_cmd_pool(SubmitType submit_ty) {
+  if (cmd_pool_pool.has_free_item(submit_ty)) {
+    CommandPoolPoolItem item {};
+    item = cmd_pool_pool.acquire(std::move(submit_ty));
+    VK_ASSERT << vkResetCommandPool(*dev, *item.value(), 0);
+    return item;
+  } else {
+    sys::CommandPoolRef cmd_pool = _create_cmd_pool(*this, submit_ty);
+    return cmd_pool_pool.create(std::move(submit_ty), std::move(cmd_pool));
   }
 }
 
