@@ -117,6 +117,9 @@ struct DescriptorSetKey {
 typedef pool::Pool<DescriptorSetKey, sys::DescriptorSetRef> DescriptorSetPool;
 typedef pool::PoolItem<DescriptorSetKey, sys::DescriptorSetRef> DescriptorSetPoolItem;
 
+typedef pool::Pool<int, sys::QueryPoolRef> QueryPoolPool;
+typedef pool::PoolItem<int, sys::QueryPoolRef> QueryPoolPoolItem;
+
 struct ContextSubmitDetail {
   uint32_t qfam_idx;
   VkQueue queue;
@@ -137,6 +140,7 @@ struct Context {
   std::map<DepthImageSampler, VkSampler> depth_img_samplers;
   ContextDescriptorSetDetail desc_set_detail;
   CommandPoolPool cmd_pool_pool;
+  QueryPoolPool query_pool_pool;
   VmaAllocator allocator;
 
   inline VkPhysicalDevice physdev() const {
@@ -153,6 +157,8 @@ struct Context {
   DescriptorSetPoolItem acquire_desc_set(const std::vector<ResourceType>& rsc_tys);
 
   CommandPoolPoolItem acquire_cmd_pool(SubmitType submit_ty);
+
+  QueryPoolPoolItem acquire_query_pool();
 };
 
 
@@ -354,7 +360,7 @@ struct Invocation {
   // Managed transitioning of resources referenced by invocation.
   InvocationTransitionDetail transit_detail;
   // Query pool for device-side timing, if required.
-  VkQueryPool query_pool;
+  QueryPoolPoolItem query_pool;
   // Baking artifacts. Currently we don't support baking render pass invocations
   // and those with switching submit types.
   std::unique_ptr<InvocationBakingDetail> bake_detail;
