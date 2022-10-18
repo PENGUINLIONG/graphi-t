@@ -14,10 +14,10 @@ namespace log {
 // Logging infrastructure.
 
 enum class LogLevel {
-  L_LOG_LEVEL_DEBUG,
-  L_LOG_LEVEL_INFO,
-  L_LOG_LEVEL_WARNING,
-  L_LOG_LEVEL_ERROR,
+  L_LOG_LEVEL_DEBUG = 0,
+  L_LOG_LEVEL_INFO = 1,
+  L_LOG_LEVEL_WARNING = 2,
+  L_LOG_LEVEL_ERROR = 3,
 };
 
 namespace detail {
@@ -43,21 +43,32 @@ void pop_indent();
 
 template<typename ... TArgs>
 inline void debug(const TArgs& ... msg) {
+#ifdef L_MIN_LOG_LEVEL
+  if constexpr ((uint32_t)LogLevel::L_LOG_LEVEL_DEBUG >= L_MIN_LOG_LEVEL)
+#endif // L_MIN_LOG_LEVEL
   log(LogLevel::L_LOG_LEVEL_DEBUG, msg...);
 }
 template<typename ... TArgs>
 inline void info(const TArgs& ... msg) {
+#ifdef L_MIN_LOG_LEVEL
+  if constexpr ((uint32_t)LogLevel::L_LOG_LEVEL_INFO >= L_MIN_LOG_LEVEL)
+#endif // L_MIN_LOG_LEVEL
   log(LogLevel::L_LOG_LEVEL_INFO, msg...);
 }
 template<typename ... TArgs>
 inline void warn(const TArgs& ... msg) {
+#ifdef L_MIN_LOG_LEVEL
+  if constexpr ((uint32_t)LogLevel::L_LOG_LEVEL_WARNING >= L_MIN_LOG_LEVEL)
+#endif // L_MIN_LOG_LEVEL
   log(LogLevel::L_LOG_LEVEL_WARNING, msg...);
 }
 template<typename ... TArgs>
 inline void error(const TArgs& ... msg) {
+#ifdef L_MIN_LOG_LEVEL
+  if constexpr ((uint32_t)LogLevel::L_LOG_LEVEL_ERROR >= L_MIN_LOG_LEVEL)
+#endif // L_MIN_LOG_LEVEL
   log(LogLevel::L_LOG_LEVEL_ERROR, msg...);
 }
 }
-
 
 } // namespace liong
