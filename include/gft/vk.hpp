@@ -77,6 +77,9 @@ extern const Instance& get_inst();
 
 
 
+typedef pool::Pool<SubmitType, sys::CommandPoolRef> CommandPoolPool;
+typedef pool::PoolItem<SubmitType, sys::CommandPoolRef> CommandPoolPoolItem;
+
 enum SubmitType {
   L_SUBMIT_TYPE_ANY,
   L_SUBMIT_TYPE_COMPUTE,
@@ -86,7 +89,7 @@ enum SubmitType {
 };
 struct TransactionSubmitDetail {
   SubmitType submit_ty;
-  sys::CommandPoolRef cmd_pool;
+  CommandPoolPoolItem cmd_pool;
   sys::CommandBufferRef cmdbuf;
   VkQueue queue;
   sys::SemaphoreRef wait_sema;
@@ -132,6 +135,7 @@ struct Context {
   std::map<ImageSampler, VkSampler> img_samplers;
   std::map<DepthImageSampler, VkSampler> depth_img_samplers;
   ContextDescriptorSetDetail desc_set_detail;
+  CommandPoolPool cmd_pool_pool;
   VmaAllocator allocator;
 
   inline VkPhysicalDevice physdev() const {
@@ -146,6 +150,8 @@ struct Context {
 
   sys::DescriptorSetLayoutRef get_desc_set_layout(const std::vector<ResourceType>& rsc_tys);
   DescriptorSetPoolItem acquire_desc_set(const std::vector<ResourceType>& rsc_tys);
+
+  CommandPoolPoolItem acquire_cmd_pool(SubmitType submit_ty);
 };
 
 
@@ -326,7 +332,7 @@ struct InvocationCompositeDetail {
   std::vector<const Invocation*> subinvokes;
 };
 struct InvocationBakingDetail {
-  sys::CommandPoolRef cmd_pool;
+  CommandPoolPoolItem cmd_pool;
   sys::CommandBufferRef cmdbuf;
 };
 struct Invocation {

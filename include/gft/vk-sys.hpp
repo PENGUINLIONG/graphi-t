@@ -391,6 +391,10 @@ struct CommandPool {
     dev(dev), cmd_pool(cmd_pool), should_destroy(should_destroy) {}
   ~CommandPool() { destroy(); }
 
+  operator VkCommandPool() {
+    return cmd_pool;
+  }
+
   static std::shared_ptr<CommandPool> create(VkDevice dev, const VkCommandPoolCreateInfo* cpci) {
     VkCommandPool cmd_pool = VK_NULL_HANDLE;
     VK_ASSERT << vkCreateCommandPool(dev, cpci, nullptr, &cmd_pool);
@@ -410,6 +414,10 @@ struct CommandBuffer {
   CommandBuffer(VkCommandBuffer cmdbuf, bool should_destroy) :
     cmdbuf(cmdbuf), should_destroy(should_destroy) {}
   ~CommandBuffer() { destroy(); }
+
+  operator VkCommandBuffer() {
+    return cmdbuf;
+  }
 
   static std::shared_ptr<CommandBuffer> create(VkDevice dev, const VkCommandBufferAllocateInfo* cbai) {
     VkCommandBuffer cmdbuf = VK_NULL_HANDLE;
