@@ -1238,10 +1238,6 @@ std::vector<sys::FenceRef> _record_invoke_impl(
       img_views.at(i) = pass_detail.attms.at(i)->img_view;
     }
 
-    VkRenderPassAttachmentBeginInfo rpabi {};
-    rpabi.attachmentCount = img_views.size();
-    rpabi.pAttachments = img_views.data();
-
     vkCmdBeginRenderPass(cmdbuf, &rpbi, sc);
     log::debug("render pass invocation '", invoke.label, "' began");
 
