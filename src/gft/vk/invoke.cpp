@@ -563,7 +563,7 @@ void destroy_invoke(Invocation& invoke) {
 }
 
 double get_invoke_time_us(const Invocation& invoke) {
-  if (invoke.query_pool.is_valid()) { return 0.0; }
+  if (!invoke.query_pool.is_valid()) { return 0.0; }
   uint64_t t[2];
   VK_ASSERT << vkGetQueryPoolResults(invoke.ctxt->dev->dev,
     *invoke.query_pool.value(), 0, 2, sizeof(uint64_t) * 2, &t,
