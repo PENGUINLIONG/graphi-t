@@ -173,21 +173,26 @@ FramebufferKey FramebufferKey::create(
   const RenderPass& pass,
   const std::vector<ResourceView>& rsc_views
 ) {
-  const RenderPassConfig& pass_cfg = pass.pass_cfg;
-  FramebufferKey key {};
-  key.pass = *pass.pass;
+  std::stringstream ss;
+  ss << *pass.pass;
   for (const auto& rsc_view : rsc_views) {
     switch (rsc_view.rsc_view_ty) {
     case L_RESOURCE_VIEW_TYPE_IMAGE:
-      key.img_views.emplace_back(rsc_view.img_view.img->img_view->img_view);
+    {
+      VkImageView img_view = rsc_view.img_view.img->img_view->img_view;
+      ss << "," << img_view;
       break;
+    }
     case L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE:
-      key.img_views.emplace_back(rsc_view.depth_img_view.depth_img->img_view->img_view);
+    {
+      VkImageView img_view = rsc_view.depth_img_view.depth_img->img_view->img_view;
+      ss << "," << img_view;
       break;
+    }
     default: L_PANIC("unsupported resource type as an attachment");
     }
   }
-  return key;
+  return { ss.str() };
 }
 
 FramebufferPoolItem RenderPass::acquire_framebuf(

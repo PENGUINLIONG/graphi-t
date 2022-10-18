@@ -65,7 +65,9 @@ struct Pool {
       std::move(value));
   }
   inline PoolItem<TKey, TValue> acquire(TKey&& key) {
-    TValue value = std::move(inner.items.at(key).back());
+    std::vector<TValue>& pool = inner.items.at(key);
+    TValue value = std::move(pool.back());
+    pool.pop_back();
     return create(std::move(key), std::move(value));
   }
 };

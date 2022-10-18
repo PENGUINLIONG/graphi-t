@@ -5,79 +5,6 @@
 namespace liong {
 namespace vk {
 
-sys::DescriptorSetLayoutRef _create_desc_set_layout(
-  const Context& ctxt,
-  const std::vector<ResourceType>& rsc_tys,
-  std::vector<VkDescriptorPoolSize>& desc_pool_sizes
-) {
-  std::vector<VkDescriptorSetLayoutBinding> dslbs;
-  std::map<VkDescriptorType, uint32_t> desc_counter;
-  for (auto i = 0; i < rsc_tys.size(); ++i) {
-    const auto& rsc_ty = rsc_tys[i];
-
-    VkDescriptorSetLayoutBinding dslb {};
-    dslb.binding = i;
-    dslb.descriptorCount = 1;
-    dslb.stageFlags =
-      VK_SHADER_STAGE_ALL_GRAPHICS | VK_SHADER_STAGE_COMPUTE_BIT;
-    switch (rsc_ty) {
-    case L_RESOURCE_TYPE_UNIFORM_BUFFER:
-      dslb.descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-      break;
-    case L_RESOURCE_TYPE_STORAGE_BUFFER:
-      dslb.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER;
-      break;
-    case L_RESOURCE_TYPE_SAMPLED_IMAGE:
-      dslb.descriptorType = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-      break;
-    case L_RESOURCE_TYPE_STORAGE_IMAGE:
-      dslb.descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-      break;
-    default:
-      panic("unexpected resource type");
-    }
-    desc_counter[dslb.descriptorType] += 1;
-
-    dslbs.emplace_back(std::move(dslb));
-
-    // Collect `desc_pool_sizes` for checks on resource bindings.
-    for (const auto& pair : desc_counter) {
-      VkDescriptorPoolSize desc_pool_size;
-      desc_pool_size.type = pair.first;
-      desc_pool_size.descriptorCount = pair.second;
-      desc_pool_sizes.emplace_back(std::move(desc_pool_size));
-    }
-  }
-
-  return sys::create_desc_set_layout(ctxt.dev->dev, dslbs);
-}
-
-sys::DescriptorPoolRef _create_desc_pool(
-  const Context& ctxt,
-  const std::vector<VkDescriptorPoolSize>& desc_pool_sizes
-) {
-  VkDescriptorPoolCreateInfo dpci {};
-  dpci.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-  dpci.poolSizeCount = static_cast<uint32_t>(desc_pool_sizes.size());
-  dpci.pPoolSizes = desc_pool_sizes.data();
-  dpci.maxSets = 1;
-
-  return sys::DescriptorPool::create(ctxt.dev->dev, &dpci);
-}
-sys::DescriptorSetRef _alloc_desc_set(
-  const Context& ctxt,
-  VkDescriptorPool desc_pool,
-  VkDescriptorSetLayout desc_set_layout
-) {
-  VkDescriptorSetAllocateInfo dsai {};
-  dsai.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-  dsai.descriptorPool = desc_pool;
-  dsai.descriptorSetCount = 1;
-  dsai.pSetLayouts = &desc_set_layout;
-
-  return sys::DescriptorSet::create(ctxt.dev->dev, &dsai);
-}
-
 Task create_comp_task(
   const Context& ctxt,
   const ComputeTaskConfig& cfg
@@ -85,8 +12,8 @@ Task create_comp_task(
   L_ASSERT(cfg.workgrp_size.x * cfg.workgrp_size.y * cfg.workgrp_size.z != 0,
     "workgroup size cannot be zero");
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
-  sys::DescriptorSetLayoutRef desc_set_layout = _create_desc_set_layout(ctxt,
-    cfg.rsc_tys, desc_pool_sizes);
+  sys::DescriptorSetLayoutRef desc_set_layout =
+    const_cast<Context&>(ctxt).get_desc_set_layout(cfg.rsc_tys);
   sys::PipelineLayoutRef pipe_layout = sys::create_pipe_layout(ctxt.dev->dev,
     desc_set_layout->desc_set_layout);
   VkShaderModule shader_mod = sys::create_shader_mod(ctxt.dev->dev,
@@ -116,10 +43,8 @@ Task create_comp_task(
   sys::destroy_shader_mod(ctxt.dev->dev, shader_mod);
 
   TaskResourceDetail rsc_detail {};
-  rsc_detail.desc_set_layout = std::move(desc_set_layout);
   rsc_detail.pipe_layout = std::move(pipe_layout);
   rsc_detail.rsc_tys = cfg.rsc_tys;
-  rsc_detail.desc_pool_sizes = std::move(desc_pool_sizes);
 
   log::debug("created compute task '", cfg.label, "'");
   return Task {
@@ -138,7 +63,8 @@ Task create_graph_task(
 
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   sys::DescriptorSetLayoutRef desc_set_layout =
-    _create_desc_set_layout(ctxt, cfg.rsc_tys, desc_pool_sizes);
+    const_cast<Context&>(ctxt).get_desc_set_layout(cfg.rsc_tys);
+
   sys::PipelineLayoutRef pipe_layout = sys::create_pipe_layout(ctxt.dev->dev,
     desc_set_layout->desc_set_layout);
   VkShaderModule vert_shader_mod = sys::create_shader_mod(ctxt.dev->dev,
@@ -202,10 +128,8 @@ Task create_graph_task(
   sys::destroy_shader_mod(ctxt.dev->dev, frag_shader_mod);
 
   TaskResourceDetail rsc_detail {};
-  rsc_detail.desc_set_layout = std::move(desc_set_layout);
   rsc_detail.pipe_layout = std::move(pipe_layout);
   rsc_detail.rsc_tys = cfg.rsc_tys;
-  rsc_detail.desc_pool_sizes = std::move(desc_pool_sizes);
 
   log::debug("created graphics task '", cfg.label, "'");
   return Task {
@@ -219,28 +143,6 @@ void destroy_task(Task& task) {
   if (task.pipe != VK_NULL_HANDLE) {
     log::debug("destroyed task '", task.label, "'");
     task = {};
-  }
-}
-
-sys::DescriptorSetRef Task::acquire_desc_set() {
-  if (rsc_detail.desc_pool_sizes.size() > 0) {
-    if (rsc_detail.free_desc_sets.empty()) {
-      sys::DescriptorPoolRef desc_pool = _create_desc_pool(*ctxt, rsc_detail.desc_pool_sizes);
-      sys::DescriptorSetRef desc_set = _alloc_desc_set(*ctxt, desc_pool->desc_pool, rsc_detail.desc_set_layout->desc_set_layout);
-      rsc_detail.desc_pools.emplace_back(desc_pool);
-      return desc_set;
-    } else {
-      auto back = std::move(rsc_detail.free_desc_sets.back());
-      rsc_detail.free_desc_sets.pop_back();
-      return back;
-    }
-  } else {
-    return nullptr;
-  }
-}
-void Task::release_desc_set(sys::DescriptorSetRef&& item) {
-  if (item != nullptr) {
-    rsc_detail.free_desc_sets.emplace_back(std::move(item));
   }
 }
 
