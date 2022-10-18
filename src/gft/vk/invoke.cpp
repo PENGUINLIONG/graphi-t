@@ -1109,8 +1109,12 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     VK_ASSERT << res;
 
     img_idx = ~0u;
-    VK_ASSERT << vkAcquireNextImageKHR(ctxt.dev->dev, swapchain.swapchain, 0,
-      VK_NULL_HANDLE, acquire_fence->fence, &img_idx);
+    res = VK_NOT_READY;
+    do {
+      res = vkAcquireNextImageKHR(ctxt.dev->dev, swapchain.swapchain, 3000,
+        VK_NULL_HANDLE, acquire_fence->fence, &img_idx);
+    } while (res == VK_NOT_READY);
+    VK_ASSERT << res;
 
     transact.is_frozen = true;
 
