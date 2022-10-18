@@ -34,7 +34,7 @@ sys::SurfaceRef _create_surf_windows(const ContextWindowsConfig& cfg) {
   wsci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
   wsci.hinstance = (HINSTANCE)cfg.hinst;
   wsci.hwnd = (HWND)cfg.hwnd;
-  sys::SurfaceRef surf = sys::Surface::create(get_inst().inst, &wsci);
+  sys::SurfaceRef surf = sys::Surface::create(get_inst().inst->inst, &wsci);
 
   log::debug("created windows surface '", cfg.label, "'");
   return surf;
@@ -54,7 +54,7 @@ sys::SurfaceRef _create_surf_android(const ContextAndroidConfig& cfg) {
   VkAndroidSurfaceCreateInfoKHR asci {};
   asci.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
   asci.window = (struct ANativeWindow* const)cfg.native_wnd;
-  sys::SurfaceRef surf = sys::Surface::create(get_inst().inst, &asci);
+  sys::SurfaceRef surf = sys::Surface::create(get_inst().inst->inst, &asci);
 
   log::debug("created android surface '", cfg.label, "'");
   return surf;
