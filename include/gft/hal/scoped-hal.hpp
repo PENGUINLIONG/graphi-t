@@ -29,7 +29,9 @@ struct GcScope {
   inline GcScope(const std::string& label = "") : label(label) {
     push_gc_frame(label);
   }
-  inline ~GcScope() { pop_gc_frame(label); }
+  inline ~GcScope() {
+    pop_gc_frame(label);
+  }
 };
 
 
@@ -68,7 +70,8 @@ enum ScopedObjectOwnership {
   static ty own_by_raii(HAL_IMPL_NAMESPACE::ty&& inner); \
   static ty own_by_gc_frame(HAL_IMPL_NAMESPACE::ty&& inner); \
   inline operator HAL_IMPL_NAMESPACE::ty&() { return *inner; } \
-  inline operator const HAL_IMPL_NAMESPACE::ty&() const { return *inner; }
+  inline operator const HAL_IMPL_NAMESPACE::ty&() const { return *inner; } \
+  constexpr bool is_valid() const { return inner != nullptr; }
 
 
 

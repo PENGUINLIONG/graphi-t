@@ -22,8 +22,6 @@ bool is_transact_done(const Transaction& transact) {
   return true;
 }
 void wait_transact(const Transaction& transact) {
-  const uint32_t SPIN_INTERVAL = 3000;
-
   const Context& ctxt = *transact.ctxt;
 
   std::vector<VkFence> fences(transact.fences.size());
