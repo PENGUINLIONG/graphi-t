@@ -149,12 +149,12 @@ void _init_swapchain(Swapchain& swapchain) {
   VkFence fence;
   VK_ASSERT << vkCreateFence(ctxt.dev->dev, &fci, nullptr, &fence);
 
-  VkResult acq_res = vkAcquireNextImageKHR(ctxt.dev->dev, swapchain.swapchain, 0,
-    VK_NULL_HANDLE, fence, &*dyn_detail.img_idx);
+  VkResult acq_res = vkAcquireNextImageKHR(ctxt.dev->dev, swapchain.swapchain,
+    SPIN_INTERVAL, VK_NULL_HANDLE, fence, &*dyn_detail.img_idx);
   L_ASSERT(acq_res >= 0, "failed to initiate swapchain image acquisition");
 
   // Ensure the first image is acquired. It shouldn't take long.
-  VK_ASSERT << vkWaitForFences(ctxt.dev->dev, 1, &fence, VK_TRUE, 1000);
+  VK_ASSERT << vkWaitForFences(ctxt.dev->dev, 1, &fence, VK_TRUE, SPIN_INTERVAL);
 
   vkDestroyFence(ctxt.dev->dev, fence, nullptr);
 }

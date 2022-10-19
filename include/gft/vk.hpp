@@ -16,6 +16,8 @@
 namespace liong {
 namespace vk {
 
+const uint32_t SPIN_INTERVAL = 30'000;
+
 inline VkFormat fmt2vk(fmt::Format fmt, fmt::ColorSpace cspace) {
   using namespace fmt;
   switch (fmt) {
