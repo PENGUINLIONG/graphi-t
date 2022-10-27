@@ -63,6 +63,7 @@ struct JsonArray {
   std::vector<JsonValue> inner;
 
   inline JsonArray() : inner() {}
+  JsonArray(std::vector<JsonValue>&& b) : inner(std::move(b)) {}
   JsonArray(std::initializer_list<JsonValue>&& elems);
 };
 // JSON object builder.
@@ -70,6 +71,7 @@ struct JsonObject {
   std::map<std::string, JsonValue> inner;
 
   inline JsonObject() : inner() {}
+  JsonObject(std::map<std::string, JsonValue>&& b) : inner(std::move(b)) {}
   JsonObject(
     std::initializer_list<std::pair<const std::string, JsonValue>>&& entries
   );
@@ -81,18 +83,25 @@ struct JsonValue {
   bool b;
   double num;
   std::string str;
-  std::map<std::string, JsonValue> obj;
-  std::vector<JsonValue> arr;
+  JsonObject obj;
+  JsonArray arr;
 
   inline JsonValue() : ty(L_JSON_NULL) {}
   inline JsonValue(nullptr_t) : ty(L_JSON_NULL) {}
   inline JsonValue(bool b) : ty(L_JSON_BOOLEAN), b(b) {}
   inline JsonValue(double num) : ty(L_JSON_NUMBER), num(num) {}
   inline JsonValue(float num) : ty(L_JSON_NUMBER), num(num) {}
+  inline JsonValue(char num) : ty(L_JSON_NUMBER), num(num) {}
+  inline JsonValue(signed char num) : ty(L_JSON_NUMBER), num(num) {}
+  inline JsonValue(unsigned char num) : ty(L_JSON_NUMBER), num(num) {}
+  inline JsonValue(short num) : ty(L_JSON_NUMBER), num(num) {}
+  inline JsonValue(unsigned short num) : ty(L_JSON_NUMBER), num(num) {}
   inline JsonValue(int num) : ty(L_JSON_NUMBER), num(num) {}
   inline JsonValue(unsigned int num) : ty(L_JSON_NUMBER), num(num) {}
   inline JsonValue(long num) : ty(L_JSON_NUMBER), num(num) {}
   inline JsonValue(unsigned long num) : ty(L_JSON_NUMBER), num(num) {}
+  inline JsonValue(long long num) : ty(L_JSON_NUMBER), num(num) {}
+  inline JsonValue(unsigned long long num) : ty(L_JSON_NUMBER), num(num) {}
   inline JsonValue(const char* str) : ty(L_JSON_STRING), str(str) {}
   inline JsonValue(const std::string& str) : ty(L_JSON_STRING), str(str) {}
   inline JsonValue(std::string&& str) :
@@ -103,27 +112,27 @@ struct JsonValue {
 
   inline JsonValue& operator[](const char* key) {
     if (!is_obj()) { throw JsonException("value is not an object"); }
-    return obj.at(key);
+    return obj.inner.at(key);
   }
   inline const JsonValue& operator[](const char* key) const {
     if (!is_obj()) { throw JsonException("value is not an object"); }
-    return obj.at(key);
+    return obj.inner.at(key);
   }
   inline JsonValue& operator[](const std::string& key) {
     if (!is_obj()) { throw JsonException("value is not an object"); }
-    return obj.at(key);
+    return obj.inner.at(key);
   }
   inline const JsonValue& operator[](const std::string& key) const {
     if (!is_obj()) { throw JsonException("value is not an object"); }
-    return obj.at(key);
+    return obj.inner.at(key);
   }
   inline JsonValue& operator[](size_t i) {
     if (!is_arr()) { throw JsonException("value is not an array"); }
-    return arr.at(i);
+    return arr.inner.at(i);
   }
   inline const JsonValue& operator[](size_t i) const {
     if (!is_arr()) { throw JsonException("value is not an array"); }
-    return arr.at(i);
+    return arr.inner.at(i);
   }
   inline operator bool() const {
     if (!is_bool()) { throw JsonException("value is not a bool"); }
@@ -136,6 +145,26 @@ struct JsonValue {
   inline operator float() const {
     if (!is_num()) { throw JsonException("value is not a number"); }
     return (float)num;
+  }
+  inline operator char() const {
+    if (!is_num()) { throw JsonException("value is not a number"); }
+    return (char)num;
+  }
+  inline operator signed char() const {
+    if (!is_num()) { throw JsonException("value is not a number"); }
+    return (signed char)num;
+  }
+  inline operator unsigned char() const {
+    if (!is_num()) { throw JsonException("value is not a number"); }
+    return (unsigned char)num;
+  }
+  inline operator short() const {
+    if (!is_num()) { throw JsonException("value is not a number"); }
+    return (short)num;
+  }
+  inline operator unsigned short() const {
+    if (!is_num()) { throw JsonException("value is not a number"); }
+    return (unsigned short)num;
   }
   inline operator int() const {
     if (!is_num()) { throw JsonException("value is not a number"); }
@@ -153,9 +182,25 @@ struct JsonValue {
     if (!is_num()) { throw JsonException("value is not a number"); }
     return (unsigned long)num;
   }
-  inline operator std::string() const {
+  inline operator long long() const {
+    if (!is_num()) { throw JsonException("value is not a number"); }
+    return (long long)num;
+  }
+  inline operator unsigned long long() const {
+    if (!is_num()) { throw JsonException("value is not a number"); }
+    return (unsigned long long)num;
+  }
+  inline operator const std::string& () const {
     if (!is_str()) { throw JsonException("value is not a string"); }
     return str;
+  }
+  inline operator const JsonArray& () const {
+    if (!is_arr()) { throw JsonException("value is not an array"); }
+    return arr;
+  }
+  inline operator const JsonObject& () const {
+    if (!is_obj()) { throw JsonException("value is not an object"); }
+    return obj;
   }
 
   inline bool is_null() const { return ty == L_JSON_NULL; }
@@ -167,18 +212,18 @@ struct JsonValue {
 
   inline size_t size() const {
     if (is_obj()) {
-      return obj.size();
+      return obj.inner.size();
     } else if (is_arr()) {
-      return arr.size();
+      return arr.inner.size();
     } else {
       throw JsonException("only object and array can have size");
     }
   }
   inline JsonElementEnumerator elems() const {
-    return JsonElementEnumerator(arr);
+    return JsonElementEnumerator(arr.inner);
   }
   inline JsonFieldEnumerator fields() const {
-    return JsonFieldEnumerator(obj);
+    return JsonFieldEnumerator(obj.inner);
   }
 };
 
