@@ -18,14 +18,14 @@ JsonArray::JsonArray(
   std::initializer_list<JsonValue>&& elems
 ) : inner(elems) {}
 JsonObject::JsonObject(
-  std::initializer_list<std::pair<const std::string, JsonValue>>&& entries
-) : inner(std::forward<std::initializer_list<std::pair<const std::string, JsonValue>>>(entries)) {}
+  std::initializer_list<std::pair<const std::string, JsonValue>>&& fields
+) : inner(fields) {}
 JsonValue::JsonValue(JsonObject&& obj) :
   ty(L_JSON_OBJECT),
-  obj(std::forward<std::map<std::string, JsonValue>>(obj.inner)) {}
+  obj(std::move(obj.inner)) {}
 JsonValue::JsonValue(JsonArray&& arr) :
   ty(L_JSON_ARRAY),
-  arr(std::forward<std::vector<JsonValue>>(arr.inner)) {}
+  arr(move(arr.inner)) {}
 
 
 
@@ -233,7 +233,7 @@ bool try_parse_impl(
           // When the array has no element.
           break;
         }
-        out.arr.emplace_back(std::move(val));
+        out.arr.inner.emplace_back(std::move(val));
         if (tokenizer.next_token(token)) {
           if (token.ty == L_JSON_TOKEN_COMMA) {
             continue;
@@ -275,7 +275,7 @@ bool try_parse_impl(
         if (!try_parse_impl(tokenizer, val)) {
           throw JsonException("unexpected end of object");
         }
-        out.obj[key] = std::move(val);
+        out.obj.inner[key] = std::move(val);
         // Should we head for another round?
         if (tokenizer.next_token(token)) {
           if (token.ty == L_JSON_TOKEN_COMMA) {
@@ -341,7 +341,7 @@ void print_impl(const JsonValue& json, std::stringstream& out) {
     out << "{";
     {
       bool is_first_iter = true;
-      for (const auto& pair : json.obj) {
+      for (const auto& pair : json.obj.inner) {
         if (is_first_iter) {
           is_first_iter = false;
         } else {
@@ -357,7 +357,7 @@ void print_impl(const JsonValue& json, std::stringstream& out) {
     out << "[";
     {
       bool is_first_iter = true;
-      for (const auto& elem : json.arr) {
+      for (const auto& elem : json.arr.inner) {
         if (is_first_iter) {
           is_first_iter = false;
         } else {
