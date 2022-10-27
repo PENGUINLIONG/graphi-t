@@ -152,7 +152,7 @@ struct JsonSerde {
   static void deserialize(const JsonValue& j, typename std::enable_if_t<std::is_same<std::vector<typename U::value_type>, T>::value, T>& x) {
     x.clear();
     for (const auto& elem : j.elems()) {
-      T::value_type xx {};
+      typename T::value_type xx {};
       JsonSerde<decltype(xx)>::deserialize(elem, xx);
       x.emplace_back(std::move(xx));
     }
