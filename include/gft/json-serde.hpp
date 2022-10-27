@@ -7,7 +7,7 @@
 #include <map>
 #include <unordered_map>
 #include <type_traits>
-
+#include "gft/json.hpp"
 
 namespace liong {
 namespace json {
@@ -294,11 +294,11 @@ public:
     static ::liong::json::detail::FieldNameList JSON_SERDE_FIELD_NAMES__ = { #__VA_ARGS__ }; \
     return JSON_SERDE_FIELD_NAMES__.field_names; \
   } \
-  JsonValue json_serialize_fields__() const { \
-    JsonObject out__ {}; \
+  ::liong::json::JsonValue json_serialize_fields__() const { \
+    ::liong::json::JsonObject out__ {}; \
     ::liong::json::detail::json_serialize_field_impl(out__, json_serde_field_names__().begin(), __VA_ARGS__); \
-    return JsonValue(std::move(out__)); \
+    return ::liong::json::JsonValue(std::move(out__)); \
   } \
-  void json_deserialize_fields__(const JsonObject& j__) { \
+  void json_deserialize_fields__(const ::liong::json::JsonObject& j__) { \
     ::liong::json::detail::json_deserialize_field_impl(j__, json_serde_field_names__().begin(), __VA_ARGS__); \
   }
