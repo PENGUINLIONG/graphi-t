@@ -35,5 +35,5 @@ jobs:
 
     - name: Test
       working-directory: ${{github.workspace}}
-      run: build/TestRunner -C ${{env.BUILD_TYPE}}
+      run: build/bin/TestRunner -C ${{env.BUILD_TYPE}}
       
