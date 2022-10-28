@@ -4,7 +4,7 @@
 #include "gft/json-serde.hpp"
 
 enum class TestEnum {
-  _123,
+  _123 = 123,
 };
 
 struct TestStructure {
@@ -19,8 +19,9 @@ struct TestStructure {
   std::array<int16_t, 3> i;
   std::uint16_t j[3];
   TestEnum k;
+  std::optional<int64_t> l;
 
-  L_JSON_SERDE_FIELDS(a, b, c, d, e, f, g, h, i, j, k);
+  L_JSON_SERDE_FIELDS(a, b, c, d, e, f, g, h, i, j, k, l);
 };
 
 L_TEST(TestJsonSerde) {
@@ -40,6 +41,7 @@ L_TEST(TestJsonSerde) {
   ts1.j[1] = 2;
   ts1.j[2] = 3;
   ts1.k = TestEnum::_123;
+  ts1.l = 123;
 
   JsonValue j1 = json::serialize(ts1);
   std::string json_lit = json::print(j1);

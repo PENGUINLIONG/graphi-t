@@ -7,6 +7,7 @@
 #include <map>
 #include <unordered_map>
 #include <type_traits>
+#include <optional>
 #include "gft/json.hpp"
 
 namespace liong {
@@ -199,6 +200,26 @@ struct JsonSerde {
       std::pair<typename T::key_type, typename T::mapped_type> xx {};
       JsonSerde<decltype(xx)>::deserialize(elem, xx);
       x.emplace(std::move(*(std::pair<const typename T::key_type, typename T::mapped_type>*) & xx));
+    }
+  }
+
+  // Optional types (requires default + move constructable).
+  template<typename U = T>
+  static JsonValue serialize(const typename std::enable_if_t<std::is_same<std::optional<typename U::value_type>, T>::value, T>& x) {
+    if (x.has_value()) {
+      return JsonSerde<typename T::value_type>::serialize(x.value());
+    } else {
+      return JsonValue(nullptr);
+    }
+  }
+  template<typename U = T>
+  static void deserialize(const JsonValue& j, typename std::enable_if_t<std::is_same<std::optional<typename U::value_type>, T>::value, T>& x) {
+    if (j.is_null()) {
+      x = std::nullopt;
+    } else {
+      typename T::value_type xx;
+      JsonSerde<typename T::value_type>::deserialize(j, xx);
+      x = std::move(xx);
     }
   }
 };
