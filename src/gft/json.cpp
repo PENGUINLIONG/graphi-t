@@ -35,7 +35,8 @@ enum JsonTokenType {
   L_JSON_TOKEN_TRUE,
   L_JSON_TOKEN_FALSE,
   L_JSON_TOKEN_STRING,
-  L_JSON_TOKEN_NUMBER,
+  L_JSON_TOKEN_INT,
+  L_JSON_TOKEN_FLOAT,
   L_JSON_TOKEN_COLON,
   L_JSON_TOKEN_COMMA,
   L_JSON_TOKEN_OPEN_BRACE,
@@ -45,7 +46,8 @@ enum JsonTokenType {
 };
 struct JsonToken {
   JsonTokenType ty;
-  double num;
+  int64_t num_int;
+  double num_float;
   std::string str;
 };
 
@@ -92,7 +94,7 @@ struct Tokenizer {
 
       // Try parse numbers.
       if (c == '+' || c == '-' || (c >= '0' && c <= '9')) {
-        out.ty = L_JSON_TOKEN_NUMBER;
+        out.ty = L_JSON_TOKEN_INT;
         const int STATE_INTEGRAL = 0;
         const int STATE_FRACTION = 1;
         const int STATE_EXPONENT = 2;
@@ -114,6 +116,7 @@ struct Tokenizer {
               break;
             }
           } else if (state == STATE_FRACTION) {
+            out.ty = L_JSON_TOKEN_FLOAT;
             if (c == 'e') {
               state = STATE_EXPONENT;
               ss.put(c);
@@ -123,13 +126,18 @@ struct Tokenizer {
               break;
             }
           } else if (state == STATE_EXPONENT) {
+            out.ty = L_JSON_TOKEN_FLOAT;
             if (c != '+' && c != '-' && (c < '0' || c > '9')) {
               break;
             }
           }
           ss.put(c);
         } while (++pos != end);
-        out.num = std::atof(ss.str().c_str());
+        if (out.ty == L_JSON_TOKEN_INT) {
+          out.num_int = std::atoll(ss.str().c_str());
+        } else if (out.ty == L_JSON_TOKEN_FLOAT) {
+          out.num_float = std::atof(ss.str().c_str());
+        }
         return true;
       }
 
@@ -222,9 +230,13 @@ bool try_parse_impl(
       out.ty = L_JSON_STRING;
       out.str = std::move(token.str);
       return true;
-    case L_JSON_TOKEN_NUMBER:
-      out.ty = L_JSON_NUMBER;
-      out.num = token.num;
+    case L_JSON_TOKEN_INT:
+      out.ty = L_JSON_INT;
+      out.num_int = token.num_int;
+      return true;
+    case L_JSON_TOKEN_FLOAT:
+      out.ty = L_JSON_FLOAT;
+      out.num_int = token.num_float;
       return true;
     case L_JSON_TOKEN_OPEN_BRACKET:
       out.ty = L_JSON_ARRAY;
@@ -331,8 +343,11 @@ void print_impl(const JsonValue& json, std::stringstream& out) {
   case L_JSON_BOOLEAN:
     out << (json.b ? "true" : "false");
     return;
-  case L_JSON_NUMBER:
-    out << json.num;
+  case L_JSON_FLOAT:
+    out << json.num_float;
+    return;
+  case L_JSON_INT:
+    out << json.num_int;
     return;
   case L_JSON_STRING:
     out << "\"" << json.str << "\"";

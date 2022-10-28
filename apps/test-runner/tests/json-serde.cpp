@@ -20,8 +20,9 @@ struct TestStructure {
   std::uint16_t j[3];
   TestEnum k;
   std::optional<int64_t> l;
+  uint64_t m;
 
-  L_JSON_SERDE_FIELDS(a, b, c, d, e, f, g, h, i, j, k, l);
+  L_JSON_SERDE_FIELDS(a, b, c, d, e, f, g, h, i, j, k, l, m);
 };
 
 L_TEST(TestJsonSerde) {
@@ -42,6 +43,7 @@ L_TEST(TestJsonSerde) {
   ts1.j[2] = 3;
   ts1.k = TestEnum::_123;
   ts1.l = 123;
+  ts1.m = 123123123123123123;
 
   JsonValue j1 = json::serialize(ts1);
   std::string json_lit = json::print(j1);
@@ -50,4 +52,5 @@ L_TEST(TestJsonSerde) {
   TestStructure ts2 {};
   json::deserialize(j2, ts2);
   L_ASSERT(json_lit == json::print(json::serialize(ts2)));
+  L_ASSERT(ts1.m == ts2.m); // Large integers should not be cast to double.
 }
