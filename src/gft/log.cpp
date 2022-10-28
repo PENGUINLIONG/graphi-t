@@ -1,12 +1,11 @@
 #include "gft/log.hpp"
 
 namespace liong {
-
 namespace log {
 
-namespace {
+namespace detail {
 
-void l_default_log_cb_impl__(liong::log::LogLevel lv, const std::string& msg) {
+void l_default_log_callback__(liong::log::LogLevel lv, const std::string& msg) {
   using liong::log::LogLevel;
   switch (lv) {
   case LogLevel::L_LOG_LEVEL_DEBUG:
@@ -24,25 +23,25 @@ void l_default_log_cb_impl__(liong::log::LogLevel lv, const std::string& msg) {
   }
 }
 
-LogCallback l_default_log_cb__ = &l_default_log_cb_impl__;
-LogLevel l_filter_lv__;
-uint32_t l_log_indent__;
+LogCallback l_log_callback__ = &l_default_log_callback__;
+LogLevel l_filter_lv__ = LogLevel::L_LOG_LEVEL_DEBUG;
+std::string l_indent__ = 0;
 
-} // namespace
+} // namespace detail
 
 
 void set_log_callback(LogCallback cb) {
-  l_default_log_cb__ = cb;
+  detail::l_log_callback__ = cb;
 }
 void set_log_filter_level(LogLevel lv) {
-  l_filter_lv__ = lv;
+  detail::l_filter_lv__ = lv;
 }
 
 void push_indent() {
-  l_log_indent__ += 4;
+  detail::l_indent__ += "  ";
 }
 void pop_indent() {
-  l_log_indent__ -= 4;
+  detail::l_indent__.resize(detail::l_indent__.size() - 2);
 }
 
 } // namespace log
