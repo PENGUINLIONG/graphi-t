@@ -15,30 +15,6 @@ using namespace liong;
 using namespace vk;
 using namespace fmt;
 
-namespace {
-
-void log_cb(liong::log::LogLevel lv, const std::string& msg) {
-  using liong::log::LogLevel;
-  switch (lv) {
-  case LogLevel::L_LOG_LEVEL_DEBUG:
-    printf("[\x1b[90mDEBUG\x1B[0m] %s\n", msg.c_str());
-    break;
-  case LogLevel::L_LOG_LEVEL_INFO:
-    printf("[\x1B[32mINFO\x1B[0m] %s\n", msg.c_str());
-    break;
-  case LogLevel::L_LOG_LEVEL_WARNING:
-    printf("[\x1B[33mWARN\x1B[0m] %s\n", msg.c_str());
-    break;
-  case LogLevel::L_LOG_LEVEL_ERROR:
-    printf("[\x1B[31mERROR\x1B[0m] %s\n", msg.c_str());
-    break;
-  }
-}
-
-} // namespace
-
-
-
 void copy_buf2host(
   const BufferView& src,
   void* dst,
@@ -223,7 +199,6 @@ void guarded_main() {
 
 
 int main(int argc, char** argv) {
-  liong::log::set_log_callback(log_cb);
   try {
     renderdoc::initialize();
     vk::initialize();
