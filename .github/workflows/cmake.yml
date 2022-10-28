@@ -21,6 +21,7 @@ jobs:
     - name: Setup Vulkan SDK
       uses: humbletim/setup-vulkan-sdk@v1.2.0
       with:
+        query_version: latest
         vulkan-use-cache: true
     - name: Ccache for gh actions
       uses: hendrikmuhs/ccache-action@v1.2.3
