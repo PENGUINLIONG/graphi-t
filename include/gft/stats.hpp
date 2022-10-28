@@ -30,7 +30,7 @@ public:
   }
   operator T() const {
     if (!has_value()) {
-      log::warn("`MinStats` has not collected any data yet");
+      L_WARN("`MinStats` has not collected any data yet");
     }
     return mn_;
   }
@@ -59,7 +59,7 @@ public:
   }
   operator T() const {
     if (!has_value()) {
-      log::warn("`MaxStats` has not collected any data yet");
+      L_WARN("`MaxStats` has not collected any data yet");
     }
     return mx_;
   }
@@ -84,7 +84,7 @@ public:
   }
   operator T() const {
     if (!has_value()) {
-      log::warn("`AvgStats` has not collected any data yet");
+      L_WARN("`AvgStats` has not collected any data yet");
     }
     return sum_ / n_;
   }
@@ -109,7 +109,7 @@ public:
   }
   operator T() const {
     if (!has_value()) {
-      log::warn("`StdStats` has not collected any data yet");
+      L_WARN("`StdStats` has not collected any data yet");
     }
     T avg = avg_;
     T sqr_sum = 0;
@@ -144,7 +144,7 @@ public:
   }
   operator T() {
     if (!has_value()) {
-      log::warn("`MedianStats` has not collected any data yet");
+      L_WARN("`MedianStats` has not collected any data yet");
     }
     std::sort(values_.begin(), values_.end());
     size_t imid = values_.size() / 2;
@@ -181,7 +181,7 @@ public:
   }
   operator value_t() const {
     if (!has_value()) {
-      log::warn("`GeomDeltaStats` has not collected enough data yet");
+      L_WARN("`GeomDeltaStats` has not collected enough data yet");
     }
     return ratio_;
   }
@@ -215,7 +215,7 @@ public:
   }
   operator value_t() const {
     if (!has_value()) {
-      log::warn("`ArithDeltaStats` has not collected enough data yet");
+      L_WARN("`ArithDeltaStats` has not collected enough data yet");
     }
     return delta_;
   }

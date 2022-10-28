@@ -68,7 +68,7 @@ struct GcFrame {
   std::vector<GcEntry> entries;
 
   GcFrame(const std::string& label) : label(label), entries() {
-    log::debug("entered gc frame '", label, "'");
+    L_DEBUG("entered gc frame '", label, "'");
   }
   GcFrame(const GcFrame&) = delete;
   GcFrame(GcFrame&&) = default;
@@ -78,7 +78,7 @@ struct GcFrame {
       _destroy_obj(it->obj_ty, it->obj);
     }
     entries.clear();
-    log::debug("exited gc frame '", label, "'");
+    L_DEBUG("exited gc frame '", label, "'");
   }
 
 };
@@ -92,14 +92,14 @@ struct ObjectPool {
   }
   ~ObjectPool() {
     while (gc_stack.size() > 1) {
-      log::warn("process is terminating while the gc stack is fully popped; "
+      L_WARN("process is terminating while the gc stack is fully popped; "
         "your object lifetime management should be reviewed");
       gc_stack.pop_back();
     }
     gc_stack.pop_back();
     for (auto it = extern_objs.begin(); it != extern_objs.end(); ++it) {
       _destroy_obj(it->second, it->first);
-      log::warn("process is terminating while external ",
+      L_WARN("process is terminating while external ",
         _obj_ty2str(it->second), " is not yet destroyed; your object lifetime "
         "management should be reviewed");
     }
@@ -161,12 +161,12 @@ L_DEF_REG_GC(Transaction, L_OBJECT_TYPE_TRANSACTION);
 
 void destroy_raii_obj(void* obj) {
   if (obj == nullptr) {
-    log::warn("attempted to destroy an external null object");
+    L_WARN("attempted to destroy an external null object");
     return;
   }
   auto it = OBJ_POOL.extern_objs.find(obj);
   if (it == OBJ_POOL.extern_objs.end()) {
-    log::warn("attempted to release unregistered external scoped obj");
+    L_WARN("attempted to release unregistered external scoped obj");
   } else {
     OBJ_POOL.extern_objs.erase(it);
   }

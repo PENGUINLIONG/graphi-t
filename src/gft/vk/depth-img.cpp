@@ -64,7 +64,7 @@ DepthImage create_depth_img(
   }
   if (res != VK_SUCCESS) {
     if (is_tile_mem) {
-      log::warn("tile-memory is unsupported, fall back to regular memory");
+      L_WARN("tile-memory is unsupported, fall back to regular memory");
     }
     aci.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     img = sys::Image::create(ctxt.allocator, &ici, &aci);
@@ -94,7 +94,7 @@ DepthImage create_depth_img(
   dyn_detail.access = 0;
   dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
 
-  log::debug("created depth image '", depth_img_cfg.label, "'");
+  L_DEBUG("created depth image '", depth_img_cfg.label, "'");
   return DepthImage {
     &ctxt, std::move(img), std::move(img_view), depth_img_cfg, std::move(dyn_detail)
   };
@@ -104,7 +104,7 @@ void destroy_depth_img(DepthImage& depth_img) {
     depth_img.img.reset();
     depth_img.img_view.reset();
 
-    log::debug("destroyed depth image '", depth_img.depth_img_cfg.label, "'");
+    L_DEBUG("destroyed depth image '", depth_img.depth_img_cfg.label, "'");
     depth_img = {};
   }
 }

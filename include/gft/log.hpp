@@ -11,7 +11,7 @@
 namespace liong {
 namespace log {
 
-enum class LogLevel {
+enum LogLevel {
   L_LOG_LEVEL_DEBUG = 0,
   L_LOG_LEVEL_INFO = 1,
   L_LOG_LEVEL_WARNING = 2,
@@ -71,3 +71,27 @@ inline void error(const TArgs& ... msg) {
 
 } // namespace log
 } // namespace liong
+
+#if !defined(L_MIN_LOG_LEVEL) || L_MIN_LOG_LEVEL >= 0
+#define L_DEBUG(...) ::liong::log::debug(__VA_ARGS__)
+#else
+#define L_DEBUG(...)
+#endif // defined(L_MIN_LOG_LEVEL) && L_MIN_LOG_LEVEL >= 0
+
+#if !defined(L_MIN_LOG_LEVEL) || L_MIN_LOG_LEVEL >= 1
+#define L_INFO(...) ::liong::log::info(__VA_ARGS__)
+#else
+#define L_INFO(...)
+#endif // defined(L_MIN_LOG_LEVEL) && L_MIN_LOG_LEVEL >= 1
+
+#if !defined(L_MIN_LOG_LEVEL) || L_MIN_LOG_LEVEL >= 2
+#define L_WARN(...) ::liong::log::warn(__VA_ARGS__)
+#else
+#define L_WARN(...)
+#endif // defined(L_MIN_LOG_LEVEL) && L_MIN_LOG_LEVEL >= 2
+
+#if !defined(L_MIN_LOG_LEVEL) || L_MIN_LOG_LEVEL >= 3
+#define L_ERROR(...) ::liong::log::error(__VA_ARGS__)
+#else
+#define L_ERROR(...)
+#endif // defined(L_MIN_LOG_LEVEL) && L_MIN_LOG_LEVEL >= 3

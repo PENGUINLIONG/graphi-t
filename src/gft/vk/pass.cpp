@@ -161,12 +161,12 @@ RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg) {
     }
   }
 
-  log::debug("created render pass '", cfg.label, "'");
+  L_DEBUG("created render pass '", cfg.label, "'");
   return RenderPass { &ctxt, cfg.width, cfg.height, std::move(pass), cfg, clear_values };
 }
 void destroy_pass(RenderPass& pass) {
   pass.pass.reset();
-  log::debug("destroyed render pass '", pass.pass_cfg.label, "'");
+  L_DEBUG("destroyed render pass '", pass.pass_cfg.label, "'");
 }
 
 FramebufferKey FramebufferKey::create(

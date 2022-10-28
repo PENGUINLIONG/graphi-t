@@ -17,7 +17,7 @@ void _initialize(bool silent) {
   static bool is_initialized = false;
   if (is_initialized) {
     if (!silent) {
-      log::warn("ignored redundant glslang module initialization");
+      L_WARN("ignored redundant glslang module initialization");
     }
     return;
   }
@@ -25,11 +25,11 @@ void _initialize(bool silent) {
   bool res = ::glslang::InitializeProcess();
   L_ASSERT(res, "cannot initialize glslang");
   ::glslang::Version glslang_ver = ::glslang::GetVersion();
-  log::info("glslang version: ", glslang_ver.major, ".",
+  L_INFO("glslang version: ", glslang_ver.major, ".",
     glslang_ver.minor, ".", glslang_ver.patch);
 
   const char* glsl_ver_str = ::glslang::GetGlslVersionString();
-  log::info("supported glsl version: ", glsl_ver_str);
+  L_INFO("supported glsl version: ", glsl_ver_str);
 
   is_initialized = true;
 }
@@ -250,7 +250,7 @@ public:
 
     std::string msg = logger.getAllMessages();
     if (msg.size() != 0) {
-      log::warn("compiler reported issues when translating glsl into spirv",
+      L_WARN("compiler reported issues when translating glsl into spirv",
         msg);
     }
 
@@ -370,7 +370,7 @@ public:
 
     std::string msg = logger.getAllMessages();
     if (msg.size() != 0) {
-      log::warn("compiler reported issues when translating glsl into "
+      L_WARN("compiler reported issues when translating glsl into "
         "spirv", msg);
     }
 

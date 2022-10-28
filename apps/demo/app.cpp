@@ -21,7 +21,7 @@ void copy_buf2host(
   size_t size
 ) {
   if (size == 0) {
-    liong::log::warn("zero-sized copy is ignored");
+    L_WARN("zero-sized copy is ignored");
     return;
   }
   L_ASSERT(src.size >= size, "src buffer size is too small");
@@ -34,7 +34,7 @@ void copy_host2buf(
   size_t size
 ) {
   if (size == 0) {
-    liong::log::warn("zero-sized copy is ignored");
+    L_WARN("zero-sized copy is ignored");
     return;
   }
   L_ASSERT(dst.size >= size, "dst buffser size is too small");
@@ -49,7 +49,7 @@ void dbg_enum_dev_descs() {
   for (;;) {
     auto desc = desc_dev(ndev);
     if (desc.empty()) { break; }
-    liong::log::info("device #", ndev, ": ", desc);
+    L_INFO("device #", ndev, ": ", desc);
     ++ndev;
   }
 }
@@ -206,11 +206,11 @@ int main(int argc, char** argv) {
 
     guarded_main();
   } catch (const std::exception& e) {
-    liong::log::error("application threw an exception");
-    liong::log::error(e.what());
-    liong::log::error("application cannot continue");
+    L_ERROR("application threw an exception");
+    L_ERROR(e.what());
+    L_ERROR("application cannot continue");
   } catch (...) {
-    liong::log::error("application threw an illiterate exception");
+    L_ERROR("application threw an illiterate exception");
   }
 
   return 0;

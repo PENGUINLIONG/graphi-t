@@ -36,7 +36,7 @@ sys::SurfaceRef _create_surf_windows(const ContextWindowsConfig& cfg) {
   wsci.hwnd = (HWND)cfg.hwnd;
   sys::SurfaceRef surf = sys::Surface::create(get_inst().inst->inst, &wsci);
 
-  log::debug("created windows surface '", cfg.label, "'");
+  L_DEBUG("created windows surface '", cfg.label, "'");
   return surf;
 #else
   panic("windows surface cannot be created on current platform");
@@ -56,7 +56,7 @@ sys::SurfaceRef _create_surf_android(const ContextAndroidConfig& cfg) {
   asci.window = (struct ANativeWindow* const)cfg.native_wnd;
   sys::SurfaceRef surf = sys::Surface::create(get_inst().inst->inst, &asci);
 
-  log::debug("created android surface '", cfg.label, "'");
+  L_DEBUG("created android surface '", cfg.label, "'");
   return surf;
 #else
   panic("android surface cannot be created on current platform");
@@ -76,7 +76,7 @@ sys::SurfaceRef _create_surf_metal(const ContextMetalConfig& cfg) {
   msci.pLayer = (const CAMetalLayer*)cfg.metal_layer;
   sys::SurfaceRef surf = sys::Surface::create(get_inst().inst->inst, &msci);
 
-  log::debug("created windows surface '", cfg.label, "'");
+  L_DEBUG("created windows surface '", cfg.label, "'");
   return surf;
 #else
   panic("metal surface cannot be created on current platform");
@@ -103,7 +103,7 @@ Context _create_ctxt(
   const auto& qfam_props = physdev_detail.qfam_props;
 
   if (prop.limits.timestampComputeAndGraphics == VK_FALSE) {
-    log::warn("context '", label, "' device does not support timestamps, "
+    L_WARN("context '", label, "' device does not support timestamps, "
       "the following command won't be available: WRITE_TIMESTAMP");
   }
 
@@ -116,7 +116,7 @@ Context _create_ctxt(
     const auto& qfam_prop = qfam_props[i];
     auto queue_flags = qfam_prop.queueFlags;
     if (qfam_prop.queueCount == 0) {
-      log::warn("ignored queue family #", i, " with zero queue count");
+      L_WARN("ignored queue family #", i, " with zero queue count");
     }
 
     std::vector<const char*> qfam_cap_lit{};
@@ -135,7 +135,7 @@ Context _create_ctxt(
     if ((queue_flags & VK_QUEUE_PROTECTED_BIT) != 0) {
       qfam_cap_lit.push_back("PROTECTED");
     }
-    log::debug("discovered queue families #", i, ": ",
+    L_DEBUG("discovered queue families #", i, ": ",
       util::join(" | ", qfam_cap_lit));
 
     uint32_t nset_bit = util::count_set_bits(queue_flags);
@@ -220,7 +220,7 @@ Context _create_ctxt(
     }
 
     if (qfam_idx_alloc == VK_QUEUE_FAMILY_IGNORED) {
-      log::warn("cannot find a suitable queue family for ",
+      L_WARN("cannot find a suitable queue family for ",
         submit_ty_queue_req.submit_ty_name);
     }
   }
@@ -254,7 +254,7 @@ Context _create_ctxt(
   for (const auto& dev_ext : physdev_detail.ext_props) {
     dev_exts.emplace_back(dev_ext.first.c_str());
   }
-  log::debug("enabled device extensions: ", util::join(", ", dev_exts));
+  L_DEBUG("enabled device extensions: ", util::join(", ", dev_exts));
 
   sys::DeviceRef dev = sys::create_dev(physdev_detail.physdev, dqcis, dev_exts, feat);
 
@@ -297,7 +297,7 @@ Context _create_ctxt(
   VmaAllocator allocator;
   VK_ASSERT << vmaCreateAllocator(&allocatorInfo, &allocator);
 
-  log::debug("created vulkan context '", label, "' on device #", dev_idx, ": ",
+  L_DEBUG("created vulkan context '", label, "' on device #", dev_idx, ": ",
     inst.physdev_details.at(dev_idx).desc);
   return Context {
     label, dev_idx, std::move(dev), surf, std::move(submit_details),
@@ -330,7 +330,7 @@ void destroy_ctxt(Context& ctxt) {
       sys::destroy_sampler(ctxt.dev->dev, samp.second);
     }
     vmaDestroyAllocator(ctxt.allocator);
-    log::debug("destroyed vulkan context '", ctxt.label, "'");
+    L_DEBUG("destroyed vulkan context '", ctxt.label, "'");
   }
   ctxt = {};
 }

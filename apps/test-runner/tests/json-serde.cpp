@@ -47,7 +47,7 @@ L_TEST(TestJsonSerde) {
 
   JsonValue j1 = json::serialize(ts1);
   std::string json_lit = json::print(j1);
-  log::info(json_lit);
+  L_INFO(json_lit);
   JsonValue j2 = json::parse(json_lit);
   TestStructure ts2 {};
   json::deserialize(j2, ts2);

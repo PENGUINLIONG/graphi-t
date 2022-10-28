@@ -96,7 +96,7 @@ struct Context {
   };
   virtual void end_capture() {
     if (api->EndFrameCapture(nullptr, nullptr) != 1) {
-      log::warn("renderdoc failed to capture this scoped frame");
+      L_WARN("renderdoc failed to capture this scoped frame");
       return;
     }
 
@@ -106,11 +106,11 @@ struct Context {
     path.resize(size);
     uint32_t icapture = api->GetNumCaptures() - 1;
     if (api->GetCapture(icapture, (char*)path.data(), &size, nullptr) != 1) {
-      log::warn("cannot get renderdoc capture path, will not launch replay ui "
+      L_WARN("cannot get renderdoc capture path, will not launch replay ui "
         "for this one");
     } else {
       api->LaunchReplayUI(1, path.c_str());
-      log::info("launched renderdoc replay ui for captured frame #", icapture);
+      L_INFO("launched renderdoc replay ui for captured frame #", icapture);
     }
   };
 };
@@ -125,7 +125,7 @@ struct WindowsContext : public Context {
   virtual ~WindowsContext() override final {
     if (should_release) {
       FreeLibrary(mod);
-      log::info("renderdoc is unloaded");
+      L_INFO("renderdoc is unloaded");
     }
   }
 };
@@ -162,7 +162,7 @@ void initialize() {
           (void*)path.data(), &cap);
       }
       if (err != ERROR_SUCCESS || path.empty()) {
-        log::warn("failed to find renderdoc on local installtion, renderdoc "
+        L_WARN("failed to find renderdoc on local installtion, renderdoc "
           "utils become nops");
         return;
       } else {
@@ -178,7 +178,7 @@ void initialize() {
 
       mod = LoadLibraryA(path.c_str());
       if (mod == NULL) {
-        log::warn("failed to load renderdoc library from installtion, "
+        L_WARN("failed to load renderdoc library from installtion, "
           "renderdoc utils become nops");
         return;
       }
@@ -192,7 +192,7 @@ void initialize() {
       get_api(eRENDERDOC_API_Version_1_0_0, (void**)&api) != 1 ||
       api == nullptr
     ) {
-      log::warn("failed to get renderdoc api from running instance, renderdoc "
+      L_WARN("failed to get renderdoc api from running instance, renderdoc "
         "apis become nops");
       return;
     } else {
@@ -202,13 +202,13 @@ void initialize() {
   }
 #else // _WIN32
   {
-    log::warn("renderdoc is not supported on current platform, renderdoc utils "
+    L_WARN("renderdoc is not supported on current platform, renderdoc utils "
       "become nops");
   }
 #endif // _WIN32
 
   if (ctxt) {
-    log::info("renderdoc is ready to capture");
+    L_INFO("renderdoc is ready to capture");
   }
 }
 
@@ -220,7 +220,7 @@ void begin_capture() {
     if (is_first_call) {
       panic("renderdoc must be initialized before any capture");
     } else {
-      log::warn("frame capture is attempted but it will be ignored because "
+      L_WARN("frame capture is attempted but it will be ignored because "
         "renderdoc failed to initialize");
     }
   } else {

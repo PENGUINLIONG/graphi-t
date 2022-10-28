@@ -15,7 +15,7 @@ VkSwapchainKHR _create_swapchain(
   VkSurfaceCapabilitiesKHR sc {};
   VK_ASSERT <<
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(physdev, ctxt.surf->surf, &sc);
-  log::debug("current surface image size is (", sc.currentExtent.width, ", ",
+  L_DEBUG("current surface image size is (", sc.currentExtent.width, ", ",
     sc.currentExtent.height, ")");
 
   uint32_t width = sc.currentExtent.width;
@@ -25,7 +25,7 @@ VkSwapchainKHR _create_swapchain(
   if (nimg < sc.minImageCount || nimg > sc.maxImageCount) {
     uint32_t nimg2 =
       std::max(std::min(nimg, sc.maxImageCount), sc.minImageCount);
-    log::warn("physical device cannot afford ", nimg, " swapchain images, "
+    L_WARN("physical device cannot afford ", nimg, " swapchain images, "
       "fallback to ", nimg2);
   }
 

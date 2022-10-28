@@ -27,7 +27,7 @@ void _update_desc_set(
     dbi.range = buf_view.size;
     dbis.emplace_back(std::move(dbi));
 
-    log::debug("bound pool resource #", wdss.size(), " to buffer '",
+    L_DEBUG("bound pool resource #", wdss.size(), " to buffer '",
       buf_view.buf->buf_cfg.label, "'");
 
     return &dbis.back();
@@ -41,7 +41,7 @@ void _update_desc_set(
       dii.imageLayout = layout;
       diis.emplace_back(std::move(dii));
 
-      log::debug("bound pool resource #", wdss.size(), " to image '",
+      L_DEBUG("bound pool resource #", wdss.size(), " to image '",
         img_view.img->img_cfg.label, "'");
     } else if (rsc_view.rsc_view_ty == L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE) {
       const DepthImageView& depth_img_view = rsc_view.depth_img_view;
@@ -51,7 +51,7 @@ void _update_desc_set(
       dii.imageLayout = layout;
       diis.emplace_back(std::move(dii));
 
-      log::debug("bound pool resource #", wdss.size(), " to depth image '",
+      L_DEBUG("bound pool resource #", wdss.size(), " to depth image '",
         depth_img_view.depth_img->depth_img_cfg.label, "'");
     } else {
       panic();
@@ -328,7 +328,7 @@ Invocation create_trans_invoke(
     panic("depth image cannot be transferred");
   }
 
-  log::debug("created transfer invocation");
+  L_DEBUG("created transfer invocation");
   return out;
 }
 Invocation create_comp_invoke(
@@ -363,7 +363,7 @@ Invocation create_comp_invoke(
   out.comp_detail =
     std::make_unique<InvocationComputeDetail>(std::move(comp_detail));
 
-  log::debug("created compute invocation");
+  L_DEBUG("created compute invocation");
   return out;
 }
 Invocation create_graph_invoke(
@@ -423,7 +423,7 @@ Invocation create_graph_invoke(
   out.graph_detail =
     std::make_unique<InvocationGraphicsDetail>(std::move(graph_detail));
 
-  log::debug("created graphics invocation");
+  L_DEBUG("created graphics invocation");
   return out;
 }
 Invocation create_pass_invoke(
@@ -472,7 +472,7 @@ Invocation create_pass_invoke(
   out.pass_detail =
     std::make_unique<InvocationRenderPassDetail>(std::move(pass_detail));
 
-  log::debug("created render pass invocation");
+  L_DEBUG("created render pass invocation");
   return out;
 }
 Invocation create_present_invoke(const Swapchain& swapchain) {
@@ -498,7 +498,7 @@ Invocation create_present_invoke(const Swapchain& swapchain) {
   out.present_detail =
     std::make_unique<InvocationPresentDetail>(std::move(present_detail));
 
-  log::debug("created present invocation");
+  L_DEBUG("created present invocation");
   return out;
 }
 Invocation create_composite_invoke(
@@ -521,7 +521,7 @@ Invocation create_composite_invoke(
   out.composite_detail =
     std::make_unique<InvocationCompositeDetail>(std::move(composite_detail));
 
-  log::debug("created composition invocation");
+  L_DEBUG("created composition invocation");
   return out;
 }
 void destroy_invoke(Invocation& invoke) {
@@ -532,31 +532,31 @@ void destroy_invoke(Invocation& invoke) {
     invoke.i2b_detail ||
     invoke.i2i_detail
   ) {
-    log::debug("destroyed transfer invocation '", invoke.label, "'");
+    L_DEBUG("destroyed transfer invocation '", invoke.label, "'");
   }
   if (invoke.comp_detail) {
     InvocationComputeDetail& comp_detail = *invoke.comp_detail;
     comp_detail.desc_set.release();
-    log::debug("destroyed compute invocation '", invoke.label, "'");
+    L_DEBUG("destroyed compute invocation '", invoke.label, "'");
   }
   if (invoke.graph_detail) {
     InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
     graph_detail.desc_set.release();
-    log::debug("destroyed graphics invocation '", invoke.label, "'");
+    L_DEBUG("destroyed graphics invocation '", invoke.label, "'");
   }
   if (invoke.pass_detail) {
     InvocationRenderPassDetail& pass_detail = *invoke.pass_detail;
     pass_detail.framebuf.release();
-    log::debug("destroyed render pass invocation '", invoke.label, "'");
+    L_DEBUG("destroyed render pass invocation '", invoke.label, "'");
   }
   if (invoke.composite_detail) {
-    log::debug("destroyed composite invocation '", invoke.label, "'");
+    L_DEBUG("destroyed composite invocation '", invoke.label, "'");
   }
 
   invoke.query_pool = QueryPoolPoolItem {};
 
   if (invoke.bake_detail) {
-    log::debug("destroyed baking artifacts");
+    L_DEBUG("destroyed baking artifacts");
   }
 
   invoke = {};
@@ -887,7 +887,7 @@ const BufferView& _transit_rsc(
     0, nullptr);
 
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("inserted buffer barrier");
+    L_DEBUG("inserted buffer barrier");
   }
 
   dyn_detail.access = dst_access;
@@ -946,7 +946,7 @@ const ImageView& _transit_rsc(
     1, &imb);
 
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("inserted image barrier");
+    L_DEBUG("inserted image barrier");
   }
 
   dyn_detail.access = dst_access;
@@ -1006,7 +1006,7 @@ const DepthImageView& _transit_rsc(
     1, &imb);
 
   if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
-    log::debug("inserted depth image barrier");
+    L_DEBUG("inserted depth image barrier");
   }
 
   dyn_detail.access = dst_access;
@@ -1096,7 +1096,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
 
     transact.is_frozen = true;
 
-    log::debug("applied presentation invocation (image #", img_idx, ")");
+    L_DEBUG("applied presentation invocation (image #", img_idx, ")");
     return { present_fence, acquire_fence };
   }
 
@@ -1114,7 +1114,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     vkCmdWriteTimestamp(cmdbuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
       *invoke.query_pool.value(), 0);
 
-    log::debug("invocation '", invoke.label, "' will be timed");
+    L_DEBUG("invocation '", invoke.label, "' will be timed");
   }
 
   _transit_rscs(transact, invoke.transit_detail);
@@ -1123,25 +1123,25 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     const InvocationCopyBufferToBufferDetail& b2b_detail =
       *invoke.b2b_detail;
     vkCmdCopyBuffer(cmdbuf, b2b_detail.src->buf, b2b_detail.dst->buf, 1, &b2b_detail.bc);
-    log::debug("applied transfer invocation '", invoke.label, "'");
+    L_DEBUG("applied transfer invocation '", invoke.label, "'");
 
   } else if (invoke.b2i_detail) {
     const InvocationCopyBufferToImageDetail& b2i_detail = *invoke.b2i_detail;
     vkCmdCopyBufferToImage(cmdbuf, b2i_detail.src->buf, b2i_detail.dst->img,
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b2i_detail.bic);
-    log::debug("applied transfer invocation '", invoke.label, "'");
+    L_DEBUG("applied transfer invocation '", invoke.label, "'");
 
   } else if (invoke.i2b_detail) {
     const InvocationCopyImageToBufferDetail& i2b_detail = *invoke.i2b_detail;
     vkCmdCopyImageToBuffer(cmdbuf, i2b_detail.src->img,
       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, i2b_detail.dst->buf, 1, &i2b_detail.bic);
-    log::debug("applied transfer invocation '", invoke.label, "'");
+    L_DEBUG("applied transfer invocation '", invoke.label, "'");
 
   } else if (invoke.i2i_detail) {
     const InvocationCopyImageToImageDetail& i2i_detail = *invoke.i2i_detail;
     vkCmdCopyImage(cmdbuf, i2i_detail.src->img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
       i2i_detail.dst->img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &i2i_detail.ic);
-    log::debug("applied transfer invocation '", invoke.label, "'");
+    L_DEBUG("applied transfer invocation '", invoke.label, "'");
 
   } else if (invoke.comp_detail) {
     const InvocationComputeDetail& comp_detail = *invoke.comp_detail;
@@ -1154,7 +1154,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
         task.rsc_detail.pipe_layout->pipe_layout, 0, 1, &comp_detail.desc_set.value()->desc_set, 0, nullptr);
     }
     vkCmdDispatch(cmdbuf, workgrp_count.x, workgrp_count.y, workgrp_count.z);
-    log::debug("applied compute invocation '", invoke.label, "'");
+    L_DEBUG("applied compute invocation '", invoke.label, "'");
 
   } else if (invoke.graph_detail) {
     const InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
@@ -1187,7 +1187,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     } else {
       vkCmdDraw(cmdbuf, graph_detail.nvert, graph_detail.ninst, 0, 0);
     }
-    log::debug("applied graphics invocation '", invoke.label, "'");
+    L_DEBUG("applied graphics invocation '", invoke.label, "'");
 
   } else if (invoke.pass_detail) {
     const InvocationRenderPassDetail& pass_detail = *invoke.pass_detail;
@@ -1213,7 +1213,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     }
 
     vkCmdBeginRenderPass(cmdbuf, &rpbi, sc);
-    log::debug("render pass invocation '", invoke.label, "' began");
+    L_DEBUG("render pass invocation '", invoke.label, "' began");
 
     for (size_t i = 0; i < pass_detail.subinvokes.size(); ++i) {
       //if (i > 0) {
@@ -1221,7 +1221,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
       //    VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS :
       //    VK_SUBPASS_CONTENTS_INLINE;
       //  vkCmdNextSubpass(cmdbuf, sc);
-      //  log::debug("render pass invocation '", invoke.label, "' switched to a "
+      //  L_DEBUG("render pass invocation '", invoke.label, "' switched to a "
       //    "next subpass");
       //}
 
@@ -1231,13 +1231,13 @@ std::vector<sys::FenceRef> _record_invoke_impl(
       if (!fences.empty()) { return fences; }
     }
     vkCmdEndRenderPass(cmdbuf);
-    log::debug("render pass invocation '", invoke.label, "' ended");
+    L_DEBUG("render pass invocation '", invoke.label, "' ended");
 
   } else if (invoke.composite_detail) {
     const InvocationCompositeDetail& composite_detail =
       *invoke.composite_detail;
 
-    log::debug("composite invocation '", invoke.label, "' began");
+    L_DEBUG("composite invocation '", invoke.label, "' began");
 
     for (size_t i = 0; i < composite_detail.subinvokes.size(); ++i) {
       const Invocation* subinvoke = composite_detail.subinvokes[i];
@@ -1246,7 +1246,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
       if (!fences.empty()) { return fences; }
     }
 
-    log::debug("composite invocation '", invoke.label, "' ended");
+    L_DEBUG("composite invocation '", invoke.label, "' ended");
 
   } else {
     unreachable();
@@ -1255,14 +1255,14 @@ std::vector<sys::FenceRef> _record_invoke_impl(
   if (invoke.query_pool.is_valid()) {
     VkCommandBuffer cmdbuf2 = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
     if (cmdbuf != cmdbuf2) {
-      log::warn("begin and end timestamps are recorded in different command "
+      L_WARN("begin and end timestamps are recorded in different command "
         "buffers, timing accuracy might be compromised");
     }
     vkCmdWriteTimestamp(cmdbuf2, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
       *invoke.query_pool.value(), 1);
   }
 
-  log::debug("scheduled invocation '", invoke.label, "' for execution");
+  L_DEBUG("scheduled invocation '", invoke.label, "' for execution");
 
   return {};
 }
@@ -1318,7 +1318,7 @@ void bake_invoke(Invocation& invoke) {
   invoke.bake_detail =
     std::make_unique<InvocationBakingDetail>(std::move(bake_detail));
 
-  log::debug("baked invocation '", invoke.label, "'");
+  L_DEBUG("baked invocation '", invoke.label, "'");
 }
 
 
@@ -1337,7 +1337,7 @@ Transaction submit_invoke(const Invocation& invoke) {
   out.submit_details = std::move(transact.submit_details);
   out.fences = fences;
 
-  log::debug("created and submitted transaction for execution, command "
+  L_DEBUG("created and submitted transaction for execution, command "
     "recording took ", timer.us(), "us");
   return out;
 }
