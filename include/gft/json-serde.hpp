@@ -57,6 +57,14 @@ struct JsonSerde {
   static void deserialize(const JsonValue& j, typename std::enable_if_t<std::is_arithmetic<U>::value, T>& x) {
     x = (T)j;
   }
+  template<typename U = T>
+  static JsonValue serialize(typename std::enable_if_t<std::is_enum<U>::value, T> x) {
+    return JsonValue((typename std::underlying_type<T>::type)x);
+  }
+  template<typename U = T>
+  static void deserialize(const JsonValue& j, typename std::enable_if_t<std::is_enum<U>::value, T>& x) {
+    x = (T)(typename std::underlying_type<T>::type)j;
+  }
 
   // String type.
   template<typename U = T>
