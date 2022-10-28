@@ -1,3 +1,4 @@
+#include <memory>
 #include "gft/assert.hpp"
 #include "gft/util.hpp"
 #include "gft/log.hpp"
