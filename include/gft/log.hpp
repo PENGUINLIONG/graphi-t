@@ -20,15 +20,9 @@ enum class LogLevel {
   L_LOG_LEVEL_ERROR = 3,
 };
 
-namespace detail {
+typedef void (*LogCallback)(LogLevel lv, const std::string& msg);
 
-extern void (*log_callback)(LogLevel lv, const std::string& msg);
-extern LogLevel filter_lv;
-extern uint32_t indent;
-
-} // namespace detail
-
-void set_log_callback(decltype(detail::log_callback) cb);
+void set_log_callback(LogCallback cb);
 void set_log_filter_level(LogLevel lv);
 template<typename ... TArgs>
 void log(LogLevel lv, const TArgs& ... msg) {
