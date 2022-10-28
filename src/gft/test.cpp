@@ -32,24 +32,24 @@ TestReport TestRegistry::run_all() {
 
   TestReport out {};
   if (tests.empty()) {
-    log::info("no test to run");
+    L_INFO("no test to run");
     return out;
   } else {
-    log::info("scheduling ", tests.size(), " tests");
+    L_INFO("scheduling ", tests.size(), " tests");
   }
 
   for (const auto& pair : tests) {
-    log::info("[", pair.first, "]");
+    L_INFO("[", pair.first, "]");
     log::push_indent();
     try {
       pair.second.f();
     } catch (const std::exception& e) {
-      log::error("unit test '", pair.first, "' threw an exception");
-      log::error(e.what());
+      L_ERROR("unit test '", pair.first, "' threw an exception");
+      L_ERROR(e.what());
       ++out.nfail;
       continue;
     } catch (...) {
-      log::error("unit test '", pair.first, "' threw an illiterate exception");
+      L_ERROR("unit test '", pair.first, "' threw an illiterate exception");
       ++out.nfail;
       continue;
     }

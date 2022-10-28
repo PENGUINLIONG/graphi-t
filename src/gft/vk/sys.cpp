@@ -37,15 +37,15 @@ sys::InstanceRef create_inst(uint32_t api_ver) {
   for (const auto& inst_ext : inst_exts) {
     inst_ext_names.emplace_back(inst_ext.extensionName);
   }
-  log::debug("enabled instance extensions: ", util::join(", ", inst_ext_names));
+  L_DEBUG("enabled instance extensions: ", util::join(", ", inst_ext_names));
 
   static std::vector<const char*> layers;
   for (const auto& inst_layer : inst_layers) {
-    log::debug("found layer ", inst_layer.layerName);
+    L_DEBUG("found layer ", inst_layer.layerName);
 #if !defined(NDEBUG)
     if (std::strcmp("VK_LAYER_KHRONOS_validation", inst_layer.layerName) == 0) {
       layers.emplace_back("VK_LAYER_KHRONOS_validation");
-      log::debug("vulkan validation layer is enabled");
+      L_DEBUG("vulkan validation layer is enabled");
     }
 #endif // !defined(NDEBUG)
   }

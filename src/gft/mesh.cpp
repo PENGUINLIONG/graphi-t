@@ -320,7 +320,7 @@ struct ObjParser {
         {
           if (unknown_verbs.find(verb) == unknown_verbs.end()) {
             unknown_verbs.emplace(verb);
-            log::warn("unknown obj verb '", verb, "' is ignored");
+            L_WARN("unknown obj verb '", verb, "' is ignored");
           }
           while (tokenizer.success) {
             if (tokenizer.try_newline() || tokenizer.try_end()) {
@@ -337,17 +337,17 @@ struct ObjParser {
         continue;
       } else if (tokenizer.try_end()) {
         if (mesh.uvs.size() == 0) {
-          log::warn("uv data is not available, filled with zeroes instead");
+          L_WARN("uv data is not available, filled with zeroes instead");
           mesh.uvs.resize(mesh.poses.size());
         } else if (mesh.uvs.size() != mesh.poses.size()) {
-          log::warn("uv count mismatches position count; treated as error");
+          L_WARN("uv count mismatches position count; treated as error");
           return false;
         }
         if (mesh.norms.size() == 0) {
-          log::warn("normal data is not available, filled with zeroes instead");
+          L_WARN("normal data is not available, filled with zeroes instead");
           mesh.norms.resize(mesh.poses.size());
         } else if (mesh.norms.size() != mesh.poses.size()) {
-          log::warn("normal count mismatches position count; treated as error");
+          L_WARN("normal count mismatches position count; treated as error");
           return false;
         }
         out = std::move(mesh);
@@ -425,7 +425,7 @@ IndexedMesh IndexedMesh::from_mesh(const Mesh& mesh) {
 
   uint32_t ntri = mesh.poses.size() / 3;
   if (ntri * 3 != mesh.poses.size()) {
-    log::warn("mesh vertex number is not aligned to 3; trailing vertices are "
+    L_WARN("mesh vertex number is not aligned to 3; trailing vertices are "
       "ignored because they don't form an actual triangle");
   }
 

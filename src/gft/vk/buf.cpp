@@ -57,13 +57,13 @@ Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg) {
   dyn_detail.access = 0;
   dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
 
-  log::debug("created buffer '", buf_cfg.label, "'");
+  L_DEBUG("created buffer '", buf_cfg.label, "'");
   return Buffer { &ctxt, std::move(buf), buf_cfg, std::move(dyn_detail) };
 }
 void destroy_buf(Buffer& buf) {
   if (buf.buf != VK_NULL_HANDLE) {
     buf.buf.reset();
-    log::debug("destroyed buffer '", buf.buf_cfg.label, "'");
+    L_DEBUG("destroyed buffer '", buf.buf_cfg.label, "'");
     buf = {};
   }
 }
@@ -87,7 +87,7 @@ void map_buf_mem(
     VK_ACCESS_HOST_READ_BIT : VK_ACCESS_HOST_WRITE_BIT;
   dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
 
-  log::debug("mapped buffer '", buf.buf->buf_cfg.label, "' from ", buf.offset,
+  L_DEBUG("mapped buffer '", buf.buf->buf_cfg.label, "' from ", buf.offset,
     " to ", buf.offset + buf.size);
   mapped = (uint8_t*)mapped + buf.offset;
 }
@@ -96,7 +96,7 @@ void unmap_buf_mem(
   void* mapped
 ) {
   vmaUnmapMemory(buf.buf->ctxt->allocator, buf.buf->buf->alloc);
-  log::debug("unmapped buffer '", buf.buf->buf_cfg.label, "'");
+  L_DEBUG("unmapped buffer '", buf.buf->buf_cfg.label, "'");
 }
 void read_buf_mem(
   const BufferView& buf,

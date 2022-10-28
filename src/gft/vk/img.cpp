@@ -89,7 +89,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   }
   if (res != VK_SUCCESS) {
     if (is_tile_mem) {
-      log::warn("tile-memory is unsupported, fall back to regular memory");
+      L_WARN("tile-memory is unsupported, fall back to regular memory");
     }
     aci.usage = VMA_MEMORY_USAGE_GPU_ONLY;
     img = sys::Image::create(ctxt.allocator, &ici, &aci);
@@ -111,7 +111,7 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   dyn_detail.access = 0;
   dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
 
-  log::debug("created image '", img_cfg.label, "'");
+  L_DEBUG("created image '", img_cfg.label, "'");
   uint32_t qfam_idx = ctxt.submit_details.at(init_submit_ty).qfam_idx;
   return Image {
     &ctxt, std::move(img), std::move(img_view), img_cfg, std::move(dyn_detail)
@@ -122,7 +122,7 @@ void destroy_img(Image& img) {
     img.img.reset();
     img.img_view.reset();
 
-    log::debug("destroyed image '", img.img_cfg.label, "'");
+    L_DEBUG("destroyed image '", img.img_cfg.label, "'");
     img = {};
   }
 }
@@ -159,7 +159,7 @@ void map_img_mem(
     VK_ACCESS_HOST_READ_BIT : VK_ACCESS_HOST_WRITE_BIT;
   dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
 
-  log::debug("mapped image '", img.img->img_cfg.label, "' from (", img.x_offset,
+  L_DEBUG("mapped image '", img.img->img_cfg.label, "' from (", img.x_offset,
     ", ", img.y_offset, ") to (", img.x_offset + img.width, ", ",
     img.y_offset + img.height, ")");
 }
@@ -169,7 +169,7 @@ void unmap_img_mem(
 ) {
   unimplemented();
   vmaUnmapMemory(img.img->ctxt->allocator, img.img->img->alloc);
-  log::debug("unmapped image '", img.img->img_cfg.label, "'");
+  L_DEBUG("unmapped image '", img.img->img_cfg.label, "'");
 }
 
 } // namespace vk

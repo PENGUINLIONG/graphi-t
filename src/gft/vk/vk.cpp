@@ -111,7 +111,7 @@ std::vector<InstancePhysicalDeviceDetail> collect_physdev_details(
 
 void initialize(uint32_t api_ver, sys::InstanceRef&& inst) {
   if (INST != nullptr) {
-    log::warn("ignored redundant vulkan module initialization");
+    L_WARN("ignored redundant vulkan module initialization");
     return;
   }
 
@@ -121,11 +121,11 @@ void initialize(uint32_t api_ver, sys::InstanceRef&& inst) {
   out.physdev_details = collect_physdev_details(inst->inst);
   out.is_imported = false;
   INST = std::make_unique<Instance>(out);
-  log::info("vulkan backend initialized with external instance");
+  L_INFO("vulkan backend initialized with external instance");
 }
 void initialize() {
   if (INST != nullptr) {
-    log::warn("ignored redundant vulkan module initialization");
+    L_WARN("ignored redundant vulkan module initialization");
     return;
   }
 
@@ -139,10 +139,10 @@ void initialize() {
   out.physdev_details = std::move(physdev_details);
   out.is_imported = true;
   INST = std::make_unique<Instance>(out);
-  log::info("vulkan backend initialized");
+  L_INFO("vulkan backend initialized");
 }
 void finalize() {
-  log::info("vulkan backend finalized");
+  L_INFO("vulkan backend finalized");
 }
 std::string desc_dev(uint32_t idx) {
   if (INST != nullptr) {

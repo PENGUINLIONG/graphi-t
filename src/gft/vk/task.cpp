@@ -46,7 +46,7 @@ Task create_comp_task(
   rsc_detail.pipe_layout = std::move(pipe_layout);
   rsc_detail.rsc_tys = cfg.rsc_tys;
 
-  log::debug("created compute task '", cfg.label, "'");
+  L_DEBUG("created compute task '", cfg.label, "'");
   return Task {
     cfg.label, L_SUBMIT_TYPE_COMPUTE, &ctxt, nullptr, std::move(pipe),
     cfg.workgrp_size, std::move(rsc_detail)
@@ -131,7 +131,7 @@ Task create_graph_task(
   rsc_detail.pipe_layout = std::move(pipe_layout);
   rsc_detail.rsc_tys = cfg.rsc_tys;
 
-  log::debug("created graphics task '", cfg.label, "'");
+  L_DEBUG("created graphics task '", cfg.label, "'");
   return Task {
     cfg.label, L_SUBMIT_TYPE_GRAPHICS, &ctxt, &pass, std::move(pipe), {},
     std::move(rsc_detail)
@@ -141,7 +141,7 @@ void destroy_task(Task& task) {
   VkDevice dev = task.ctxt->dev->dev;
 
   if (task.pipe != VK_NULL_HANDLE) {
-    log::debug("destroyed task '", task.label, "'");
+    L_DEBUG("destroyed task '", task.label, "'");
     task = {};
   }
 }
