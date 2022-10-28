@@ -25,7 +25,7 @@ void l_default_log_callback__(liong::log::LogLevel lv, const std::string& msg) {
 
 LogCallback l_log_callback__ = &l_default_log_callback__;
 LogLevel l_filter_lv__ = LogLevel::L_LOG_LEVEL_DEBUG;
-std::string l_indent__ = 0;
+std::string l_indent__ = "";
 
 } // namespace detail
 
