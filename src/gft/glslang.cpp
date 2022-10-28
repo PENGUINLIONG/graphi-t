@@ -1,3 +1,4 @@
+#include <memory>
 #include "glslang/SPIRV/GlslangToSpv.h"
 #include "glslang/glslang/Public/ShaderLang.h"
 #include "glslang/glslang/Include/BaseTypes.h"

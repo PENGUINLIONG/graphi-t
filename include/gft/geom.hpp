@@ -39,7 +39,7 @@ struct Aabb {
   ) {
     return Aabb { center - 0.5f * size, center + 0.5f * size };
   }
-  static constexpr Aabb from_points(const glm::vec3* points, size_t npoint) {
+  static inline Aabb from_points(const glm::vec3* points, size_t npoint) {
     Aabb out {};
     glm::vec3 min {
       std::numeric_limits<float>::infinity(),
@@ -58,7 +58,7 @@ struct Aabb {
     }
     return Aabb::from_min_max(min, max);
   }
-  static constexpr Aabb from_points(const std::vector<glm::vec3>& points) {
+  static inline Aabb from_points(const std::vector<glm::vec3>& points) {
     return from_points(points.data(), points.size());
   }
 };

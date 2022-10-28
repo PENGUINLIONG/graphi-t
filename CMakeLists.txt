@@ -81,12 +81,12 @@ add_executable(bin2c
 
 # The GraphiT library.
 include_directories(${INC_DIRS})
-file(GLOB_RECURSE SRCS "${PROJECT_SOURCE_DIR}/src/*")
+file(GLOB_RECURSE SRCS "${PROJECT_SOURCE_DIR}/src/*.cpp")
 if (APPLE)
-list(APPEND SRCS "${PROJECT_SOURCE_DIR}/src/gft/platform/macos.mm")
+    list(APPEND SRCS "${PROJECT_SOURCE_DIR}/src/gft/platform/macos.mm")
 endif()
-file(GLOB_RECURSE INCS "${PROJECT_SOURCE_DIR}/include/*")
-add_library(GraphiT STATIC ${SRCS} ${INCS} )
+file(GLOB_RECURSE INCS "${PROJECT_SOURCE_DIR}/include/*.hpp")
+add_library(GraphiT STATIC ${SRCS} ${INCS})
 target_link_libraries(GraphiT ${LINK_LIBS})
 add_dependencies(GraphiT bin2c)
 
