@@ -288,6 +288,10 @@ constexpr size_t pop_idx(size_t& aggr_idx, size_t dim_size) {
   return out;
 }
 
+// - [CRC32] -------------------------------------------------------------------
+
+uint32_t crc32(const void* data, int size);
+
 } // namespace util
 
 } // namespace liong
