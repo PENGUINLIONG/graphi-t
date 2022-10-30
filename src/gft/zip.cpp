@@ -19,8 +19,9 @@ struct ZipParser {
   std::vector<ZipFileRecord> records;
   std::map<uint32_t, size_t> rel_offset2irecord;
   std::map<std::string, size_t> file_name2irecord;
+  uint32_t cdr_offset;
 
-  ZipParser(const void* data, size_t size) : stream(data, size) {}
+  ZipParser(const void* data, size_t size) : stream(data, size), cdr_offset() {}
 
   bool extract_local_file_header() {
     uint32_t rel_offset = stream.offset() - sizeof(uint32_t);
@@ -34,7 +35,7 @@ struct ZipParser {
     uint16_t compression_method = stream.extract<uint16_t>();
     uint16_t last_modify_time = stream.extract<uint16_t>();
     uint16_t last_modify_date = stream.extract<uint16_t>();
-    uint16_t crc32 = stream.extract<uint16_t>();
+    uint32_t crc32 = stream.extract<uint32_t>();
     uint32_t compressed_size = stream.extract<uint32_t>();
     uint32_t uncompressed_size = stream.extract<uint32_t>();
     if (compression_method != 0 || compressed_size != uncompressed_size) {
@@ -56,6 +57,7 @@ struct ZipParser {
     size_t irecord = records.size();
 
     rel_offset2irecord[rel_offset] = irecord;
+
     ZipFileRecord& record = records.emplace_back();
     record.file_name = file_name;
     record.data = stream.pos();
@@ -64,7 +66,9 @@ struct ZipParser {
 
     file_name2irecord[file_name] = irecord;
 
-    if (flags & 0x8 != 0) {
+    stream.skip(compressed_size);
+
+    if ((flags & 0x8) != 0) {
       uint32_t sig_dd = 0;
       if (stream.try_peek<uint32_t>(sig_dd)) {
         if (sig_dd == L_ZIP_SIGNATURE_DATA_DESCRIPTOR) {
@@ -196,12 +200,16 @@ struct ZipParser {
     uint32_t sig = 0;
     while (stream.try_peek(sig)) {
       if (sig == L_ZIP_SIGNATURE_CENTRAL_DIRECTORY_FILE_HEADER) {
+        stream.skip(sizeof(sig));
+
         if (!extract_central_directory_file_header()) {
           L_ERROR("cannot extract central directory file header");
           return false;
         }
 
       } else if (sig == L_ZIP_SIGNATURE_END_OF_CENTRAL_DIRECTORY_RECORD) {
+        stream.skip(sizeof(sig));
+
         if (!extract_end_of_central_directory_record()) {
           L_ERROR("cannot extract end of central directory record");
           return false;
@@ -219,6 +227,7 @@ struct ZipParser {
   bool parse() {
     bool out = true;
     out &= parse_file_records();
+    cdr_offset = stream.offset();
     out &= parse_central_directory_records();
     return out;
   }
@@ -227,7 +236,7 @@ struct ZipParser {
 struct ZipArchiver {
   stream::WriteStream stream;
   const std::vector<ZipFileRecord>& records;
-  std::vector<uint32_t> abs_offsets;
+  std::vector<uint32_t> rel_offsets;
   uint32_t cdr_offset;
   uint32_t ecdr_offset;
 
@@ -235,7 +244,7 @@ struct ZipArchiver {
 
   void append_file_records() {
     for (size_t i = 0; i < records.size(); ++i) {
-      abs_offsets.at(i) = (uint32_t)stream.size();
+      rel_offsets.emplace_back((uint32_t)stream.size());
 
       const ZipFileRecord& record = records.at(i);
       stream.append<uint32_t>(L_ZIP_SIGNATURE_LOCAL_FILE_HEADER);
@@ -275,7 +284,7 @@ struct ZipArchiver {
       stream.append<uint16_t>(0); // disk number
       stream.append<uint16_t>(0); // internal attrs
       stream.append<uint32_t>(0); // external attrs
-      stream.append<uint32_t>(cdr_offset - abs_offsets.at(i)); // offset
+      stream.append<uint32_t>(rel_offsets.at(i)); // offset
       stream.append_data(record.file_name.data(), record.file_name.size());
     }
   }
@@ -303,6 +312,7 @@ ZipArchive ZipArchive::from_bytes(const uint8_t* data, size_t size) {
   ZipParser parser(data, size);
   if (!parser.parse()) {
     L_ERROR("failed to parse zip archive");
+    return {};
   }
 
   ZipArchive ar {};

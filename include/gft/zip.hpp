@@ -22,6 +22,10 @@ struct ZipArchive {
   static ZipArchive from_bytes(const uint8_t* data, size_t size);
   static ZipArchive from_bytes(const std::vector<uint8_t>& out);
 
+  inline const ZipFileRecord& get_file(const std::string& file_name) const {
+    return records.at(file_name2irecord.at(file_name));
+  }
+
   // `data` has to be kept alive through out the archive's lifetime.
   void add_file(const std::string& file_name, const void* data, size_t size);
   void to_bytes(std::vector<uint8_t>& out) const;
