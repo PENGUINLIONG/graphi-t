@@ -20,24 +20,24 @@ public:
     size_(size),
     offset_(0) {}
 
-  constexpr const void* data() const {
+  inline const void* data() const {
     return data_;
   }
   inline const void* pos() const {
     return (const uint8_t*)data_ + offset_;
   }
-  constexpr size_t size() const {
+  inline size_t size() const {
     return size_;
   }
   // Resetting `offset` is not allowed. Create another `ReadStream` instance
   // instead if necessary.
-  constexpr size_t offset() const {
+  inline size_t offset() const {
     return offset_;
   }
-  constexpr size_t size_remain() const {
+  inline size_t size_remain() const {
     return size_ - offset_;
   }
-  constexpr bool ate() const {
+  inline bool ate() const {
     return size_ <= offset_;
   }
 
@@ -109,7 +109,7 @@ private:
   std::vector<uint8_t> data_;
 
 public:
-  constexpr size_t size() const {
+  inline size_t size() const {
     return data_.size();
   }
 
