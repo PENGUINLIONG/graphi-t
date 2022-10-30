@@ -165,19 +165,6 @@ std::string trim(const std::string& str) {
   return std::string(beg, end);
 }
 
-
-DataStream& DataStream::skip(size_t n) {
-  L_ASSERT(size >= offset + n);
-  offset += n;
-  return *this;
-}
-void DataStream::extract_data(void* out, size_t size) {
-  L_ASSERT(size_remain() >= size);
-  const void* buf = (const uint8_t*)data() + offset;
-  offset += size;
-  std::memcpy(out, buf, size);
-}
-
 /*
 ** The crc32 is licensed under the Apache License, Version 2.0, and a copy of the license is included in this file.
 **
@@ -190,7 +177,7 @@ void DataStream::extract_data(void* out, size_t size) {
 **    Poly                       : 0xedb88320
 **    Output for "123456789"     : 0xCBF43926
 */
-uint32_t crc32(const void* data, int size) {
+uint32_t crc32(const void* data, size_t size) {
   static uint32_t LUT[] = {
     0x00000000L, 0x77073096L, 0xee0e612cL, 0x990951baL, 0x076dc419L,
     0x706af48fL, 0xe963a535L, 0x9e6495a3L, 0x0edb8832L, 0x79dcb8a4L,
@@ -245,11 +232,10 @@ uint32_t crc32(const void* data, int size) {
     0x5d681b02L, 0x2a6f2b94L, 0xb40bbe37L, 0xc30c8ea1L, 0x5a05df1bL,
     0x2d02ef8dL
   };
-  int i;
   uint32_t crc32val = 0;
   crc32val ^= 0xFFFFFFFF;
 
-  for (i = 0;  i < size;  i++) {
+  for (size_t i = 0;  i < size;  i++) {
     uint32_t x = ((const uint8_t*)data)[i];
     crc32val = LUT[(crc32val ^ x) & 0xFF] ^ ((crc32val >> 8) & 0x00FFFFFF);
   }
