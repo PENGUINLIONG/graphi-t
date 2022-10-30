@@ -10,7 +10,7 @@ ReadStream& ReadStream::skip(size_t n) {
   offset_ += n;
   return *this;
 }
-void ReadStream::extract_data(void* out, size_t size) {
+void ReadStream::peek_data(void* out, size_t size) {
   L_ASSERT(size_remain() >= size);
   const void* buf = (const uint8_t*)data_ + offset_;
   std::memcpy(out, buf, size);

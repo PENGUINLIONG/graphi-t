@@ -227,7 +227,7 @@ constexpr size_t pop_idx(size_t& aggr_idx, size_t dim_size) {
 
 // - [CRC32] -------------------------------------------------------------------
 
-uint32_t crc32(const void* data, int size);
+uint32_t crc32(const void* data, size_t size);
 
 } // namespace util
 

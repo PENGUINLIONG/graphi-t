@@ -62,14 +62,14 @@ public:
     if (size_remain() < sizeof(T)) {
       return false;
     } else {
-      peek_data(&out);
+      peek_data(&out, sizeof(T));
       return true;
     }
   }
   template<typename T>
   inline T extract() {
     T out {};
-    extract_data(&out);
+    extract_data(&out, sizeof(T));
     return out;
   }
   template<typename T>
@@ -121,7 +121,7 @@ public:
   }
   template<typename T>
   inline void append(const std::vector<T>& data) {
-    append_data(x.data(), x.size() * sizeof(T));
+    append_data(data.data(), data.size() * sizeof(T));
   }
 
   inline std::vector<uint8_t> take() {
