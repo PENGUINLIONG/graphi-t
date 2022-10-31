@@ -4,7 +4,7 @@
 namespace liong {
 namespace vk {
 
-VkSwapchainKHR _create_swapchain(
+sys::SwapchainRef _create_swapchain(
   const Context& ctxt,
   const SwapchainConfig& cfg,
   VkSwapchainKHR old_swapchain,
@@ -79,18 +79,17 @@ VkSwapchainKHR _create_swapchain(
   sci.presentMode = VK_PRESENT_MODE_FIFO_KHR;
   sci.clipped = VK_TRUE;
 
-  VkSwapchainKHR swapchain;
-  VK_ASSERT << vkCreateSwapchainKHR(ctxt.dev->dev, &sci, nullptr, &swapchain);
+  sys::SwapchainRef swapchain = sys::Swapchain::create(*ctxt.dev, &sci);
 
   // Collect swapchain images.
   std::vector<VkImage> imgs;
   {
     uint32_t nimg2;
-    VK_ASSERT << vkGetSwapchainImagesKHR(ctxt.dev->dev, swapchain, &nimg2, nullptr);
+    VK_ASSERT << vkGetSwapchainImagesKHR(ctxt.dev->dev, *swapchain, &nimg2, nullptr);
     L_ASSERT(nimg == nimg2, "expected ", nimg, "swapchain images, but actually "
       "get ", nimg2, " images");
     imgs.resize(nimg2);
-    VK_ASSERT << vkGetSwapchainImagesKHR(ctxt.dev->dev, swapchain, &nimg2, imgs.data());
+    VK_ASSERT << vkGetSwapchainImagesKHR(ctxt.dev->dev, *swapchain, &nimg2, imgs.data());
   }
 
   std::vector<Image> swapchain_imgs;
@@ -136,7 +135,7 @@ void _init_swapchain(Swapchain& swapchain) {
   if (swapchain.dyn_detail == nullptr) {
     SwapchainDynamicDetail dyn_detail {};
     swapchain.swapchain = _create_swapchain(*swapchain.ctxt,
-      swapchain.swapchain_cfg, swapchain.swapchain, dyn_detail);
+      swapchain.swapchain_cfg, *swapchain.swapchain, dyn_detail);
   }
 
   const Context& ctxt = *swapchain.ctxt;
@@ -149,7 +148,7 @@ void _init_swapchain(Swapchain& swapchain) {
   VkFence fence;
   VK_ASSERT << vkCreateFence(ctxt.dev->dev, &fci, nullptr, &fence);
 
-  VkResult acq_res = vkAcquireNextImageKHR(ctxt.dev->dev, swapchain.swapchain,
+  VkResult acq_res = vkAcquireNextImageKHR(ctxt.dev->dev, *swapchain.swapchain,
     SPIN_INTERVAL, VK_NULL_HANDLE, fence, &*dyn_detail.img_idx);
   L_ASSERT(acq_res >= 0, "failed to initiate swapchain image acquisition");
 
@@ -160,18 +159,17 @@ void _init_swapchain(Swapchain& swapchain) {
 }
 Swapchain create_swapchain(const Context& ctxt, const SwapchainConfig& cfg) {
   SwapchainDynamicDetail dyn_detail;
-  VkSwapchainKHR swapchain =
+  sys::SwapchainRef swapchain =
     _create_swapchain(ctxt, cfg, VK_NULL_HANDLE, dyn_detail);
 
   Swapchain out {
-    &ctxt, cfg, swapchain,
+    &ctxt, cfg, std::move(swapchain),
     std::make_unique<SwapchainDynamicDetail>(std::move(dyn_detail)),
   };
   _init_swapchain(out);
   return std::move(out);
 }
 Swapchain::~Swapchain() {
-  vkDestroySwapchainKHR(*ctxt->dev, swapchain, nullptr);
   L_DEBUG("destroyed swapchain '", swapchain_cfg.label, "'");
 }
 

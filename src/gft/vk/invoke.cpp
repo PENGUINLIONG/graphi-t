@@ -1049,7 +1049,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     VkPresentInfoKHR pi {};
     pi.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     pi.swapchainCount = 1;
-    pi.pSwapchains = &swapchain.swapchain;
+    pi.pSwapchains = &swapchain.swapchain->swapchain;
     pi.pImageIndices = &img_idx;
     pi.pResults = &present_res;
     if (transact.submit_details.size() != 0) {
@@ -1075,7 +1075,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     img_idx = ~0u;
     res = VK_NOT_READY;
     do {
-      res = vkAcquireNextImageKHR(ctxt.dev->dev, swapchain.swapchain,
+      res = vkAcquireNextImageKHR(ctxt.dev->dev, *swapchain.swapchain,
         SPIN_INTERVAL, VK_NULL_HANDLE, acquire_fence->fence, &img_idx);
     } while (res == VK_TIMEOUT);
     VK_ASSERT << res;

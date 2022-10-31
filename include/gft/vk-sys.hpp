@@ -237,6 +237,31 @@ struct Surface {
 };
 typedef std::shared_ptr<Surface> SurfaceRef;
 
+struct Swapchain {
+  typedef Swapchain Self;
+  VkDevice dev;
+  VkSwapchainKHR swapchain;
+  bool should_destroy;
+
+  Swapchain(VkDevice dev, VkSwapchainKHR swapchain, bool should_destroy) :
+    dev(dev), swapchain(swapchain), should_destroy(should_destroy) {}
+  ~Swapchain() { destroy(); }
+
+  operator VkSwapchainKHR() const {
+    return swapchain;
+  }
+
+  static std::shared_ptr<Swapchain> create(VkDevice dev, const VkSwapchainCreateInfoKHR* sci) {
+    VkSwapchainKHR swapchain = VK_NULL_HANDLE;
+    VK_ASSERT << vkCreateSwapchainKHR(dev, sci, nullptr, &swapchain);
+    return std::make_shared<Swapchain>(dev, swapchain, true);
+  }
+  void destroy() {
+    vkDestroySwapchainKHR(dev, swapchain, nullptr);
+  }
+};
+typedef std::shared_ptr<Swapchain> SwapchainRef;
+
 struct DescriptorSetLayout {
   typedef DescriptorSetLayout Self;
   VkDevice dev;

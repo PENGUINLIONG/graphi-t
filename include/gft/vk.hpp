@@ -237,7 +237,7 @@ struct SwapchainDynamicDetail {
 struct Swapchain {
   const Context* ctxt;
   SwapchainConfig swapchain_cfg;
-  VkSwapchainKHR swapchain;
+  sys::SwapchainRef swapchain;
   std::unique_ptr<SwapchainDynamicDetail> dyn_detail;
 
   Swapchain(const Swapchain&) = delete;
