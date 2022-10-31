@@ -321,18 +321,15 @@ Context create_ctxt_metal(const ContextMetalConfig& cfg) {
   sys::SurfaceRef surf = _create_surf_metal(cfg);
   return _create_ctxt(cfg.label, cfg.dev_idx, surf);
 }
-void destroy_ctxt(Context& ctxt) {
-  if (ctxt.dev != VK_NULL_HANDLE) {
-    for (const auto& samp : ctxt.img_samplers) {
-      sys::destroy_sampler(ctxt.dev->dev, samp.second);
-    }
-    for (const auto& samp : ctxt.depth_img_samplers) {
-      sys::destroy_sampler(ctxt.dev->dev, samp.second);
-    }
-    vmaDestroyAllocator(ctxt.allocator);
-    L_DEBUG("destroyed vulkan context '", ctxt.label, "'");
+Context::~Context() {
+  for (const auto& samp : img_samplers) {
+    sys::destroy_sampler(*dev, samp.second);
   }
-  ctxt = {};
+  for (const auto& samp : depth_img_samplers) {
+    sys::destroy_sampler(*dev, samp.second);
+  }
+  vmaDestroyAllocator(allocator);
+  L_DEBUG("destroyed vulkan context '", label, "'");
 }
 
 

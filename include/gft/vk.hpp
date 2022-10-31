@@ -103,6 +103,10 @@ struct Transaction {
   const Context* ctxt;
   std::vector<TransactionSubmitDetail> submit_details;
   std::vector<sys::FenceRef> fences;
+
+  Transaction(const Transaction&) = delete;
+  Transaction(Transaction&&) = default;
+  ~Transaction();
 };
 
 
@@ -145,6 +149,10 @@ struct Context {
   QueryPoolPool query_pool_pool;
   VmaAllocator allocator;
 
+  Context(const Context&) = delete;
+  Context(Context&&) = default;
+  ~Context();
+
   inline VkPhysicalDevice physdev() const {
     return get_inst().physdev_details.at(iphysdev).physdev;
   }
@@ -174,6 +182,10 @@ struct Buffer {
   sys::BufferRef buf;
   BufferConfig buf_cfg;
   BufferDynamicDetail dyn_detail;
+
+  Buffer(const Buffer&) = delete;
+  Buffer(Buffer&&) = default;
+  ~Buffer();
 };
 
 
@@ -189,6 +201,10 @@ struct Image {
   sys::ImageViewRef img_view;
   ImageConfig img_cfg;
   ImageDynamicDetail dyn_detail;
+
+  Image(const Image&) = delete;
+  Image(Image&&) = default;
+  ~Image();
 };
 
 
@@ -204,6 +220,10 @@ struct DepthImage {
   sys::ImageViewRef img_view;
   DepthImageConfig depth_img_cfg;
   DepthImageDynamicDetail dyn_detail;
+
+  DepthImage(const DepthImage&) = delete;
+  DepthImage(DepthImage&&) = default;
+  ~DepthImage();
 };
 
 
@@ -219,6 +239,10 @@ struct Swapchain {
   SwapchainConfig swapchain_cfg;
   VkSwapchainKHR swapchain;
   std::unique_ptr<SwapchainDynamicDetail> dyn_detail;
+
+  Swapchain(const Swapchain&) = delete;
+  Swapchain(Swapchain&&) = default;
+  ~Swapchain();
 };
 
 
@@ -245,6 +269,10 @@ struct RenderPass {
   RenderPassConfig pass_cfg;
   std::vector<VkClearValue> clear_values;
 
+  RenderPass(const RenderPass&) = delete;
+  RenderPass(RenderPass&&) = default;
+  ~RenderPass();
+
   FramebufferPool framebuf_pool;
   FramebufferPoolItem acquire_framebuf(const std::vector<ResourceView>& attms);
 };
@@ -263,6 +291,10 @@ struct Task {
   sys::PipelineRef pipe;
   DispatchSize workgrp_size; // Only for compute task.
   TaskResourceDetail rsc_detail;
+
+  Task(const Task&) = delete;
+  Task(Task&&) = default;
+  ~Task();
 };
 
 
@@ -366,6 +398,10 @@ struct Invocation {
   // Baking artifacts. Currently we don't support baking render pass invocations
   // and those with switching submit types.
   std::unique_ptr<InvocationBakingDetail> bake_detail;
+
+  Invocation(const Invocation&) = delete;
+  Invocation(Invocation&&) = default;
+  ~Invocation();
 };
 
 } // namespace vk

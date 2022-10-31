@@ -126,7 +126,7 @@ VkSwapchainKHR _create_swapchain(
   }
 
   dyn_detail = SwapchainDynamicDetail {
-    width, height, swapchain_imgs, nullptr
+    width, height, std::move(swapchain_imgs), nullptr
   };
 
   return swapchain;
@@ -168,16 +168,11 @@ Swapchain create_swapchain(const Context& ctxt, const SwapchainConfig& cfg) {
     std::make_unique<SwapchainDynamicDetail>(std::move(dyn_detail)),
   };
   _init_swapchain(out);
-  return out;
+  return std::move(out);
 }
-void destroy_swapchain(Swapchain& swapchain) {
-  const Context& ctxt = *swapchain.ctxt;
-  if (swapchain.dyn_detail != nullptr) {
-    SwapchainDynamicDetail& dyn_detail = *swapchain.dyn_detail;
-    dyn_detail.img_idx = nullptr;
-    dyn_detail.imgs.clear();
-  }
-  vkDestroySwapchainKHR(ctxt.dev->dev, swapchain.swapchain, nullptr);
+Swapchain::~Swapchain() {
+  vkDestroySwapchainKHR(*ctxt->dev, swapchain, nullptr);
+  L_DEBUG("destroyed swapchain '", swapchain_cfg.label, "'");
 }
 
 const Image& get_swapchain_img(const Swapchain& swapchain) {

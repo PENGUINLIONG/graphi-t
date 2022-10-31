@@ -524,42 +524,28 @@ Invocation create_composite_invoke(
   L_DEBUG("created composition invocation");
   return out;
 }
-void destroy_invoke(Invocation& invoke) {
-  const Context& ctxt = *invoke.ctxt;
-  if (
-    invoke.b2b_detail ||
-    invoke.b2i_detail ||
-    invoke.i2b_detail ||
-    invoke.i2i_detail
-  ) {
-    L_DEBUG("destroyed transfer invocation '", invoke.label, "'");
+Invocation::~Invocation() {
+  if (b2b_detail || b2i_detail || i2b_detail || i2i_detail) {
+    L_DEBUG("destroyed transfer invocation '", label, "'");
   }
-  if (invoke.comp_detail) {
-    InvocationComputeDetail& comp_detail = *invoke.comp_detail;
-    comp_detail.desc_set.release();
-    L_DEBUG("destroyed compute invocation '", invoke.label, "'");
+  if (comp_detail) {
+    L_DEBUG("destroyed compute invocation '", label, "'");
   }
-  if (invoke.graph_detail) {
-    InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
-    graph_detail.desc_set.release();
-    L_DEBUG("destroyed graphics invocation '", invoke.label, "'");
+  if (graph_detail) {
+    L_DEBUG("destroyed graphics invocation '", label, "'");
   }
-  if (invoke.pass_detail) {
-    InvocationRenderPassDetail& pass_detail = *invoke.pass_detail;
-    pass_detail.framebuf.release();
-    L_DEBUG("destroyed render pass invocation '", invoke.label, "'");
+  if (pass_detail) {
+    L_DEBUG("destroyed render pass invocation '", label, "'");
   }
-  if (invoke.composite_detail) {
-    L_DEBUG("destroyed composite invocation '", invoke.label, "'");
+  if (composite_detail) {
+    L_DEBUG("destroyed composite invocation '", label, "'");
   }
 
-  invoke.query_pool = QueryPoolPoolItem {};
+  query_pool = QueryPoolPoolItem {};
 
-  if (invoke.bake_detail) {
+  if (bake_detail) {
     L_DEBUG("destroyed baking artifacts");
   }
-
-  invoke = {};
 }
 
 double get_invoke_time_us(const Invocation& invoke) {
@@ -1221,7 +1207,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
       //    VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS :
       //    VK_SUBPASS_CONTENTS_INLINE;
       //  vkCmdNextSubpass(cmdbuf, sc);
-      //  L_DEBUG("render pass invocation '", invoke.label, "' switched to a "
+      //  L_DEBUG("render pass invocation '", label, "' switched to a "
       //    "next subpass");
       //}
 

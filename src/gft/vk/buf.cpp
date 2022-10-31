@@ -60,12 +60,8 @@ Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg) {
   L_DEBUG("created buffer '", buf_cfg.label, "'");
   return Buffer { &ctxt, std::move(buf), buf_cfg, std::move(dyn_detail) };
 }
-void destroy_buf(Buffer& buf) {
-  if (buf.buf != VK_NULL_HANDLE) {
-    buf.buf.reset();
-    L_DEBUG("destroyed buffer '", buf.buf_cfg.label, "'");
-    buf = {};
-  }
+Buffer::~Buffer() {
+  L_DEBUG("destroyed buffer '", buf_cfg.label, "'");
 }
 const BufferConfig& get_buf_cfg(const Buffer& buf) {
   return buf.buf_cfg;
@@ -131,8 +127,6 @@ void read_buf_mem(
     wait_transact(transact);
 
     read_buf_mem(stage_buf_view, data, size);
-
-    destroy_buf(stage_buf);
   }
 }
 

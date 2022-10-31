@@ -4,10 +4,8 @@
 namespace liong {
 namespace vk {
 
-void destroy_transact(Transaction& transact) {
-  const Context& ctxt = *transact.ctxt;
+Transaction::~Transaction() {
   L_DEBUG("destroyed transaction");
-  transact = {};
 }
 bool is_transact_done(const Transaction& transact) {
   const Context& ctxt = *transact.ctxt;

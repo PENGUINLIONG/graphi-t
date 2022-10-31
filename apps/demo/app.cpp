@@ -79,6 +79,14 @@ void dbg_dump_spv_art(
 void guarded_main() {
   scoped::GcScope scope;
 
+  ContextConfig ctxt_cfg { "ctxt", 0 };
+  scoped::Context ctxt = scoped::Context::own_by_gc_frame(create_ctxt(ctxt_cfg));
+
+  auto x = ctxt.inner->acquire_query_pool();
+  x.release();
+
+  return;
+#if 0
   dbg_enum_dev_descs();
 
   std::string vert_glsl = R"(
@@ -194,6 +202,7 @@ void guarded_main() {
 
     swapchain.create_present_invoke().submit().wait();
   }
+#endif
 
 }
 

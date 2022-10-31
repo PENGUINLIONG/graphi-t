@@ -117,14 +117,8 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
     &ctxt, std::move(img), std::move(img_view), img_cfg, std::move(dyn_detail)
   };
 }
-void destroy_img(Image& img) {
-  if (img.img != VK_NULL_HANDLE) {
-    img.img.reset();
-    img.img_view.reset();
-
-    L_DEBUG("destroyed image '", img.img_cfg.label, "'");
-    img = {};
-  }
+Image::~Image() {
+  L_DEBUG("destroyed image '", img_cfg.label, "'");
 }
 const ImageConfig& get_img_cfg(const Image& img) {
   return img.img_cfg;
