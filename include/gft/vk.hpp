@@ -147,7 +147,7 @@ struct Context {
   ContextDescriptorSetDetail desc_set_detail;
   CommandPoolPool cmd_pool_pool;
   QueryPoolPool query_pool_pool;
-  VmaAllocator allocator;
+  sys::AllocatorRef allocator;
 
   Context(const Context&) = delete;
   Context(Context&&) = default;

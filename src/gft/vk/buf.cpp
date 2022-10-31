@@ -51,7 +51,7 @@ Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg) {
   VmaAllocationCreateInfo aci {};
   aci.usage = _host_access2vma_usage(buf_cfg.host_access);
 
-  sys::BufferRef buf = sys::Buffer::create(ctxt.allocator, &bci, &aci);
+  sys::BufferRef buf = sys::Buffer::create(*ctxt.allocator, &bci, &aci);
 
   BufferDynamicDetail dyn_detail {};
   dyn_detail.access = 0;
@@ -76,7 +76,7 @@ void map_buf_mem(
 ) {
   L_ASSERT(map_access != 0, "memory map access must be read, write or both");
 
-  VK_ASSERT << vmaMapMemory(buf.buf->ctxt->allocator, buf.buf->buf->alloc, &mapped);
+  VK_ASSERT << vmaMapMemory(*buf.buf->ctxt->allocator, buf.buf->buf->alloc, &mapped);
 
   auto& dyn_detail = (BufferDynamicDetail&)buf.buf->dyn_detail;
   dyn_detail.access = map_access == L_MEMORY_ACCESS_READ_BIT ?
@@ -91,7 +91,7 @@ void unmap_buf_mem(
   const BufferView& buf,
   void* mapped
 ) {
-  vmaUnmapMemory(buf.buf->ctxt->allocator, buf.buf->buf->alloc);
+  vmaUnmapMemory(*buf.buf->ctxt->allocator, buf.buf->buf->alloc);
   L_DEBUG("unmapped buffer '", buf.buf->buf_cfg.label, "'");
 }
 void read_buf_mem(

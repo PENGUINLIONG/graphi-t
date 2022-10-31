@@ -294,14 +294,13 @@ Context _create_ctxt(
   allocatorInfo.device = dev->dev;
   allocatorInfo.instance = inst.inst->inst;
 
-  VmaAllocator allocator;
-  VK_ASSERT << vmaCreateAllocator(&allocatorInfo, &allocator);
+  sys::AllocatorRef allocator = sys::Allocator::create(&allocatorInfo);
 
   L_DEBUG("created vulkan context '", label, "' on device #", dev_idx, ": ",
     inst.physdev_details.at(dev_idx).desc);
   return Context {
     label, dev_idx, std::move(dev), surf, std::move(submit_details),
-    img_samplers, depth_img_samplers, {}, {}, {}, allocator
+    img_samplers, depth_img_samplers, {}, {}, {}, std::move(allocator)
   };
 
 }
@@ -328,7 +327,6 @@ Context::~Context() {
   for (const auto& samp : depth_img_samplers) {
     sys::destroy_sampler(*dev, samp.second);
   }
-  vmaDestroyAllocator(allocator);
   L_DEBUG("destroyed vulkan context '", label, "'");
 }
 

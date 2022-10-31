@@ -60,14 +60,14 @@ DepthImage create_depth_img(
   VkResult res = VK_ERROR_OUT_OF_DEVICE_MEMORY;
   if (is_tile_mem) {
     aci.usage = VMA_MEMORY_USAGE_GPU_LAZILY_ALLOCATED;
-    img = sys::Image::create(ctxt.allocator, &ici, &aci);
+    img = sys::Image::create(*ctxt.allocator, &ici, &aci);
   }
   if (res != VK_SUCCESS) {
     if (is_tile_mem) {
       L_WARN("tile-memory is unsupported, fall back to regular memory");
     }
     aci.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    img = sys::Image::create(ctxt.allocator, &ici, &aci);
+    img = sys::Image::create(*ctxt.allocator, &ici, &aci);
   }
 
   VkImageViewCreateInfo ivci {};

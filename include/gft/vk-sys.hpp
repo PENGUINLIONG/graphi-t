@@ -92,6 +92,31 @@ struct Device {
 };
 typedef std::shared_ptr<Device> DeviceRef;
 
+struct Allocator {
+  typedef Allocator Self;
+  VmaAllocator allocator;
+  bool should_destroy;
+
+  Allocator(VmaAllocator allocator, bool should_destroy) :
+    allocator(allocator), should_destroy(should_destroy) {}
+  ~Allocator() { destroy(); }
+
+  operator VmaAllocator() const {
+    return allocator;
+  }
+
+  static std::shared_ptr<Allocator> create(const VmaAllocatorCreateInfo* aci) {
+    VmaAllocator allocator = VK_NULL_HANDLE;
+    VK_ASSERT << vmaCreateAllocator(aci, &allocator);
+    return std::make_shared<Allocator>(allocator, true);
+  }
+  void destroy() {
+    vmaDestroyAllocator(allocator);
+  }
+};
+typedef std::shared_ptr<Allocator> AllocatorRef;
+
+
 struct Buffer {
   typedef Device Self;
   VmaAllocator allocator;
