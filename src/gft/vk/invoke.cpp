@@ -36,7 +36,7 @@ void _update_desc_set(
     VkDescriptorImageInfo dii {};
     if (rsc_view.rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE) {
       const ImageView& img_view = rsc_view.img_view;
-      dii.sampler = ctxt.img_samplers.at(img_view.sampler);
+      dii.sampler = ctxt.img_samplers.at(img_view.sampler)->sampler;
       dii.imageView = img_view.img->img_view->img_view;
       dii.imageLayout = layout;
       diis.emplace_back(std::move(dii));
@@ -46,7 +46,7 @@ void _update_desc_set(
     } else if (rsc_view.rsc_view_ty == L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE) {
       const DepthImageView& depth_img_view = rsc_view.depth_img_view;
 
-      dii.sampler = ctxt.depth_img_samplers.at(depth_img_view.sampler);
+      dii.sampler = ctxt.depth_img_samplers.at(depth_img_view.sampler)->sampler;
       dii.imageView = depth_img_view.depth_img->img_view->img_view;
       dii.imageLayout = layout;
       diis.emplace_back(std::move(dii));

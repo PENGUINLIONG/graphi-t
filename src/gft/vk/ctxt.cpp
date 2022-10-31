@@ -272,7 +272,7 @@ Context _create_ctxt(
       std::move(submit_ty), std::move(submit_detail)));
   }
 
-  std::map<ImageSampler, VkSampler> img_samplers {};
+  std::map<ImageSampler, sys::SamplerRef> img_samplers {};
   img_samplers[L_IMAGE_SAMPLER_LINEAR] = sys::create_sampler(dev->dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, VK_COMPARE_OP_NEVER);
   img_samplers[L_IMAGE_SAMPLER_NEAREST] = sys::create_sampler(dev->dev,
@@ -280,7 +280,7 @@ Context _create_ctxt(
   img_samplers[L_IMAGE_SAMPLER_ANISOTROPY_4] = sys::create_sampler(dev->dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 4.0f, VK_COMPARE_OP_NEVER);
 
-  std::map<DepthImageSampler, VkSampler> depth_img_samplers {};
+  std::map<DepthImageSampler, sys::SamplerRef> depth_img_samplers {};
   depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_LINEAR] = sys::create_sampler(dev->dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, VK_COMPARE_OP_LESS);
   depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_NEAREST] = sys::create_sampler(dev->dev,
@@ -321,12 +321,6 @@ Context create_ctxt_metal(const ContextMetalConfig& cfg) {
   return _create_ctxt(cfg.label, cfg.dev_idx, surf);
 }
 Context::~Context() {
-  for (const auto& samp : img_samplers) {
-    sys::destroy_sampler(*dev, samp.second);
-  }
-  for (const auto& samp : depth_img_samplers) {
-    sys::destroy_sampler(*dev, samp.second);
-  }
   L_DEBUG("destroyed vulkan context '", label, "'");
 }
 

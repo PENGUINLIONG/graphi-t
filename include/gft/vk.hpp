@@ -142,8 +142,8 @@ struct Context {
   sys::DeviceRef dev;
   sys::SurfaceRef surf;
   std::map<SubmitType, ContextSubmitDetail> submit_details;
-  std::map<ImageSampler, VkSampler> img_samplers;
-  std::map<DepthImageSampler, VkSampler> depth_img_samplers;
+  std::map<ImageSampler, sys::SamplerRef> img_samplers;
+  std::map<DepthImageSampler, sys::SamplerRef> depth_img_samplers;
   ContextDescriptorSetDetail desc_set_detail;
   CommandPoolPool cmd_pool_pool;
   QueryPoolPool query_pool_pool;

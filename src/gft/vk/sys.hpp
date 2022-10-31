@@ -32,14 +32,13 @@ extern sys::DeviceRef create_dev(
 VkQueue get_dev_queue(VkDevice dev, uint32_t qfam_idx, uint32_t queue_idx);
 
 // VkSampler
-extern VkSampler create_sampler(
+extern sys::SamplerRef create_sampler(
   VkDevice dev,
   VkFilter filter,
   VkSamplerMipmapMode mip_mode,
   float max_aniso,
   VkCompareOp cmp_op
 );
-extern void destroy_sampler(VkDevice dev, VkSampler sampler);
 
 // VkDescriptorSetLayout
 extern sys::DescriptorSetLayoutRef create_desc_set_layout(

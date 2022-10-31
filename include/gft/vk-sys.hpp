@@ -196,6 +196,31 @@ struct ImageView {
 };
 typedef std::shared_ptr<ImageView> ImageViewRef;
 
+struct Sampler {
+  typedef Sampler Self;
+  VkDevice dev;
+  VkSampler sampler;
+  bool should_destroy;
+
+  Sampler(VkDevice dev, VkSampler sampler, bool should_destroy) :
+    dev(dev), sampler(sampler), should_destroy(should_destroy) {}
+  ~Sampler() { destroy(); }
+
+  operator VkSampler() const {
+    return sampler;
+  }
+
+  static std::shared_ptr<Sampler> create(VkDevice dev, const VkSamplerCreateInfo* sci) {
+    VkSampler sampler = VK_NULL_HANDLE;
+    VK_ASSERT << vkCreateSampler(dev, sci, nullptr, &sampler);
+    return std::make_shared<Sampler>(dev, sampler, true);
+  }
+  void destroy() {
+    vkDestroySampler(dev, sampler, nullptr);
+  }
+};
+typedef std::shared_ptr<Sampler> SamplerRef;
+
 struct Surface {
   typedef Surface Self;
   VkInstance inst;
