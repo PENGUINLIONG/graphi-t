@@ -118,7 +118,9 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   };
 }
 Image::~Image() {
-  L_DEBUG("destroyed image '", img_cfg.label, "'");
+  if (img) {
+    L_DEBUG("destroyed image '", img_cfg.label, "'");
+  }
 }
 const ImageConfig& get_img_cfg(const Image& img) {
   return img.img_cfg;

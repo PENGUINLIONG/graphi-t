@@ -5,7 +5,9 @@ namespace liong {
 namespace vk {
 
 Transaction::~Transaction() {
-  L_DEBUG("destroyed transaction");
+  if (fences.size() > 0) {
+    L_DEBUG("destroyed transaction");
+  }
 }
 bool is_transact_done(const Transaction& transact) {
   const Context& ctxt = *transact.ctxt;

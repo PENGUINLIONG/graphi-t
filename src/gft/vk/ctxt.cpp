@@ -321,7 +321,9 @@ Context create_ctxt_metal(const ContextMetalConfig& cfg) {
   return _create_ctxt(cfg.label, cfg.dev_idx, surf);
 }
 Context::~Context() {
-  L_DEBUG("destroyed vulkan context '", label, "'");
+  if (dev) {
+    L_DEBUG("destroyed vulkan context '", label, "'");
+  }
 }
 
 

@@ -100,7 +100,9 @@ DepthImage create_depth_img(
   };
 }
 DepthImage::~DepthImage() {
-  L_DEBUG("destroyed depth image '", depth_img_cfg.label, "'");
+  if (img) {
+    L_DEBUG("destroyed depth image '", depth_img_cfg.label, "'");
+  }
 }
 const DepthImageConfig& get_depth_img_cfg(const DepthImage& depth_img) {
   return depth_img.depth_img_cfg;

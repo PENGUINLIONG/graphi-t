@@ -61,7 +61,9 @@ Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg) {
   return Buffer { &ctxt, std::move(buf), buf_cfg, std::move(dyn_detail) };
 }
 Buffer::~Buffer() {
-  L_DEBUG("destroyed buffer '", buf_cfg.label, "'");
+  if (buf) {
+    L_DEBUG("destroyed buffer '", buf_cfg.label, "'");
+  }
 }
 const BufferConfig& get_buf_cfg(const Buffer& buf) {
   return buf.buf_cfg;

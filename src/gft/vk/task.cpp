@@ -138,7 +138,9 @@ Task create_graph_task(
   };
 }
 Task::~Task() {
-  L_DEBUG("destroyed task '", label, "'");
+  if (pipe) {
+    L_DEBUG("destroyed task '", label, "'");
+  }
 }
 
 } // namespace vk

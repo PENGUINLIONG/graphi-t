@@ -541,8 +541,6 @@ Invocation::~Invocation() {
     L_DEBUG("destroyed composite invocation '", label, "'");
   }
 
-  query_pool = QueryPoolPoolItem {};
-
   if (bake_detail) {
     L_DEBUG("destroyed baking artifacts");
   }

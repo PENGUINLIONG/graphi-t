@@ -170,7 +170,9 @@ Swapchain create_swapchain(const Context& ctxt, const SwapchainConfig& cfg) {
   return std::move(out);
 }
 Swapchain::~Swapchain() {
-  L_DEBUG("destroyed swapchain '", swapchain_cfg.label, "'");
+  if (swapchain) {
+    L_DEBUG("destroyed swapchain '", swapchain_cfg.label, "'");
+  }
 }
 
 const Image& get_swapchain_img(const Swapchain& swapchain) {
