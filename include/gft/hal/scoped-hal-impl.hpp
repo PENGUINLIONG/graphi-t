@@ -1,6 +1,14 @@
 #pragma once
 #include "gft/hal/scoped-hal.hpp"
 
+#if defined(_WIN32)
+#include "gft/platform/windows.hpp"
+#endif // defined(_WIN32)
+
+#if defined(__MACH__) && defined(__APPLE__)
+#include "gft/platform/macos.hpp"
+#endif // defined(__MACH__) && defined(__APPLE__)
+
 #ifndef HAL_IMPL_NAMESPACE
 static_assert(false, "please specify the implementation namespace (e.g. `vk`)");
 #endif
@@ -127,16 +135,16 @@ void pop_gc_frame(const std::string& label) {
 
 
 #define L_DEF_REG_GC(ty, ty_enum) \
-  HAL_IMPL_NAMESPACE::ty* reg_gc_frame_obj(HAL_IMPL_NAMESPACE::ty&& x) { \
-    void* obj = new HAL_IMPL_NAMESPACE::ty(std::move(x)); \
+  HAL_IMPL_NAMESPACE::ty* ty::create_gc_frame_obj() { \
+    void* obj = new HAL_IMPL_NAMESPACE::ty(); \
     GcEntry entry {}; \
     entry.obj_ty = ty_enum; \
     entry.obj = obj; \
     OBJ_POOL.gc_stack.back().entries.emplace_back(std::move(entry)); \
     return (HAL_IMPL_NAMESPACE::ty*)obj; \
   } \
-  HAL_IMPL_NAMESPACE::ty* reg_raii_obj(HAL_IMPL_NAMESPACE::ty&& x) { \
-    void* obj = new HAL_IMPL_NAMESPACE::ty(std::move(x)); \
+  HAL_IMPL_NAMESPACE::ty* ty::create_raii_obj() { \
+    void* obj = new HAL_IMPL_NAMESPACE::ty(); \
     std::pair<void*, ObjectType> extern_obj {}; \
     extern_obj.first = obj; \
     extern_obj.second = ty_enum; \
@@ -176,18 +184,6 @@ void destroy_raii_obj(void* obj) {
     out.ownership = L_SCOPED_OBJECT_OWNERSHIP_BORROWED; \
     return out; \
   } \
-  ty ty::own_by_raii(HAL_IMPL_NAMESPACE::ty&& inner) { \
-    ty out {}; \
-    out.inner = reg_raii_obj(std::move(inner)); \
-    out.ownership = L_SCOPED_OBJECT_OWNERSHIP_OWNED_BY_RAII; \
-    return out; \
-  } \
-  ty ty::own_by_gc_frame(HAL_IMPL_NAMESPACE::ty&& inner) { \
-    ty out {}; \
-    out.inner = reg_gc_frame_obj(std::move(inner)); \
-    out.ownership = L_SCOPED_OBJECT_OWNERSHIP_OWNED_BY_GC_FRAME; \
-    return out; \
-  } \
   ty::~ty() { \
     if (inner != nullptr) { \
       if (ownership == L_SCOPED_OBJECT_OWNERSHIP_OWNED_BY_RAII) { \
@@ -197,14 +193,43 @@ void destroy_raii_obj(void* obj) {
     } \
   }
 
-#define L_BUILD_WITH_CFG(ty, create_fn) \
-  gc ? \
-    ty::own_by_gc_frame(create_fn(parent, inner)) : \
-    ty::own_by_raii(create_fn(parent, inner));
+#define L_BUILD_WITH_CFG(ty) \
+  [&]() { \
+    if (gc) { \
+      HAL_IMPL_NAMESPACE::ty* obj = ty::create_gc_frame_obj(); \
+      bool succ = HAL_IMPL_NAMESPACE::ty::create(parent, inner, *obj); \
+      L_ASSERT(succ); \
+      ty out {}; \
+      out.inner = obj; \
+      out.ownership = L_SCOPED_OBJECT_OWNERSHIP_OWNED_BY_GC_FRAME; \
+      return out; \
+    } else { \
+      HAL_IMPL_NAMESPACE::ty* obj = ty::create_raii_obj(); \
+      bool succ = HAL_IMPL_NAMESPACE::ty::create(parent, inner, *obj); \
+      L_ASSERT(succ); \
+      ty out {}; \
+      out.inner = obj; \
+      out.ownership = L_SCOPED_OBJECT_OWNERSHIP_OWNED_BY_RAII; \
+      return out; \
+    } \
+  }()
 
 
 
 L_DEF_CTOR_DTOR(Context);
+Context ContextBuilder::build(bool gc) {
+  return L_BUILD_WITH_CFG(Context);
+}
+Context WindowsContextBuilder::build(bool gc) {
+  return L_BUILD_WITH_CFG(Context);
+}
+Context AndroidContextBuilder::build(bool gc) {
+  return L_BUILD_WITH_CFG(Context);
+}
+Context MetalContextBuilder::build(bool gc) {
+  return L_BUILD_WITH_CFG(Context);
+}
+
 
 
 L_DEF_CTOR_DTOR(Buffer);
@@ -227,7 +252,7 @@ BufferBuilder& BufferBuilder::streaming_with_aligned(
   return streaming().size(elem_aligned_size * nelem);
 }
 Buffer BufferBuilder::build(bool gc) {
-  auto out = L_BUILD_WITH_CFG(Buffer, create_buf);
+  auto out = L_BUILD_WITH_CFG(Buffer);
   if (streaming_data != nullptr && nstreaming_elem > 0) {
     MappedBuffer mapped = out.map_write();
     size_t offset_src = 0;
@@ -248,33 +273,28 @@ Buffer BufferBuilder::build(bool gc) {
 
 L_DEF_CTOR_DTOR(Image);
 Image ImageBuilder::build(bool gc) {
-  return L_BUILD_WITH_CFG(Image, create_img);
+  return L_BUILD_WITH_CFG(Image);
 }
 
 
 
 L_DEF_CTOR_DTOR(DepthImage);
 DepthImage DepthImageBuilder::build(bool gc) {
-  return L_BUILD_WITH_CFG(DepthImage, create_depth_img);
+  return L_BUILD_WITH_CFG(DepthImage);
 }
 
 
 
 L_DEF_CTOR_DTOR(Swapchain);
 Swapchain SwapchainBuilder::build(bool gc) {
-  return L_BUILD_WITH_CFG(Swapchain, create_swapchain);
-}
-Invocation Swapchain::create_present_invoke(bool gc) const {
-  return gc ?
-    Invocation::own_by_gc_frame(HAL_IMPL_NAMESPACE::create_present_invoke(*inner)) :
-    Invocation::own_by_raii(HAL_IMPL_NAMESPACE::create_present_invoke(*inner));
+  return L_BUILD_WITH_CFG(Swapchain);
 }
 
 
 
 L_DEF_CTOR_DTOR(RenderPass);
 RenderPass RenderPassBuilder::build(bool gc) {
-  return L_BUILD_WITH_CFG(RenderPass, create_pass);
+  return L_BUILD_WITH_CFG(RenderPass);
 }
 
 GraphicsTaskBuilder RenderPass::build_graph_task(
@@ -292,10 +312,10 @@ RenderPassInvocationBuilder RenderPass::build_pass_invoke(
 
 L_DEF_CTOR_DTOR(Task);
 Task ComputeTaskBuilder::build(bool gc) {
-  return L_BUILD_WITH_CFG(Task, create_comp_task);
+  return L_BUILD_WITH_CFG(Task);
 }
 Task GraphicsTaskBuilder::build(bool gc) {
-  return L_BUILD_WITH_CFG(Task, create_graph_task);
+  return L_BUILD_WITH_CFG(Task);
 }
 
 ComputeInvocationBuilder Task::build_comp_invoke(
@@ -313,29 +333,47 @@ GraphicsInvocationBuilder Task::build_graph_invoke(
 
 L_DEF_CTOR_DTOR(Invocation);
 Invocation TransferInvocationBuilder::build(bool gc) {
-  return L_BUILD_WITH_CFG(Invocation, create_trans_invoke);
+  return L_BUILD_WITH_CFG(Invocation);
 }
 Invocation ComputeInvocationBuilder::build(bool gc) {
-  return L_BUILD_WITH_CFG(Invocation, create_comp_invoke);
+  return L_BUILD_WITH_CFG(Invocation);
 }
 Invocation GraphicsInvocationBuilder::build(bool gc) {
-  return L_BUILD_WITH_CFG(Invocation, create_graph_invoke);
+  return L_BUILD_WITH_CFG(Invocation);
 }
 Invocation RenderPassInvocationBuilder::build(bool gc) {
-  return L_BUILD_WITH_CFG(Invocation, create_pass_invoke);
+  return L_BUILD_WITH_CFG(Invocation);
 }
 Invocation CompositeInvocationBuilder::build(bool gc) {
-  return L_BUILD_WITH_CFG(Invocation, create_composite_invoke);
+  return L_BUILD_WITH_CFG(Invocation);
+}
+Invocation PresentInvocationBuilder::build(bool gc) {
+  return L_BUILD_WITH_CFG(Invocation);
+}
+
+double Invocation::get_time_us() const {
+  return inner->get_time_us();
+}
+void Invocation::bake() {
+  inner->bake();
 }
 Transaction Invocation::submit(bool gc) {
-  return gc ?
-    Transaction::own_by_gc_frame(submit_invoke(*inner)) :
-    Transaction::own_by_raii(submit_invoke(*inner));
+  return InvocationSubmitTransactionBuilder(*this).build(gc);
 }
 
 
 
 L_DEF_CTOR_DTOR(Transaction);
+Transaction InvocationSubmitTransactionBuilder::build(bool gc) {
+  return L_BUILD_WITH_CFG(Transaction);
+}
+
+bool Transaction::is_done() const {
+  return inner->is_done();
+}
+void Transaction::wait() {
+  inner->wait();
+}
 
 
 

@@ -15,7 +15,11 @@ constexpr VmaMemoryUsage _host_access2vma_usage(MemoryAccess host_access) {
     return VMA_MEMORY_USAGE_CPU_ONLY;
   }
 }
-Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg) {
+bool Buffer::create(
+  const Context& ctxt,
+  const BufferConfig& buf_cfg,
+  Buffer& out
+) {
   VkBufferCreateInfo bci {};
   bci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
   bci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
@@ -57,8 +61,12 @@ Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg) {
   dyn_detail.access = 0;
   dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
 
+  out.ctxt = &ctxt;
+  out.buf = std::move(buf);
+  out.buf_cfg = buf_cfg;
+  out.dyn_detail = std::move(dyn_detail);
   L_DEBUG("created buffer '", buf_cfg.label, "'");
-  return Buffer { &ctxt, std::move(buf), buf_cfg, std::move(dyn_detail) };
+  return true;
 }
 Buffer::~Buffer() {
   if (buf) {
@@ -118,15 +126,20 @@ void read_buf_mem(
     staging_buf_cfg.host_access = L_MEMORY_ACCESS_READ_BIT;
     staging_buf_cfg.size = size;
     staging_buf_cfg.usage = L_BUFFER_USAGE_TRANSFER_DST_BIT;
-    Buffer stage_buf = create_buf(ctxt, staging_buf_cfg);
+    Buffer stage_buf {};
+    Buffer::create(ctxt, staging_buf_cfg, stage_buf);
     BufferView stage_buf_view = make_buf_view(stage_buf);
 
     TransferInvocationConfig trans_invoke_cfg {};
     trans_invoke_cfg.src_rsc_view = make_rsc_view(buf);
     trans_invoke_cfg.dst_rsc_view = make_rsc_view(stage_buf_view);
-    Invocation invoke = create_trans_invoke(ctxt, trans_invoke_cfg);
-    Transaction transact = submit_invoke(invoke);
-    wait_transact(transact);
+    Invocation invoke {};
+    Invocation::create(ctxt, trans_invoke_cfg, invoke);
+
+    InvocationSubmitTransactionConfig invoke_submit_transact_cfg {};
+    Transaction transact {};
+    Transaction::create(invoke, invoke_submit_transact_cfg, transact);
+    transact.wait();
 
     read_buf_mem(stage_buf_view, data, size);
   }

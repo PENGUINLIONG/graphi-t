@@ -84,13 +84,13 @@ sys::SurfaceRef _create_surf_metal(const ContextMetalConfig& cfg) {
 #endif // VK_EXT_metal_surface
 }
 
-Context _create_ctxt(
+void _create_ctxt(
+  const Instance& inst,
   const std::string& label,
   uint32_t dev_idx,
-  const sys::SurfaceRef& surf
+  const sys::SurfaceRef& surf,
+  Context& out
 ) {
-  const Instance& inst = get_inst();
-
   L_ASSERT(dev_idx < inst.physdev_details.size(),
     "wanted vulkan device does not exists (#", dev_idx, " of ",
     inst.physdev_details.size(), " available devices)");
@@ -296,29 +296,40 @@ Context _create_ctxt(
 
   sys::AllocatorRef allocator = sys::Allocator::create(&allocatorInfo);
 
+  out.label = label;
+  out.iphysdev = dev_idx;
+  out.dev = std::move(dev);
+  out.surf = surf;
+  out.submit_details = std::move(submit_details);
+  out.img_samplers = std::move(img_samplers);
+  out.depth_img_samplers = std::move(depth_img_samplers);
+  out.desc_set_detail = {};
+  out.cmd_pool_pool = {};
+  out.query_pool_pool = {};
+  out.allocator = std::move(allocator);
+
   L_DEBUG("created vulkan context '", label, "' on device #", dev_idx, ": ",
     inst.physdev_details.at(dev_idx).desc);
-  return Context {
-    label, dev_idx, std::move(dev), surf, std::move(submit_details),
-    img_samplers, depth_img_samplers, {}, {}, {}, std::move(allocator)
-  };
-
 }
 
-Context create_ctxt(const ContextConfig& cfg) {
-  return _create_ctxt(cfg.label, cfg.dev_idx, VK_NULL_HANDLE);
+bool Context::create(const Instance& inst, const ContextConfig& cfg, Context& out) {
+  _create_ctxt(inst, cfg.label, cfg.dev_idx, VK_NULL_HANDLE, out);
+  return true;
 }
-Context create_ctxt_windows(const ContextWindowsConfig& cfg) {
+bool Context::create(const Instance& inst, const ContextWindowsConfig& cfg, Context& out) {
   sys::SurfaceRef surf = _create_surf_windows(cfg);
-  return _create_ctxt(cfg.label, cfg.dev_idx, surf);
+  _create_ctxt(inst, cfg.label, cfg.dev_idx, surf, out);
+  return true;
 }
-Context create_ctxt_android(const ContextAndroidConfig& cfg) {
+bool Context::create(const Instance& inst, const ContextAndroidConfig& cfg, Context& out) {
   sys::SurfaceRef surf = _create_surf_android(cfg);
-  return _create_ctxt(cfg.label, cfg.dev_idx, surf);
+  _create_ctxt(inst, cfg.label, cfg.dev_idx, surf, out);
+  return true;
 }
-Context create_ctxt_metal(const ContextMetalConfig& cfg) {
+bool Context::create(const Instance& inst, const ContextMetalConfig& cfg, Context& out) {
   sys::SurfaceRef surf = _create_surf_metal(cfg);
-  return _create_ctxt(cfg.label, cfg.dev_idx, surf);
+  _create_ctxt(inst, cfg.label, cfg.dev_idx, surf, out);
+  return true;
 }
 Context::~Context() {
   if (dev) {

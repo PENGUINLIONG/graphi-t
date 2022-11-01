@@ -28,10 +28,13 @@ namespace liong {
 
 namespace HAL_IMPL_NAMESPACE {
 
+L_IMPL_STRUCT struct Instance;
 // Initialize the implementation of the HAL.
 L_IMPL_FN void initialize();
 // Finalize the implementation.
 L_IMPL_FN void finalize();
+// Get the implementation instance.
+L_IMPL_FN const Instance& get_inst();
 
 // Generate Human-readable string to describe the properties and capabilities
 // of the device at index `idx`. If there is no device at `idx`, an empty string
@@ -40,13 +43,18 @@ L_IMPL_FN std::string desc_dev(uint32_t idx);
 
 
 
+struct InvocationSubmitTransactionConfig {
+  std::string label;
+};
 // A batch of works dispatched to the device.
+struct Transaction_ {
+  // Check whether the transaction is finished. `true` is returned if so.
+  virtual bool is_done() const = 0;
+  // Wait the invocation submitted to device for execution. Returns immediately
+  // if the invocation has already been waited.
+  virtual void wait() const = 0;
+};
 L_IMPL_STRUCT struct Transaction;
-// Check whether the transaction is finished. `true` is returned if so.
-L_IMPL_FN bool is_transact_done(const Transaction& transact);
-// Wait the invocation submitted to device for execution. Returns immediately if
-// the invocation has already been waited.
-L_IMPL_FN void wait_transact(const Transaction& transact);
 
 
 
@@ -79,10 +87,6 @@ struct ContextMetalConfig {
 };
 
 L_IMPL_STRUCT struct Context;
-L_IMPL_FN Context create_ctxt(const ContextConfig& cfg);
-L_IMPL_FN Context create_ctxt_windows(const ContextWindowsConfig& cfg);
-L_IMPL_FN Context create_ctxt_android(const ContextAndroidConfig& cfg);
-L_IMPL_FN Context create_ctxt_metal(const ContextMetalConfig& cfg);
 
 
 
@@ -117,7 +121,6 @@ struct BufferConfig {
   BufferUsage usage;
 };
 L_IMPL_STRUCT struct Buffer;
-L_IMPL_FN Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg);
 L_IMPL_FN const BufferConfig& get_buf_cfg(const Buffer& buf);
 
 struct BufferView {
@@ -190,7 +193,6 @@ struct ImageConfig {
   ImageUsage usage;
 };
 L_IMPL_STRUCT struct Image;
-L_IMPL_FN Image create_img(const Context& ctxt, const ImageConfig& img_cfg);
 L_IMPL_FN const ImageConfig& get_img_cfg(const Image& img);
 
 enum ImageSampler {
@@ -538,38 +540,16 @@ struct CompositeInvocationConfig {
   // Set `true` if the device-side execution time is wanted.
   bool is_timed;
 };
+struct PresentInvocationConfig {
+};
+struct Invocation_ {
+  // Get the execution time of the last WAITED invocation.
+  virtual double get_time_us() const = 0;
+  // Pre-encode the invocation commands to reduce host-side overhead on constant
+  // device-side procedures.
+  virtual void bake() = 0;
+};
 L_IMPL_STRUCT struct Invocation;
-L_IMPL_FN Invocation create_trans_invoke(
-  const Context& ctxt,
-  const TransferInvocationConfig& cfg
-);
-L_IMPL_FN Invocation create_comp_invoke(
-  const Task& task,
-  const ComputeInvocationConfig& cfg
-);
-L_IMPL_FN Invocation create_graph_invoke(
-  const Task& task,
-  const GraphicsInvocationConfig& cfg
-);
-L_IMPL_FN Invocation create_pass_invoke(
-  const RenderPass& pass,
-  const RenderPassInvocationConfig& cfg
-);
-// Present the content written to the current surface image.
-L_IMPL_FN Invocation create_present_invoke(
-  const Swapchain& swapchain
-);
-L_IMPL_FN Invocation create_composite_invoke(
-  const Context& ctxt,
-  const CompositeInvocationConfig& cfg
-);
-// Get the execution time of the last WAITED invocation.
-L_IMPL_FN double get_invoke_time_us(const Invocation& invoke);
-// Pre-encode the invocation commands to reduce host-side overhead on constant
-// device-side procedures.
-L_IMPL_FN void bake_invoke(Invocation& invoke);
-// Create a device transactiona and submit `invoke` to device for execution.
-L_IMPL_FN Transaction submit_invoke(const Invocation& invoke);
 
 } // namespace HAL_IMPL_NAMESPACE
 

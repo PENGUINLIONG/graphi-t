@@ -4,9 +4,10 @@
 namespace liong {
 namespace vk {
 
-DepthImage create_depth_img(
+bool DepthImage::create(
   const Context& ctxt,
-  const DepthImageConfig& depth_img_cfg
+  const DepthImageConfig& depth_img_cfg,
+  DepthImage& out
 ) {
   VkFormat fmt = depth_fmt2vk(depth_img_cfg.fmt);
   VkImageUsageFlags usage = 0;
@@ -94,10 +95,13 @@ DepthImage create_depth_img(
   dyn_detail.access = 0;
   dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
 
+  out.ctxt = &ctxt;
+  out.img = std::move(img);
+  out.img_view = std::move(img_view);
+  out.depth_img_cfg = depth_img_cfg;
+  out.dyn_detail = std::move(dyn_detail);
   L_DEBUG("created depth image '", depth_img_cfg.label, "'");
-  return DepthImage {
-    &ctxt, std::move(img), std::move(img_view), depth_img_cfg, std::move(dyn_detail)
-  };
+  return true;
 }
 DepthImage::~DepthImage() {
   if (img) {

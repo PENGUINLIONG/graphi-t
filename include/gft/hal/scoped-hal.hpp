@@ -67,23 +67,33 @@ enum ScopedObjectOwnership {
     return *this; \
   } \
   static ty borrow(const HAL_IMPL_NAMESPACE::ty& inner); \
-  static ty own_by_raii(HAL_IMPL_NAMESPACE::ty&& inner); \
-  static ty own_by_gc_frame(HAL_IMPL_NAMESPACE::ty&& inner); \
+  static HAL_IMPL_NAMESPACE::ty* create_gc_frame_obj(); \
+  static HAL_IMPL_NAMESPACE::ty* create_raii_obj(); \
   inline operator HAL_IMPL_NAMESPACE::ty&() { return *inner; } \
   inline operator const HAL_IMPL_NAMESPACE::ty&() const { return *inner; } \
   constexpr bool is_valid() const { return inner != nullptr; }
 
 
-
 struct Transaction {
   L_DECLR_SCOPED_OBJ(Transaction);
 
-  inline bool is_done() const {
-    return is_transact_done(*this);
+  bool is_done() const;
+  void wait();
+};
+struct InvocationSubmitTransactionBuilder {
+  using Self = InvocationSubmitTransactionBuilder;
+
+  const Invocation& parent;
+  InvocationSubmitTransactionConfig inner {};
+
+  inline InvocationSubmitTransactionBuilder(
+    const Invocation& invoke,
+    const std::string& label = ""
+  ) : parent(invoke), inner() {
+    inner.label = label;
   }
-  inline void wait() {
-    wait_transact(*this);
-  }
+
+  Transaction build(bool gc = true);
 };
 
 
@@ -91,12 +101,8 @@ struct Transaction {
 struct Invocation {
   L_DECLR_SCOPED_OBJ(Invocation);
 
-  inline double get_time_us() const {
-    return get_invoke_time_us(*this);
-  }
-  inline void bake() {
-    bake_invoke(*this);
-  }
+  double get_time_us() const;
+  void bake();
 
   Transaction submit(bool gc = true);
 };
@@ -304,6 +310,18 @@ struct CompositeInvocationBuilder {
     inner.is_timed = is_timed;
     return *this;
   }
+
+  Invocation build(bool gc = true);
+};
+struct PresentInvocationBuilder {
+  using Self = PresentInvocationBuilder;
+  const Swapchain& parent;
+  PresentInvocationConfig inner;
+
+  inline PresentInvocationBuilder(
+    const Swapchain& swapchain,
+    const std::string& label = ""
+  ) : parent(swapchain), inner() {}
 
   Invocation build(bool gc = true);
 };
@@ -614,7 +632,9 @@ struct Swapchain {
     return get_swapchain_cfg(*inner);
   }
 
-  Invocation create_present_invoke(bool gc = true) const;
+  Invocation create_present_invoke(bool gc = true) const {
+    return PresentInvocationBuilder(*this).build(gc);
+  }
 
   inline Image get_img() const {
     return Image::borrow(get_swapchain_img(*inner));
@@ -991,6 +1011,79 @@ struct Context {
     L_ASSERT(succ);
     return out;
   }
+};
+struct ContextBuilder {
+  using Self = ContextBuilder;
+
+  const HAL_IMPL_NAMESPACE::Instance& parent;
+  ContextConfig inner;
+
+  inline ContextBuilder(
+    const std::string& label = ""
+  ) : parent(get_inst()), inner() {
+    inner.label = label;
+  }
+
+  Context build(bool gc = true);
+};
+struct WindowsContextBuilder {
+  using Self = WindowsContextBuilder;
+
+  const HAL_IMPL_NAMESPACE::Instance& parent;
+  ContextWindowsConfig inner;
+
+  inline WindowsContextBuilder(
+    const std::string& label = ""
+  ) : parent(get_inst()), inner() {
+    inner.label = label;
+  }
+
+  Self& hinst(void* hinst) {
+    inner.hinst = hinst;
+    return *this;
+  }
+  Self& hwnd(void* hwnd) {
+    inner.hwnd = hwnd;
+    return *this;
+  }
+
+  Context build(bool gc = true);
+};
+struct AndroidContextBuilder {
+  using Self = AndroidContextBuilder;
+
+  const HAL_IMPL_NAMESPACE::Instance& parent;
+  ContextAndroidConfig inner;
+
+  inline AndroidContextBuilder(
+    const std::string& label = ""
+  ) : parent(get_inst()), inner() {
+    inner.label = label;
+  }
+
+  Self& native_wnd(void* native_wnd) {
+    inner.native_wnd = native_wnd;
+    return *this;
+  }
+
+  Context build(bool gc = true);
+};
+struct MetalContextBuilder {
+  using Self = MetalContextBuilder;
+
+  const HAL_IMPL_NAMESPACE::Instance& parent;
+  ContextMetalConfig inner;
+
+  inline MetalContextBuilder(
+    const std::string& label = ""
+  ) : parent(get_inst()), inner() { inner.label = label; }
+
+  Self& metal_layer(void* metal_layer) {
+    inner.metal_layer = metal_layer;
+    return *this;
+  }
+
+  Context build(bool gc = true);
 };
 
 

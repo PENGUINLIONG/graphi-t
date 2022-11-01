@@ -10,6 +10,7 @@ sys::SwapchainRef _create_swapchain(
   VkSwapchainKHR old_swapchain,
   SwapchainDynamicDetail& dyn_detail
 ) {
+  L_ASSERT(ctxt.surf != nullptr);
   auto physdev = ctxt.physdev();
 
   VkSurfaceCapabilitiesKHR sc {};
@@ -157,17 +158,21 @@ void _init_swapchain(Swapchain& swapchain) {
 
   vkDestroyFence(ctxt.dev->dev, fence, nullptr);
 }
-Swapchain create_swapchain(const Context& ctxt, const SwapchainConfig& cfg) {
+bool Swapchain::create(
+  const Context& ctxt,
+  const SwapchainConfig& cfg,
+  Swapchain& out
+) {
   SwapchainDynamicDetail dyn_detail;
   sys::SwapchainRef swapchain =
     _create_swapchain(ctxt, cfg, VK_NULL_HANDLE, dyn_detail);
 
-  Swapchain out {
-    &ctxt, cfg, std::move(swapchain),
-    std::make_unique<SwapchainDynamicDetail>(std::move(dyn_detail)),
-  };
+  out.ctxt = &ctxt;
+  out.swapchain_cfg = cfg;
+  out.swapchain = swapchain;
+  out.dyn_detail = std::make_unique<SwapchainDynamicDetail>(std::move(dyn_detail));
   _init_swapchain(out);
-  return std::move(out);
+  return true;
 }
 Swapchain::~Swapchain() {
   if (swapchain) {

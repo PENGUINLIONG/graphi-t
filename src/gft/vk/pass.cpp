@@ -135,7 +135,11 @@ sys::FramebufferRef _create_framebuf(
   return sys::Framebuffer::create(pass.ctxt->dev->dev, &fci);
 }
 
-RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg) {
+bool RenderPass::create(
+  const Context& ctxt,
+  const RenderPassConfig& cfg,
+  RenderPass& out
+) {
   sys::RenderPassRef pass = _create_pass(ctxt, cfg.attm_cfgs);
 
   VkRect2D viewport {};
@@ -161,8 +165,14 @@ RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg) {
     }
   }
 
+  out.ctxt = &ctxt;
+  out.width = cfg.width;
+  out.height = cfg.height;
+  out.pass = std::move(pass);
+  out.pass_cfg = cfg;
+  out.clear_values = clear_values;
   L_DEBUG("created render pass '", cfg.label, "'");
-  return RenderPass { &ctxt, cfg.width, cfg.height, std::move(pass), cfg, clear_values };
+  return true;
 }
 RenderPass::~RenderPass() {
   if (pass) {
