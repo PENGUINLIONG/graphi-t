@@ -85,14 +85,14 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   VkResult res = VK_ERROR_OUT_OF_DEVICE_MEMORY;
   if (is_tile_mem) {
     aci.usage = VMA_MEMORY_USAGE_GPU_LAZILY_ALLOCATED;
-    img = sys::Image::create(ctxt.allocator, &ici, &aci);
+    img = sys::Image::create(*ctxt.allocator, &ici, &aci);
   }
   if (res != VK_SUCCESS) {
     if (is_tile_mem) {
       L_WARN("tile-memory is unsupported, fall back to regular memory");
     }
     aci.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    img = sys::Image::create(ctxt.allocator, &ici, &aci);
+    img = sys::Image::create(*ctxt.allocator, &ici, &aci);
   }
 
   VkImageViewCreateInfo ivci {};
@@ -117,13 +117,9 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
     &ctxt, std::move(img), std::move(img_view), img_cfg, std::move(dyn_detail)
   };
 }
-void destroy_img(Image& img) {
-  if (img.img != VK_NULL_HANDLE) {
-    img.img.reset();
-    img.img_view.reset();
-
-    L_DEBUG("destroyed image '", img.img_cfg.label, "'");
-    img = {};
+Image::~Image() {
+  if (img) {
+    L_DEBUG("destroyed image '", img_cfg.label, "'");
   }
 }
 const ImageConfig& get_img_cfg(const Image& img) {
@@ -149,7 +145,7 @@ void map_img_mem(
   size_t offset = sl.offset;
   size_t size = sl.size;
 
-  VK_ASSERT << vmaMapMemory(img.img->ctxt->allocator, img.img->img->alloc, &mapped);
+  VK_ASSERT << vmaMapMemory(*img.img->ctxt->allocator, img.img->img->alloc, &mapped);
   row_pitch = sl.rowPitch;
 
   auto& dyn_detail = (ImageDynamicDetail&)(img.img->dyn_detail);
@@ -168,7 +164,7 @@ void unmap_img_mem(
   void* mapped
 ) {
   unimplemented();
-  vmaUnmapMemory(img.img->ctxt->allocator, img.img->img->alloc);
+  vmaUnmapMemory(*img.img->ctxt->allocator, img.img->img->alloc);
   L_DEBUG("unmapped image '", img.img->img_cfg.label, "'");
 }
 

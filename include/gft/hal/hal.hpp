@@ -42,7 +42,6 @@ L_IMPL_FN std::string desc_dev(uint32_t idx);
 
 // A batch of works dispatched to the device.
 L_IMPL_STRUCT struct Transaction;
-L_IMPL_FN void destroy_transact(Transaction& transact);
 // Check whether the transaction is finished. `true` is returned if so.
 L_IMPL_FN bool is_transact_done(const Transaction& transact);
 // Wait the invocation submitted to device for execution. Returns immediately if
@@ -84,7 +83,6 @@ L_IMPL_FN Context create_ctxt(const ContextConfig& cfg);
 L_IMPL_FN Context create_ctxt_windows(const ContextWindowsConfig& cfg);
 L_IMPL_FN Context create_ctxt_android(const ContextAndroidConfig& cfg);
 L_IMPL_FN Context create_ctxt_metal(const ContextMetalConfig& cfg);
-L_IMPL_FN void destroy_ctxt(Context& ctxt);
 
 
 
@@ -120,7 +118,6 @@ struct BufferConfig {
 };
 L_IMPL_STRUCT struct Buffer;
 L_IMPL_FN Buffer create_buf(const Context& ctxt, const BufferConfig& buf_cfg);
-L_IMPL_FN void destroy_buf(Buffer& buf);
 L_IMPL_FN const BufferConfig& get_buf_cfg(const Buffer& buf);
 
 struct BufferView {
@@ -194,7 +191,6 @@ struct ImageConfig {
 };
 L_IMPL_STRUCT struct Image;
 L_IMPL_FN Image create_img(const Context& ctxt, const ImageConfig& img_cfg);
-L_IMPL_FN void destroy_img(Image& img);
 L_IMPL_FN const ImageConfig& get_img_cfg(const Image& img);
 
 enum ImageSampler {
@@ -270,7 +266,6 @@ L_IMPL_FN DepthImage create_depth_img(
   const Context& ctxt,
   const DepthImageConfig& depth_img_cfg
 );
-L_IMPL_FN void destroy_depth_img(DepthImage& depth_img);
 L_IMPL_FN const DepthImageConfig& get_depth_img_cfg(const DepthImage& depth_img);
 
 enum DepthImageSampler {
@@ -322,7 +317,6 @@ L_IMPL_FN Swapchain create_swapchain(
   const Context& ctxt,
   const SwapchainConfig& cfg
 );
-L_IMPL_FN void destroy_swapchain(Swapchain& swapchain);
 L_IMPL_FN const SwapchainConfig& get_swapchain_cfg(const Swapchain& swapchain);
 // Get the surface image for the current frame. Surface image is alive after the
 // `acquire_surf_img` transition finishes and before the next presentation
@@ -409,7 +403,6 @@ struct RenderPassConfig {
 };
 L_IMPL_STRUCT struct RenderPass;
 RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg);
-void destroy_pass(RenderPass& pass);
 
 enum Topology {
   L_TOPOLOGY_POINT = 1,
@@ -451,7 +444,6 @@ L_IMPL_FN Task create_graph_task(
   const RenderPass& pass,
   const GraphicsTaskConfig& cfg
 );
-L_IMPL_FN void destroy_task(Task& task);
 
 
 
@@ -571,7 +563,6 @@ L_IMPL_FN Invocation create_composite_invoke(
   const Context& ctxt,
   const CompositeInvocationConfig& cfg
 );
-L_IMPL_FN void destroy_invoke(Invocation& invoke);
 // Get the execution time of the last WAITED invocation.
 L_IMPL_FN double get_invoke_time_us(const Invocation& invoke);
 // Pre-encode the invocation commands to reduce host-side overhead on constant

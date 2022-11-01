@@ -272,7 +272,7 @@ Context _create_ctxt(
       std::move(submit_ty), std::move(submit_detail)));
   }
 
-  std::map<ImageSampler, VkSampler> img_samplers {};
+  std::map<ImageSampler, sys::SamplerRef> img_samplers {};
   img_samplers[L_IMAGE_SAMPLER_LINEAR] = sys::create_sampler(dev->dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, VK_COMPARE_OP_NEVER);
   img_samplers[L_IMAGE_SAMPLER_NEAREST] = sys::create_sampler(dev->dev,
@@ -280,7 +280,7 @@ Context _create_ctxt(
   img_samplers[L_IMAGE_SAMPLER_ANISOTROPY_4] = sys::create_sampler(dev->dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 4.0f, VK_COMPARE_OP_NEVER);
 
-  std::map<DepthImageSampler, VkSampler> depth_img_samplers {};
+  std::map<DepthImageSampler, sys::SamplerRef> depth_img_samplers {};
   depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_LINEAR] = sys::create_sampler(dev->dev,
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 0.0f, VK_COMPARE_OP_LESS);
   depth_img_samplers[L_DEPTH_IMAGE_SAMPLER_NEAREST] = sys::create_sampler(dev->dev,
@@ -294,14 +294,13 @@ Context _create_ctxt(
   allocatorInfo.device = dev->dev;
   allocatorInfo.instance = inst.inst->inst;
 
-  VmaAllocator allocator;
-  VK_ASSERT << vmaCreateAllocator(&allocatorInfo, &allocator);
+  sys::AllocatorRef allocator = sys::Allocator::create(&allocatorInfo);
 
   L_DEBUG("created vulkan context '", label, "' on device #", dev_idx, ": ",
     inst.physdev_details.at(dev_idx).desc);
   return Context {
     label, dev_idx, std::move(dev), surf, std::move(submit_details),
-    img_samplers, depth_img_samplers, {}, {}, {}, allocator
+    img_samplers, depth_img_samplers, {}, {}, {}, std::move(allocator)
   };
 
 }
@@ -321,18 +320,10 @@ Context create_ctxt_metal(const ContextMetalConfig& cfg) {
   sys::SurfaceRef surf = _create_surf_metal(cfg);
   return _create_ctxt(cfg.label, cfg.dev_idx, surf);
 }
-void destroy_ctxt(Context& ctxt) {
-  if (ctxt.dev != VK_NULL_HANDLE) {
-    for (const auto& samp : ctxt.img_samplers) {
-      sys::destroy_sampler(ctxt.dev->dev, samp.second);
-    }
-    for (const auto& samp : ctxt.depth_img_samplers) {
-      sys::destroy_sampler(ctxt.dev->dev, samp.second);
-    }
-    vmaDestroyAllocator(ctxt.allocator);
-    L_DEBUG("destroyed vulkan context '", ctxt.label, "'");
+Context::~Context() {
+  if (dev) {
+    L_DEBUG("destroyed vulkan context '", label, "'");
   }
-  ctxt = {};
 }
 
 

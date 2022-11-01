@@ -92,6 +92,31 @@ struct Device {
 };
 typedef std::shared_ptr<Device> DeviceRef;
 
+struct Allocator {
+  typedef Allocator Self;
+  VmaAllocator allocator;
+  bool should_destroy;
+
+  Allocator(VmaAllocator allocator, bool should_destroy) :
+    allocator(allocator), should_destroy(should_destroy) {}
+  ~Allocator() { destroy(); }
+
+  operator VmaAllocator() const {
+    return allocator;
+  }
+
+  static std::shared_ptr<Allocator> create(const VmaAllocatorCreateInfo* aci) {
+    VmaAllocator allocator = VK_NULL_HANDLE;
+    VK_ASSERT << vmaCreateAllocator(aci, &allocator);
+    return std::make_shared<Allocator>(allocator, true);
+  }
+  void destroy() {
+    vmaDestroyAllocator(allocator);
+  }
+};
+typedef std::shared_ptr<Allocator> AllocatorRef;
+
+
 struct Buffer {
   typedef Device Self;
   VmaAllocator allocator;
@@ -171,6 +196,31 @@ struct ImageView {
 };
 typedef std::shared_ptr<ImageView> ImageViewRef;
 
+struct Sampler {
+  typedef Sampler Self;
+  VkDevice dev;
+  VkSampler sampler;
+  bool should_destroy;
+
+  Sampler(VkDevice dev, VkSampler sampler, bool should_destroy) :
+    dev(dev), sampler(sampler), should_destroy(should_destroy) {}
+  ~Sampler() { destroy(); }
+
+  operator VkSampler() const {
+    return sampler;
+  }
+
+  static std::shared_ptr<Sampler> create(VkDevice dev, const VkSamplerCreateInfo* sci) {
+    VkSampler sampler = VK_NULL_HANDLE;
+    VK_ASSERT << vkCreateSampler(dev, sci, nullptr, &sampler);
+    return std::make_shared<Sampler>(dev, sampler, true);
+  }
+  void destroy() {
+    vkDestroySampler(dev, sampler, nullptr);
+  }
+};
+typedef std::shared_ptr<Sampler> SamplerRef;
+
 struct Surface {
   typedef Surface Self;
   VkInstance inst;
@@ -211,6 +261,31 @@ struct Surface {
   }
 };
 typedef std::shared_ptr<Surface> SurfaceRef;
+
+struct Swapchain {
+  typedef Swapchain Self;
+  VkDevice dev;
+  VkSwapchainKHR swapchain;
+  bool should_destroy;
+
+  Swapchain(VkDevice dev, VkSwapchainKHR swapchain, bool should_destroy) :
+    dev(dev), swapchain(swapchain), should_destroy(should_destroy) {}
+  ~Swapchain() { destroy(); }
+
+  operator VkSwapchainKHR() const {
+    return swapchain;
+  }
+
+  static std::shared_ptr<Swapchain> create(VkDevice dev, const VkSwapchainCreateInfoKHR* sci) {
+    VkSwapchainKHR swapchain = VK_NULL_HANDLE;
+    VK_ASSERT << vkCreateSwapchainKHR(dev, sci, nullptr, &swapchain);
+    return std::make_shared<Swapchain>(dev, swapchain, true);
+  }
+  void destroy() {
+    vkDestroySwapchainKHR(dev, swapchain, nullptr);
+  }
+};
+typedef std::shared_ptr<Swapchain> SwapchainRef;
 
 struct DescriptorSetLayout {
   typedef DescriptorSetLayout Self;

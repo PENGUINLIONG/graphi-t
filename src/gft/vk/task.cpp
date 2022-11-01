@@ -137,12 +137,9 @@ Task create_graph_task(
     std::move(rsc_detail)
   };
 }
-void destroy_task(Task& task) {
-  VkDevice dev = task.ctxt->dev->dev;
-
-  if (task.pipe != VK_NULL_HANDLE) {
-    L_DEBUG("destroyed task '", task.label, "'");
-    task = {};
+Task::~Task() {
+  if (pipe) {
+    L_DEBUG("destroyed task '", label, "'");
   }
 }
 

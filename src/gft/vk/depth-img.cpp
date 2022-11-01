@@ -60,14 +60,14 @@ DepthImage create_depth_img(
   VkResult res = VK_ERROR_OUT_OF_DEVICE_MEMORY;
   if (is_tile_mem) {
     aci.usage = VMA_MEMORY_USAGE_GPU_LAZILY_ALLOCATED;
-    img = sys::Image::create(ctxt.allocator, &ici, &aci);
+    img = sys::Image::create(*ctxt.allocator, &ici, &aci);
   }
   if (res != VK_SUCCESS) {
     if (is_tile_mem) {
       L_WARN("tile-memory is unsupported, fall back to regular memory");
     }
     aci.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    img = sys::Image::create(ctxt.allocator, &ici, &aci);
+    img = sys::Image::create(*ctxt.allocator, &ici, &aci);
   }
 
   VkImageViewCreateInfo ivci {};
@@ -99,13 +99,9 @@ DepthImage create_depth_img(
     &ctxt, std::move(img), std::move(img_view), depth_img_cfg, std::move(dyn_detail)
   };
 }
-void destroy_depth_img(DepthImage& depth_img) {
-  if (depth_img.img) {
-    depth_img.img.reset();
-    depth_img.img_view.reset();
-
-    L_DEBUG("destroyed depth image '", depth_img.depth_img_cfg.label, "'");
-    depth_img = {};
+DepthImage::~DepthImage() {
+  if (img) {
+    L_DEBUG("destroyed depth image '", depth_img_cfg.label, "'");
   }
 }
 const DepthImageConfig& get_depth_img_cfg(const DepthImage& depth_img) {

@@ -36,7 +36,7 @@ void _update_desc_set(
     VkDescriptorImageInfo dii {};
     if (rsc_view.rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE) {
       const ImageView& img_view = rsc_view.img_view;
-      dii.sampler = ctxt.img_samplers.at(img_view.sampler);
+      dii.sampler = ctxt.img_samplers.at(img_view.sampler)->sampler;
       dii.imageView = img_view.img->img_view->img_view;
       dii.imageLayout = layout;
       diis.emplace_back(std::move(dii));
@@ -46,7 +46,7 @@ void _update_desc_set(
     } else if (rsc_view.rsc_view_ty == L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE) {
       const DepthImageView& depth_img_view = rsc_view.depth_img_view;
 
-      dii.sampler = ctxt.depth_img_samplers.at(depth_img_view.sampler);
+      dii.sampler = ctxt.depth_img_samplers.at(depth_img_view.sampler)->sampler;
       dii.imageView = depth_img_view.depth_img->img_view->img_view;
       dii.imageLayout = layout;
       diis.emplace_back(std::move(dii));
@@ -524,42 +524,26 @@ Invocation create_composite_invoke(
   L_DEBUG("created composition invocation");
   return out;
 }
-void destroy_invoke(Invocation& invoke) {
-  const Context& ctxt = *invoke.ctxt;
-  if (
-    invoke.b2b_detail ||
-    invoke.b2i_detail ||
-    invoke.i2b_detail ||
-    invoke.i2i_detail
-  ) {
-    L_DEBUG("destroyed transfer invocation '", invoke.label, "'");
+Invocation::~Invocation() {
+  if (b2b_detail || b2i_detail || i2b_detail || i2i_detail) {
+    L_DEBUG("destroyed transfer invocation '", label, "'");
   }
-  if (invoke.comp_detail) {
-    InvocationComputeDetail& comp_detail = *invoke.comp_detail;
-    comp_detail.desc_set.release();
-    L_DEBUG("destroyed compute invocation '", invoke.label, "'");
+  if (comp_detail) {
+    L_DEBUG("destroyed compute invocation '", label, "'");
   }
-  if (invoke.graph_detail) {
-    InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
-    graph_detail.desc_set.release();
-    L_DEBUG("destroyed graphics invocation '", invoke.label, "'");
+  if (graph_detail) {
+    L_DEBUG("destroyed graphics invocation '", label, "'");
   }
-  if (invoke.pass_detail) {
-    InvocationRenderPassDetail& pass_detail = *invoke.pass_detail;
-    pass_detail.framebuf.release();
-    L_DEBUG("destroyed render pass invocation '", invoke.label, "'");
+  if (pass_detail) {
+    L_DEBUG("destroyed render pass invocation '", label, "'");
   }
-  if (invoke.composite_detail) {
-    L_DEBUG("destroyed composite invocation '", invoke.label, "'");
+  if (composite_detail) {
+    L_DEBUG("destroyed composite invocation '", label, "'");
   }
 
-  invoke.query_pool = QueryPoolPoolItem {};
-
-  if (invoke.bake_detail) {
+  if (bake_detail) {
     L_DEBUG("destroyed baking artifacts");
   }
-
-  invoke = {};
 }
 
 double get_invoke_time_us(const Invocation& invoke) {
@@ -1063,7 +1047,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     VkPresentInfoKHR pi {};
     pi.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     pi.swapchainCount = 1;
-    pi.pSwapchains = &swapchain.swapchain;
+    pi.pSwapchains = &swapchain.swapchain->swapchain;
     pi.pImageIndices = &img_idx;
     pi.pResults = &present_res;
     if (transact.submit_details.size() != 0) {
@@ -1089,7 +1073,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     img_idx = ~0u;
     res = VK_NOT_READY;
     do {
-      res = vkAcquireNextImageKHR(ctxt.dev->dev, swapchain.swapchain,
+      res = vkAcquireNextImageKHR(ctxt.dev->dev, *swapchain.swapchain,
         SPIN_INTERVAL, VK_NULL_HANDLE, acquire_fence->fence, &img_idx);
     } while (res == VK_TIMEOUT);
     VK_ASSERT << res;
@@ -1221,7 +1205,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
       //    VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS :
       //    VK_SUBPASS_CONTENTS_INLINE;
       //  vkCmdNextSubpass(cmdbuf, sc);
-      //  L_DEBUG("render pass invocation '", invoke.label, "' switched to a "
+      //  L_DEBUG("render pass invocation '", label, "' switched to a "
       //    "next subpass");
       //}
 

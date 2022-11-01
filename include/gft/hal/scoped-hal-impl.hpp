@@ -23,21 +23,20 @@ enum ObjectType {
 void _destroy_obj(ObjectType obj_ty, void* obj) {
   switch (obj_ty) {
 
-#define L_CASE_DESTROY_OBJ(ty_enum, dtor, ty) \
+#define L_CASE_DESTROY_OBJ(ty_enum, ty) \
   case ty_enum: \
-    dtor(*(HAL_IMPL_NAMESPACE::ty*)obj); \
     delete (HAL_IMPL_NAMESPACE::ty*)obj; \
     break;
 
-  L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_CONTEXT, destroy_ctxt, Context);
-  L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_BUFFER, destroy_buf, Buffer);
-  L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_IMAGE, destroy_img, Image);
-  L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_DEPTH_IMAGE, destroy_depth_img, DepthImage);
-  L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_SWAPCHAIN, destroy_swapchain, Swapchain);
-  L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_RENDER_PASS, destroy_pass, RenderPass);
-  L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_TASK, destroy_task, Task);
-  L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_INVOCATION, destroy_invoke, Invocation);
-  L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_TRANSACTION, destroy_transact, Transaction);
+  L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_CONTEXT, Context);
+  L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_BUFFER, Buffer);
+  L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_IMAGE, Image);
+  L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_DEPTH_IMAGE, DepthImage);
+  L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_SWAPCHAIN, Swapchain);
+  L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_RENDER_PASS, RenderPass);
+  L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_TASK, Task);
+  L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_INVOCATION, Invocation);
+  L_CASE_DESTROY_OBJ(L_OBJECT_TYPE_TRANSACTION, Transaction);
 
 #undef L_CASE_DESTROY_OBJ
 
@@ -129,8 +128,7 @@ void pop_gc_frame(const std::string& label) {
 
 #define L_DEF_REG_GC(ty, ty_enum) \
   HAL_IMPL_NAMESPACE::ty* reg_gc_frame_obj(HAL_IMPL_NAMESPACE::ty&& x) { \
-    void* obj = new HAL_IMPL_NAMESPACE::ty( \
-      std::forward<HAL_IMPL_NAMESPACE::ty>(x)); \
+    void* obj = new HAL_IMPL_NAMESPACE::ty(std::move(x)); \
     GcEntry entry {}; \
     entry.obj_ty = ty_enum; \
     entry.obj = obj; \
@@ -138,8 +136,7 @@ void pop_gc_frame(const std::string& label) {
     return (HAL_IMPL_NAMESPACE::ty*)obj; \
   } \
   HAL_IMPL_NAMESPACE::ty* reg_raii_obj(HAL_IMPL_NAMESPACE::ty&& x) { \
-    void* obj = new HAL_IMPL_NAMESPACE::ty( \
-      std::forward<HAL_IMPL_NAMESPACE::ty>(x)); \
+    void* obj = new HAL_IMPL_NAMESPACE::ty(std::move(x)); \
     std::pair<void*, ObjectType> extern_obj {}; \
     extern_obj.first = obj; \
     extern_obj.second = ty_enum; \
@@ -181,13 +178,13 @@ void destroy_raii_obj(void* obj) {
   } \
   ty ty::own_by_raii(HAL_IMPL_NAMESPACE::ty&& inner) { \
     ty out {}; \
-    out.inner = reg_raii_obj(std::forward<HAL_IMPL_NAMESPACE::ty>(inner)); \
+    out.inner = reg_raii_obj(std::move(inner)); \
     out.ownership = L_SCOPED_OBJECT_OWNERSHIP_OWNED_BY_RAII; \
     return out; \
   } \
   ty ty::own_by_gc_frame(HAL_IMPL_NAMESPACE::ty&& inner) { \
     ty out {}; \
-    out.inner = reg_gc_frame_obj(std::forward<HAL_IMPL_NAMESPACE::ty>(inner)); \
+    out.inner = reg_gc_frame_obj(std::move(inner)); \
     out.ownership = L_SCOPED_OBJECT_OWNERSHIP_OWNED_BY_GC_FRAME; \
     return out; \
   } \

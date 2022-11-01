@@ -143,7 +143,7 @@ VkQueue get_dev_queue(VkDevice dev, uint32_t qfam_idx, uint32_t queue_idx) {
 
 
 // VkSampler
-VkSampler create_sampler(
+sys::SamplerRef create_sampler(
   VkDevice dev,
   VkFilter filter,
   VkSamplerMipmapMode mip_mode,
@@ -167,12 +167,7 @@ VkSampler create_sampler(
     sci.compareOp = cmp_op;
   }
 
-  VkSampler sampler;
-  VK_ASSERT << vkCreateSampler(dev, &sci, nullptr, &sampler);
-  return sampler;
-}
-void destroy_sampler(VkDevice dev, VkSampler sampler) {
-  vkDestroySampler(dev, sampler, nullptr);
+  return sys::Sampler::create(dev, &sci);
 }
 
 
