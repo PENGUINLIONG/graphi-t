@@ -73,78 +73,36 @@ Buffer::~Buffer() {
     L_DEBUG("destroyed buffer '", buf_cfg.label, "'");
   }
 }
-const BufferConfig& get_buf_cfg(const Buffer& buf) {
-  return buf.buf_cfg;
+
+const BufferConfig& Buffer::cfg() const {
+  return buf_cfg;
 }
 
-
-
-void map_buf_mem(
-  const BufferView& buf,
-  MemoryAccess map_access,
-  void*& mapped
-) {
+void* Buffer::map(MemoryAccess map_access) {
   L_ASSERT(map_access != 0, "memory map access must be read, write or both");
 
-  VK_ASSERT << vmaMapMemory(*buf.buf->ctxt->allocator, buf.buf->buf->alloc, &mapped);
+  void* mapped = nullptr;
+  VK_ASSERT << vmaMapMemory(*ctxt->allocator, buf->alloc, &mapped);
 
-  auto& dyn_detail = (BufferDynamicDetail&)buf.buf->dyn_detail;
   dyn_detail.access = map_access == L_MEMORY_ACCESS_READ_BIT ?
     VK_ACCESS_HOST_READ_BIT : VK_ACCESS_HOST_WRITE_BIT;
   dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
 
-  L_DEBUG("mapped buffer '", buf.buf->buf_cfg.label, "' from ", buf.offset,
-    " to ", buf.offset + buf.size);
-  mapped = (uint8_t*)mapped + buf.offset;
+  L_DEBUG("mapped buffer '", buf.buf->buf_cfg.label, "'");
+  return (uint8_t*)mapped;
 }
-void unmap_buf_mem(
-  const BufferView& buf,
-  void* mapped
-) {
-  vmaUnmapMemory(*buf.buf->ctxt->allocator, buf.buf->buf->alloc);
+void Buffer::unmap(void* mapped) {
+  vmaUnmapMemory(*ctxt->allocator, buf->alloc);
   L_DEBUG("unmapped buffer '", buf.buf->buf_cfg.label, "'");
 }
-void read_buf_mem(
-  const BufferView& buf,
-  void* data,
-  size_t size
-) {
-  L_ASSERT(size <= buf.size);
-  L_ASSERT(buf.offset + buf.size <= buf.buf->buf_cfg.size);
 
-  if (buf.buf->buf_cfg.host_access & L_MEMORY_ACCESS_READ_BIT) {
-    void* mapped = nullptr;
-    map_buf_mem(buf, L_MEMORY_ACCESS_READ_BIT, mapped);
-    L_ASSERT(mapped != nullptr);
-    std::memcpy(data, mapped, size);
-    unmap_buf_mem(buf, mapped);
-  } else {
-    const Context& ctxt = *buf.buf->ctxt;
-
-    BufferConfig staging_buf_cfg {};
-    staging_buf_cfg.align = 1;
-    staging_buf_cfg.host_access = L_MEMORY_ACCESS_READ_BIT;
-    staging_buf_cfg.size = size;
-    staging_buf_cfg.usage = L_BUFFER_USAGE_TRANSFER_DST_BIT;
-    Buffer stage_buf {};
-    Buffer::create(ctxt, staging_buf_cfg, stage_buf);
-    BufferView stage_buf_view = make_buf_view(stage_buf);
-
-    TransferInvocationConfig trans_invoke_cfg {};
-    trans_invoke_cfg.src_rsc_view = make_rsc_view(buf);
-    trans_invoke_cfg.dst_rsc_view = make_rsc_view(stage_buf_view);
-    Invocation invoke {};
-    Invocation::create(ctxt, trans_invoke_cfg, invoke);
-
-    InvocationSubmitTransactionConfig invoke_submit_transact_cfg {};
-    Transaction transact {};
-    Transaction::create(invoke, invoke_submit_transact_cfg, transact);
-    transact.wait();
-
-    read_buf_mem(stage_buf_view, data, size);
-  }
+BufferView Buffer::view(size_t offset, size_t size) const {
+  BufferView out {};
+  out.buf = this;
+  out.offset = offset;
+  out.size = size;
+  return out;
 }
-
 
 } // namespace vk
 } // namespace liong

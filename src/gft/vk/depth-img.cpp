@@ -108,8 +108,25 @@ DepthImage::~DepthImage() {
     L_DEBUG("destroyed depth image '", depth_img_cfg.label, "'");
   }
 }
-const DepthImageConfig& get_depth_img_cfg(const DepthImage& depth_img) {
-  return depth_img.depth_img_cfg;
+const DepthImageConfig& DepthImage::cfg() const {
+  return depth_img_cfg;
+}
+DepthImageView DepthImage::view(
+  uint32_t x_offset,
+  uint32_t y_offset,
+  uint32_t width,
+  uint32_t height,
+  DepthImageSampler sampler
+) const {
+  const DepthImageConfig& cfg2 = cfg();
+  DepthImageView out {};
+  out.depth_img = this;
+  out.x_offset = x_offset;
+  out.y_offset = y_offset;
+  out.width = width;
+  out.height = height;
+  out.sampler = sampler;
+  return out;
 }
 
 } // namespace vk

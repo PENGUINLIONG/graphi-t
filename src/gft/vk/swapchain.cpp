@@ -180,21 +180,18 @@ Swapchain::~Swapchain() {
   }
 }
 
-const Image& get_swapchain_img(const Swapchain& swapchain) {
-  L_ASSERT(swapchain.dyn_detail != nullptr,
+const SwapchainConfig& Swapchain::cfg() const {
+  return swapchain_cfg;
+}
+
+const Image& Swapchain::get_img() const {
+  L_ASSERT(dyn_detail != nullptr,
     "swapchain recreation is required; call `acquire_swapchain_img` first");
 
-  const SwapchainDynamicDetail& dyn_detail = *swapchain.dyn_detail;
-  L_ASSERT(*dyn_detail.img_idx != ~0u,
+  L_ASSERT(*dyn_detail->img_idx != ~0u,
     "swapchain has not acquired an image for this frame");
 
-  return dyn_detail.imgs[*dyn_detail.img_idx];
-}
-uint32_t get_swapchain_img_width(const Swapchain& swapchain) {
-  return swapchain.dyn_detail->width;
-}
-uint32_t get_swapchain_img_height(const Swapchain& swapchain) {
-  return swapchain.dyn_detail->height;
+  return dyn_detail->imgs[*dyn_detail->img_idx];
 }
 
 

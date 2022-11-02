@@ -124,8 +124,28 @@ Image::~Image() {
     L_DEBUG("destroyed image '", img_cfg.label, "'");
   }
 }
-const ImageConfig& get_img_cfg(const Image& img) {
-  return img.img_cfg;
+const ImageConfig& Image::cfg() const {
+  return img_cfg;
+}
+ImageView Image::view(
+  uint32_t x_offset,
+  uint32_t y_offset,
+  uint32_t z_offset,
+  uint32_t width,
+  uint32_t height,
+  uint32_t depth,
+  ImageSampler sampler
+) const {
+  ImageView out {};
+  out.img = this;
+  out.x_offset = x_offset;
+  out.y_offset = y_offset;
+  out.z_offset = z_offset;
+  out.width = width;
+  out.height = height;
+  out.depth = depth;
+  out.sampler = sampler;
+  return out;
 }
 
 void map_img_mem(

@@ -271,6 +271,24 @@ Buffer BufferBuilder::build(bool gc) {
 
 
 
+MappedBuffer::MappedBuffer(HAL_IMPL_NAMESPACE::Buffer& buf, MemoryAccess map_access) :
+  mapped(buf.map(map_access)),
+  buf(&buf) {}
+MappedBuffer::~MappedBuffer() {
+  if (mapped != nullptr) {
+    buf->unmap(mapped);
+  }
+}
+
+void* MappedBuffer::data() {
+  return (uint8_t*)mapped;
+}
+const void* MappedBuffer::data() const {
+  return (const uint8_t*)mapped;
+}
+
+
+
 L_DEF_CTOR_DTOR(Image);
 Image ImageBuilder::build(bool gc) {
   return L_BUILD_WITH_CFG(Image);

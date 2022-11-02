@@ -46,15 +46,17 @@ L_IMPL_FN std::string desc_dev(uint32_t idx);
 struct InvocationSubmitTransactionConfig {
   std::string label;
 };
+L_IMPL_STRUCT struct Transaction;
 // A batch of works dispatched to the device.
 struct Transaction_ {
+  virtual ~Transaction_() {}
+
   // Check whether the transaction is finished. `true` is returned if so.
   virtual bool is_done() const = 0;
   // Wait the invocation submitted to device for execution. Returns immediately
   // if the invocation has already been waited.
   virtual void wait() const = 0;
 };
-L_IMPL_STRUCT struct Transaction;
 
 
 
@@ -87,6 +89,9 @@ struct ContextMetalConfig {
 };
 
 L_IMPL_STRUCT struct Context;
+struct Context_ {
+  virtual ~Context_() {}
+};
 
 
 
@@ -121,44 +126,21 @@ struct BufferConfig {
   BufferUsage usage;
 };
 L_IMPL_STRUCT struct Buffer;
-L_IMPL_FN const BufferConfig& get_buf_cfg(const Buffer& buf);
-
 struct BufferView {
   const Buffer* buf; // Lifetime bound.
   size_t offset;
   size_t size;
 };
-inline BufferView make_buf_view(const Buffer& buf, size_t offset, size_t size) {
-  BufferView out {};
-  out.buf = &buf;
-  out.offset = offset;
-  out.size = size;
-  return out;
-}
-inline BufferView make_buf_view(const Buffer& buf) {
-  const BufferConfig& buf_cfg = get_buf_cfg(buf);
-  return make_buf_view(buf, 0, buf_cfg.size);
-}
+struct Buffer_ {
+  virtual ~Buffer_() {}
 
-L_IMPL_FN void map_buf_mem(
-  const BufferView& dst,
-  MemoryAccess map_access,
-  void*& mapped
-);
-L_IMPL_FN void unmap_buf_mem(
-  const BufferView& buf,
-  void* mapped
-);
-L_IMPL_FN void read_buf_mem(
-  const BufferView& buf,
-  void* data,
-  size_t size
-);
-L_IMPL_FN void write_buf_mem(
-  const BufferView& buf,
-  const void* data,
-  size_t size
-);
+  virtual const BufferConfig& cfg() const = 0;
+
+  virtual void* map(MemoryAccess access) = 0;
+  virtual void unmap(void* mapped) = 0;
+
+  virtual BufferView view(size_t offset, size_t size) const = 0;
+};
 
 
 
@@ -174,6 +156,11 @@ enum ImageUsageBits {
   L_IMAGE_USAGE_PRESENT_BIT = (1 << 7),
 };
 typedef uint32_t ImageUsage;
+enum ImageSampler {
+  L_IMAGE_SAMPLER_LINEAR,
+  L_IMAGE_SAMPLER_NEAREST,
+  L_IMAGE_SAMPLER_ANISOTROPY_4,
+};
 // Describe a row-major 2D image.
 struct ImageConfig {
   // Human-readable label of the image.
@@ -192,53 +179,33 @@ struct ImageConfig {
   // Usage of the image.
   ImageUsage usage;
 };
-L_IMPL_STRUCT struct Image;
-L_IMPL_FN const ImageConfig& get_img_cfg(const Image& img);
 
-enum ImageSampler {
-  L_IMAGE_SAMPLER_LINEAR,
-  L_IMAGE_SAMPLER_NEAREST,
-  L_IMAGE_SAMPLER_ANISOTROPY_4,
-};
+L_IMPL_STRUCT struct Image;
 struct ImageView {
   const Image* img; // Lifetime bound.
   uint32_t x_offset;
   uint32_t y_offset;
+  uint32_t z_offset;
   uint32_t width;
   uint32_t height;
   uint32_t depth;
   ImageSampler sampler;
 };
-inline ImageView make_img_view(
-  const Image& img,
-  uint32_t x_offset,
-  uint32_t y_offset,
-  uint32_t width,
-  uint32_t height,
-  uint32_t depth,
-  ImageSampler sampler
-) {
-  ImageView out {};
-  out.img = &img;
-  out.x_offset = x_offset;
-  out.y_offset = y_offset;
-  out.width = width;
-  out.height = height;
-  out.depth = depth;
-  out.sampler = sampler;
-  return out;
-}
+struct Image_ {
+  virtual ~Image_() {}
 
-L_IMPL_FN void map_img_mem(
-  const ImageView& img,
-  MemoryAccess map_access,
-  void*& mapped,
-  size_t& row_pitch
-);
-L_IMPL_FN void unmap_img_mem(
-  const ImageView& img,
-  void* mapped
-);
+  virtual const ImageConfig& cfg() const = 0;
+
+  virtual ImageView view(
+    uint32_t x_offset,
+    uint32_t y_offset,
+    uint32_t z_offset,
+    uint32_t width,
+    uint32_t height,
+    uint32_t depth,
+    ImageSampler sampler
+  ) const = 0;
+};
 
 
 
@@ -250,6 +217,11 @@ enum DepthImageUsageBits {
   L_DEPTH_IMAGE_USAGE_TILE_MEMORY_BIT = (1 << 3),
 };
 typedef uint32_t DepthImageUsage;
+enum DepthImageSampler {
+  L_DEPTH_IMAGE_SAMPLER_LINEAR,
+  L_DEPTH_IMAGE_SAMPLER_NEAREST,
+  L_DEPTH_IMAGE_SAMPLER_ANISOTROPY_4,
+};
 struct DepthImageConfig {
   std::string label;
   // Width of the depth image. When used, the image size should match color
@@ -263,18 +235,8 @@ struct DepthImageConfig {
   // Usage of the depth image.
   DepthImageUsage usage;
 };
-L_IMPL_STRUCT struct DepthImage;
-L_IMPL_FN DepthImage create_depth_img(
-  const Context& ctxt,
-  const DepthImageConfig& depth_img_cfg
-);
-L_IMPL_FN const DepthImageConfig& get_depth_img_cfg(const DepthImage& depth_img);
 
-enum DepthImageSampler {
-  L_DEPTH_IMAGE_SAMPLER_LINEAR,
-  L_DEPTH_IMAGE_SAMPLER_NEAREST,
-  L_DEPTH_IMAGE_SAMPLER_ANISOTROPY_4,
-};
+L_IMPL_STRUCT struct DepthImage;
 struct DepthImageView {
   const DepthImage* depth_img; // Lifetime bound.
   uint32_t x_offset;
@@ -283,23 +245,19 @@ struct DepthImageView {
   uint32_t height;
   DepthImageSampler sampler;
 };
-inline DepthImageView make_depth_img_view(
-  const DepthImage& depth_img,
-  uint32_t x_offset,
-  uint32_t y_offset,
-  uint32_t width,
-  uint32_t height,
-  DepthImageSampler sampler
-) {
-  DepthImageView out {};
-  out.depth_img = &depth_img;
-  out.x_offset = x_offset;
-  out.y_offset = y_offset;
-  out.width = width;
-  out.height = height;
-  out.sampler = sampler;
-  return out;
-}
+struct DepthImage_ {
+  virtual ~DepthImage_() {}
+
+  virtual const DepthImageConfig& cfg() const = 0;
+
+  virtual DepthImageView view(
+    uint32_t x_offset,
+    uint32_t y_offset,
+    uint32_t width,
+    uint32_t height,
+    DepthImageSampler sampler
+  ) const = 0;
+};
 
 
 
@@ -314,19 +272,15 @@ struct SwapchainConfig {
   // presentation. The rendering output should always be linear colors.
   fmt::ColorSpace cspace;
 };
-L_IMPL_STRUCT struct Swapchain;
-L_IMPL_FN Swapchain create_swapchain(
-  const Context& ctxt,
-  const SwapchainConfig& cfg
-);
-L_IMPL_FN const SwapchainConfig& get_swapchain_cfg(const Swapchain& swapchain);
-// Get the surface image for the current frame. Surface image is alive after the
-// `acquire_surf_img` transition finishes and before the next presentation
-// invocation.
-L_IMPL_FN const Image& get_swapchain_img(const Swapchain& swapchain);
-L_IMPL_FN uint32_t get_swapchain_img_width(const Swapchain& swapchain);
-L_IMPL_FN uint32_t get_swapchain_img_height(const Swapchain& swapchain);
 
+L_IMPL_STRUCT struct Swapchain;
+struct Swapchain_ {
+  virtual ~Swapchain_() {}
+
+  virtual const SwapchainConfig& cfg() const = 0;
+
+  virtual const Image& get_img() const = 0;
+};
 
 
 struct DispatchSize {
@@ -403,8 +357,13 @@ struct RenderPassConfig {
   // Configurations of attachments that will be used in the render pass.
   std::vector<AttachmentConfig> attm_cfgs;
 };
+
 L_IMPL_STRUCT struct RenderPass;
-RenderPass create_pass(const Context& ctxt, const RenderPassConfig& cfg);
+struct RenderPass_ {
+  virtual ~RenderPass_() {}
+};
+
+
 
 enum Topology {
   L_TOPOLOGY_POINT = 1,
@@ -438,14 +397,9 @@ struct GraphicsTaskConfig {
 };
 
 L_IMPL_STRUCT struct Task;
-L_IMPL_FN Task create_comp_task(
-  const Context& ctxt,
-  const ComputeTaskConfig& cfg
-);
-L_IMPL_FN Task create_graph_task(
-  const RenderPass& pass,
-  const GraphicsTaskConfig& cfg
-);
+struct Task_ {
+  virtual ~Task_() {}
+};
 
 
 

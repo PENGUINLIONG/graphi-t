@@ -1015,7 +1015,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     // Transition image layout for presentation.
     uint32_t& img_idx = *swapchain.dyn_detail->img_idx;
     const Image& img = swapchain.dyn_detail->imgs[img_idx];
-    ImageView img_view = make_img_view(img, 0, 0, img.img_cfg.width,
+    ImageView img_view = img.view(0, 0, 0, img.img_cfg.width,
       img.img_cfg.height, img.img_cfg.depth, L_IMAGE_SAMPLER_NEAREST);
     _transit_rsc(transact, img_view, L_IMAGE_USAGE_PRESENT_BIT);
 

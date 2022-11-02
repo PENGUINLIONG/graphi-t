@@ -150,7 +150,7 @@ struct ContextDescriptorSetDetail {
   std::vector<sys::DescriptorPoolRef> desc_pools;
   DescriptorSetPool desc_set_pool;
 };
-struct Context {
+struct Context : public Context_ {
   std::string label;
   uint32_t iphysdev;
   sys::DeviceRef dev;
@@ -193,7 +193,7 @@ struct BufferDynamicDetail {
   VkPipelineStageFlags stage;
   VkAccessFlags access;
 };
-struct Buffer {
+struct Buffer : public Buffer_ {
   const Context* ctxt; // Lifetime bound.
   sys::BufferRef buf;
   BufferConfig buf_cfg;
@@ -201,6 +201,13 @@ struct Buffer {
 
   static bool create(const Context& ctxt, const BufferConfig& cfg, Buffer& out);
   ~Buffer();
+
+  virtual const BufferConfig& cfg() const override final;
+
+  virtual void* map(MemoryAccess map_access) override final;
+  virtual void unmap(void* mapped) override final;
+
+  virtual BufferView view(size_t offset, size_t size) const override final;
 };
 
 
@@ -210,7 +217,7 @@ struct ImageDynamicDetail {
   VkAccessFlags access;
   VkImageLayout layout;
 };
-struct Image {
+struct Image : public Image_ {
   const Context* ctxt; // Lifetime bound.
   sys::ImageRef img;
   sys::ImageViewRef img_view;
@@ -219,6 +226,17 @@ struct Image {
 
   static bool create(const Context& ctxt, const ImageConfig& cfg, Image& out);
   ~Image();
+
+  virtual const ImageConfig& cfg() const override final;
+  virtual ImageView view(
+    uint32_t x_offset,
+    uint32_t y_offset,
+    uint32_t z_offset,
+    uint32_t width,
+    uint32_t height,
+    uint32_t depth,
+    ImageSampler sampler
+  ) const override final;
 };
 
 
@@ -228,7 +246,7 @@ struct DepthImageDynamicDetail {
   VkAccessFlags access;
   VkImageLayout layout;
 };
-struct DepthImage {
+struct DepthImage : public DepthImage_ {
   const Context* ctxt; // Lifetime bound.
   sys::ImageRef img;
   sys::ImageViewRef img_view;
@@ -237,6 +255,15 @@ struct DepthImage {
 
   static bool create(const Context& ctxt, const DepthImageConfig& cfg, DepthImage& out);
   ~DepthImage();
+
+  virtual const DepthImageConfig& cfg() const override final;
+  virtual DepthImageView view(
+    uint32_t x_offset,
+    uint32_t y_offset,
+    uint32_t width,
+    uint32_t height,
+    DepthImageSampler sampler
+  ) const override final;
 };
 
 
@@ -247,7 +274,7 @@ struct SwapchainDynamicDetail {
   std::vector<Image> imgs;
   std::unique_ptr<uint32_t> img_idx;
 };
-struct Swapchain {
+struct Swapchain : public Swapchain_ {
   const Context* ctxt;
   SwapchainConfig swapchain_cfg;
   sys::SwapchainRef swapchain;
@@ -255,6 +282,10 @@ struct Swapchain {
 
   static bool create(const Context& ctxt, const SwapchainConfig& cfg, Swapchain& out);
   ~Swapchain();
+
+  virtual const SwapchainConfig& cfg() const;
+
+  virtual const Image& get_img() const;
 };
 
 
