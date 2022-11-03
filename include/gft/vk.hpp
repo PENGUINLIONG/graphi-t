@@ -99,14 +99,28 @@ struct TransactionSubmitDetail {
   sys::SemaphoreRef signal_sema;
   bool is_submitted;
 };
-struct Transaction {
+struct TransactionLike {
+  const Context* ctxt;
+  std::vector<TransactionSubmitDetail> submit_details;
+  std::vector<sys::FenceRef> fences;
+  VkCommandBufferLevel level;
+  // Some invocations cannot be followedby subsequent invocations, e.g.
+  // presentation.
+  bool is_frozen;
+
+  inline TransactionLike(const Context& ctxt, VkCommandBufferLevel level) :
+    ctxt(&ctxt), submit_details(), level(level), is_frozen(false) {}
+};
+struct Transaction : public Transaction_ {
   const Context* ctxt;
   std::vector<TransactionSubmitDetail> submit_details;
   std::vector<sys::FenceRef> fences;
 
-  Transaction(const Transaction&) = delete;
-  Transaction(Transaction&&) = default;
+  static bool create(const Invocation& invoke, InvocationSubmitTransactionConfig& cfg, Transaction& out);
   ~Transaction();
+
+  virtual bool is_done() const override final;
+  virtual void wait() const override final;
 };
 
 
@@ -136,7 +150,7 @@ struct ContextDescriptorSetDetail {
   std::vector<sys::DescriptorPoolRef> desc_pools;
   DescriptorSetPool desc_set_pool;
 };
-struct Context {
+struct Context : public Context_ {
   std::string label;
   uint32_t iphysdev;
   sys::DeviceRef dev;
@@ -149,8 +163,10 @@ struct Context {
   QueryPoolPool query_pool_pool;
   sys::AllocatorRef allocator;
 
-  Context(const Context&) = delete;
-  Context(Context&&) = default;
+  static bool create(const Instance& inst, const ContextConfig& cfg, Context& out);
+  static bool create(const Instance& inst, const ContextWindowsConfig& cfg, Context& out);
+  static bool create(const Instance& inst, const ContextAndroidConfig& cfg, Context& out);
+  static bool create(const Instance& inst, const ContextMetalConfig& cfg, Context& out);
   ~Context();
 
   inline VkPhysicalDevice physdev() const {
@@ -177,15 +193,21 @@ struct BufferDynamicDetail {
   VkPipelineStageFlags stage;
   VkAccessFlags access;
 };
-struct Buffer {
+struct Buffer : public Buffer_ {
   const Context* ctxt; // Lifetime bound.
   sys::BufferRef buf;
   BufferConfig buf_cfg;
   BufferDynamicDetail dyn_detail;
 
-  Buffer(const Buffer&) = delete;
-  Buffer(Buffer&&) = default;
+  static bool create(const Context& ctxt, const BufferConfig& cfg, Buffer& out);
   ~Buffer();
+
+  virtual const BufferConfig& cfg() const override final;
+
+  virtual void* map(MemoryAccess map_access) override final;
+  virtual void unmap(void* mapped) override final;
+
+  virtual BufferView view(size_t offset, size_t size) const override final;
 };
 
 
@@ -195,16 +217,26 @@ struct ImageDynamicDetail {
   VkAccessFlags access;
   VkImageLayout layout;
 };
-struct Image {
+struct Image : public Image_ {
   const Context* ctxt; // Lifetime bound.
   sys::ImageRef img;
   sys::ImageViewRef img_view;
   ImageConfig img_cfg;
   ImageDynamicDetail dyn_detail;
 
-  Image(const Image&) = delete;
-  Image(Image&&) = default;
+  static bool create(const Context& ctxt, const ImageConfig& cfg, Image& out);
   ~Image();
+
+  virtual const ImageConfig& cfg() const override final;
+  virtual ImageView view(
+    uint32_t x_offset,
+    uint32_t y_offset,
+    uint32_t z_offset,
+    uint32_t width,
+    uint32_t height,
+    uint32_t depth,
+    ImageSampler sampler
+  ) const override final;
 };
 
 
@@ -214,16 +246,24 @@ struct DepthImageDynamicDetail {
   VkAccessFlags access;
   VkImageLayout layout;
 };
-struct DepthImage {
+struct DepthImage : public DepthImage_ {
   const Context* ctxt; // Lifetime bound.
   sys::ImageRef img;
   sys::ImageViewRef img_view;
   DepthImageConfig depth_img_cfg;
   DepthImageDynamicDetail dyn_detail;
 
-  DepthImage(const DepthImage&) = delete;
-  DepthImage(DepthImage&&) = default;
+  static bool create(const Context& ctxt, const DepthImageConfig& cfg, DepthImage& out);
   ~DepthImage();
+
+  virtual const DepthImageConfig& cfg() const override final;
+  virtual DepthImageView view(
+    uint32_t x_offset,
+    uint32_t y_offset,
+    uint32_t width,
+    uint32_t height,
+    DepthImageSampler sampler
+  ) const override final;
 };
 
 
@@ -234,15 +274,18 @@ struct SwapchainDynamicDetail {
   std::vector<Image> imgs;
   std::unique_ptr<uint32_t> img_idx;
 };
-struct Swapchain {
+struct Swapchain : public Swapchain_ {
   const Context* ctxt;
   SwapchainConfig swapchain_cfg;
   sys::SwapchainRef swapchain;
   std::unique_ptr<SwapchainDynamicDetail> dyn_detail;
 
-  Swapchain(const Swapchain&) = delete;
-  Swapchain(Swapchain&&) = default;
+  static bool create(const Context& ctxt, const SwapchainConfig& cfg, Swapchain& out);
   ~Swapchain();
+
+  virtual const SwapchainConfig& cfg() const;
+
+  virtual const Image& get_img() const;
 };
 
 
@@ -269,8 +312,7 @@ struct RenderPass {
   RenderPassConfig pass_cfg;
   std::vector<VkClearValue> clear_values;
 
-  RenderPass(const RenderPass&) = delete;
-  RenderPass(RenderPass&&) = default;
+  static bool create(const Context& ctxt, const RenderPassConfig& cfg, RenderPass& out);
   ~RenderPass();
 
   FramebufferPool framebuf_pool;
@@ -292,8 +334,8 @@ struct Task {
   DispatchSize workgrp_size; // Only for compute task.
   TaskResourceDetail rsc_detail;
 
-  Task(const Task&) = delete;
-  Task(Task&&) = default;
+  static bool create(const Context& ctxt, const ComputeTaskConfig& cfg, Task& out);
+  static bool create(const RenderPass& pass, const GraphicsTaskConfig& cfg, Task& out);
   ~Task();
 };
 
@@ -376,7 +418,7 @@ struct InvocationBakingDetail {
   CommandPoolPoolItem cmd_pool;
   sys::CommandBufferRef cmdbuf;
 };
-struct Invocation {
+struct Invocation : public Invocation_ {
   std::string label;
   // Execution context of the invocation.
   const Context* ctxt;
@@ -399,9 +441,18 @@ struct Invocation {
   // and those with switching submit types.
   std::unique_ptr<InvocationBakingDetail> bake_detail;
 
-  Invocation(const Invocation&) = delete;
-  Invocation(Invocation&&) = default;
+  static bool create(const Context& ctxt, const TransferInvocationConfig& cfg, Invocation& out);
+  static bool create(const Task& task, const ComputeInvocationConfig& cfg, Invocation& out);
+  static bool create(const Task& task, const GraphicsInvocationConfig& cfg, Invocation& out);
+  static bool create(const RenderPass& pass, const RenderPassInvocationConfig& cfg, Invocation& out);
+  static bool create(const Context& ctxt, const CompositeInvocationConfig& cfg, Invocation& out);
+  static bool create(const Swapchain& swapchain, const PresentInvocationConfig& cfg, Invocation& out);
   ~Invocation();
+
+  void record(TransactionLike& transact) const;
+
+  virtual double get_time_us() const override final;
+  virtual void bake() override final;
 };
 
 } // namespace vk

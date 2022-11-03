@@ -2,21 +2,15 @@
 #include "gft/vk.hpp"
 #include "gft/glslang.hpp"
 #include "gft/renderdoc.hpp"
-
-#if defined(_WIN32)
-#include "gft/platform/windows.hpp"
-#endif // defined(_WIN32)
-
-#if defined(__MACH__) && defined(__APPLE__)
 #include "gft/platform/macos.hpp"
-#endif // defined(__MACH__) && defined(__APPLE__)
+#include "gft/platform/windows.hpp"
 
 using namespace liong;
 using namespace vk;
 using namespace fmt;
 
 void copy_buf2host(
-  const BufferView& src,
+  scoped::Buffer& src,
   void* dst,
   size_t size
 ) {
@@ -24,20 +18,20 @@ void copy_buf2host(
     L_WARN("zero-sized copy is ignored");
     return;
   }
-  L_ASSERT(src.size >= size, "src buffer size is too small");
+  L_ASSERT(src.size() >= size, "src buffer size is too small");
   scoped::MappedBuffer mapped(src, L_MEMORY_ACCESS_READ_BIT);
   std::memcpy(dst, (const void*)mapped, size);
 }
 void copy_host2buf(
   const void* src,
-  const BufferView& dst,
+  scoped::Buffer& dst,
   size_t size
 ) {
   if (size == 0) {
     L_WARN("zero-sized copy is ignored");
     return;
   }
-  L_ASSERT(dst.size >= size, "dst buffser size is too small");
+  L_ASSERT(dst.size() >= size, "dst buffser size is too small");
   scoped::MappedBuffer mapped(dst, L_MEMORY_ACCESS_WRITE_BIT);
   std::memcpy((void*)mapped, mapped, size);
 }
@@ -107,15 +101,18 @@ void guarded_main() {
 
 #if defined(__MACH__) && defined(__APPLE__)
   macos::Window window = macos::create_window(1024, 768);
-  ContextMetalConfig ctxt_metal_cfg { "ctxt", 0, window.metal_layer };
-  scoped::Context ctxt = scoped::Context::own_by_gc_frame(create_ctxt_metal(ctxt_metal_cfg));
+  scoped::Context ctxt = scoped::MetalContextBuilder()
+    .metal_layer(window.metal_layer)
+    .build();
 #elif defined(_WIN32)
   windows::Window window = windows::create_window();
-  ContextWindowsConfig ctxt_cfg { "ctxt", 0, window.hinst, window.hwnd };
-  scoped::Context ctxt = scoped::Context::own_by_gc_frame(create_ctxt_windows(ctxt_cfg));
+  scoped::Context ctxt = scoped::WindowsContextBuilder()
+    .hinst(window.hinst)
+    .hwnd(window.hwnd)
+    .build();
 #else
-  ContextConfig ctxt_cfg { "ctxt", 0 };
-  scoped::Context ctxt = scoped::Context::own_by_gc_frame(create_ctxt(ctxt_cfg));
+  scoped::Context ctxt = scoped::ContextBuilder()
+    .build();
 #endif
 
   renderdoc::CaptureGuard capture;

@@ -4,7 +4,7 @@
 namespace liong {
 namespace vk {
 
-Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
+bool Image::create(const Context& ctxt, const ImageConfig& img_cfg, Image& out) {
   VkFormat fmt = fmt2vk(img_cfg.fmt, img_cfg.cspace);
   VkImageUsageFlags usage = 0;
   SubmitType init_submit_ty = L_SUBMIT_TYPE_ANY;
@@ -111,19 +111,41 @@ Image create_img(const Context& ctxt, const ImageConfig& img_cfg) {
   dyn_detail.access = 0;
   dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
 
+  out.ctxt = &ctxt;
+  out.img = std::move(img);
+  out.img_view = std::move(img_view);
+  out.img_cfg = img_cfg;
+  out.dyn_detail = std::move(dyn_detail);
   L_DEBUG("created image '", img_cfg.label, "'");
-  uint32_t qfam_idx = ctxt.submit_details.at(init_submit_ty).qfam_idx;
-  return Image {
-    &ctxt, std::move(img), std::move(img_view), img_cfg, std::move(dyn_detail)
-  };
+  return true;
 }
 Image::~Image() {
   if (img) {
     L_DEBUG("destroyed image '", img_cfg.label, "'");
   }
 }
-const ImageConfig& get_img_cfg(const Image& img) {
-  return img.img_cfg;
+const ImageConfig& Image::cfg() const {
+  return img_cfg;
+}
+ImageView Image::view(
+  uint32_t x_offset,
+  uint32_t y_offset,
+  uint32_t z_offset,
+  uint32_t width,
+  uint32_t height,
+  uint32_t depth,
+  ImageSampler sampler
+) const {
+  ImageView out {};
+  out.img = this;
+  out.x_offset = x_offset;
+  out.y_offset = y_offset;
+  out.z_offset = z_offset;
+  out.width = width;
+  out.height = height;
+  out.depth = depth;
+  out.sampler = sampler;
+  return out;
 }
 
 void map_img_mem(

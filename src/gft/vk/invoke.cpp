@@ -285,16 +285,16 @@ void _fill_transfer_i2i_invoke(
   out.transit_detail.reg(src, L_IMAGE_USAGE_TRANSFER_SRC_BIT);
   out.transit_detail.reg(dst, L_IMAGE_USAGE_TRANSFER_DST_BIT);
 }
-Invocation create_trans_invoke(
+bool Invocation::create(
   const Context& ctxt,
-  const TransferInvocationConfig& cfg
+  const TransferInvocationConfig& cfg,
+  Invocation& out
 ) {
   const ResourceView& src_rsc_view = cfg.src_rsc_view;
   const ResourceView& dst_rsc_view = cfg.dst_rsc_view;
   ResourceViewType src_rsc_view_ty = src_rsc_view.rsc_view_ty;
   ResourceViewType dst_rsc_view_ty = dst_rsc_view.rsc_view_ty;
 
-  Invocation out {};
   out.label = cfg.label;
   out.ctxt = &ctxt;
   out.submit_ty = L_SUBMIT_TYPE_TRANSFER;
@@ -329,17 +329,17 @@ Invocation create_trans_invoke(
   }
 
   L_DEBUG("created transfer invocation");
-  return out;
+  return true;
 }
-Invocation create_comp_invoke(
+bool Invocation::create(
   const Task& task,
-  const ComputeInvocationConfig& cfg
+  const ComputeInvocationConfig& cfg,
+  Invocation& out
 ) {
   L_ASSERT(task.rsc_detail.rsc_tys.size() == cfg.rsc_views.size());
   L_ASSERT(task.submit_ty == L_SUBMIT_TYPE_COMPUTE);
   const Context& ctxt = *task.ctxt;
 
-  Invocation out {};
   out.label = cfg.label;
   out.ctxt = &ctxt;
   out.submit_ty = L_SUBMIT_TYPE_COMPUTE;
@@ -364,17 +364,17 @@ Invocation create_comp_invoke(
     std::make_unique<InvocationComputeDetail>(std::move(comp_detail));
 
   L_DEBUG("created compute invocation");
-  return out;
+  return true;
 }
-Invocation create_graph_invoke(
+bool Invocation::create(
   const Task& task,
-  const GraphicsInvocationConfig& cfg
+  const GraphicsInvocationConfig& cfg,
+  Invocation& out
 ) {
   L_ASSERT(task.rsc_detail.rsc_tys.size() == cfg.rsc_views.size());
   L_ASSERT(task.submit_ty == L_SUBMIT_TYPE_GRAPHICS);
   const Context& ctxt = *task.ctxt;
 
-  Invocation out {};
   out.label = cfg.label;
   out.ctxt = &ctxt;
   out.submit_ty = L_SUBMIT_TYPE_GRAPHICS;
@@ -424,15 +424,15 @@ Invocation create_graph_invoke(
     std::make_unique<InvocationGraphicsDetail>(std::move(graph_detail));
 
   L_DEBUG("created graphics invocation");
-  return out;
+  return true;
 }
-Invocation create_pass_invoke(
+bool Invocation::create(
   const RenderPass& pass,
-  const RenderPassInvocationConfig& cfg
+  const RenderPassInvocationConfig& cfg,
+  Invocation& out
 ) {
   const Context& ctxt = *pass.ctxt;
 
-  Invocation out {};
   out.label = cfg.label;
   out.ctxt = &ctxt;
   out.submit_ty = L_SUBMIT_TYPE_GRAPHICS;
@@ -473,9 +473,13 @@ Invocation create_pass_invoke(
     std::make_unique<InvocationRenderPassDetail>(std::move(pass_detail));
 
   L_DEBUG("created render pass invocation");
-  return out;
+  return true;
 }
-Invocation create_present_invoke(const Swapchain& swapchain) {
+bool Invocation::create(
+  const Swapchain& swapchain,
+  const PresentInvocationConfig& cfg,
+  Invocation& out
+) {
   L_ASSERT(swapchain.dyn_detail != nullptr,
     "swapchain need to be recreated with `acquire_swapchain_img`");
 
@@ -486,7 +490,6 @@ Invocation create_present_invoke(const Swapchain& swapchain) {
   L_ASSERT(dyn_detail.img_idx != nullptr,
     "swapchain has not acquired an image to present for the current frame");
 
-  Invocation out {};
   out.label = util::format(swapchain.swapchain_cfg.label);
   out.ctxt = &ctxt;
   out.submit_ty = L_SUBMIT_TYPE_PRESENT;
@@ -499,13 +502,13 @@ Invocation create_present_invoke(const Swapchain& swapchain) {
     std::make_unique<InvocationPresentDetail>(std::move(present_detail));
 
   L_DEBUG("created present invocation");
-  return out;
+  return true;
 }
-Invocation create_composite_invoke(
+bool Invocation::create(
   const Context& ctxt,
-  const CompositeInvocationConfig& cfg
+  const CompositeInvocationConfig& cfg,
+  Invocation& out
 ) {
-  Invocation out {};
   out.label = cfg.label;
   out.ctxt = &ctxt;
   out.submit_ty = _infer_submit_ty(cfg.invokes);
@@ -522,7 +525,7 @@ Invocation create_composite_invoke(
     std::make_unique<InvocationCompositeDetail>(std::move(composite_detail));
 
   L_DEBUG("created composition invocation");
-  return out;
+  return true;
 }
 Invocation::~Invocation() {
   if (b2b_detail || b2i_detail || i2b_detail || i2i_detail) {
@@ -546,30 +549,8 @@ Invocation::~Invocation() {
   }
 }
 
-double get_invoke_time_us(const Invocation& invoke) {
-  if (!invoke.query_pool.is_valid()) { return 0.0; }
-  uint64_t t[2];
-  VK_ASSERT << vkGetQueryPoolResults(invoke.ctxt->dev->dev,
-    *invoke.query_pool.value(), 0, 2, sizeof(uint64_t) * 2, &t,
-    sizeof(uint64_t),
-    VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT); // Wait till ready.
-  double ns_per_tick = invoke.ctxt->physdev_prop().limits.timestampPeriod;
-  return (t[1] - t[0]) * ns_per_tick / 1000.0;
-}
 
 
-
-struct TransactionLike {
-  const Context* ctxt;
-  std::vector<TransactionSubmitDetail> submit_details;
-  VkCommandBufferLevel level;
-  // Some invocations cannot be followedby subsequent invocations, e.g.
-  // presentation.
-  bool is_frozen;
-
-  inline TransactionLike(const Context& ctxt, VkCommandBufferLevel level) :
-    ctxt(&ctxt), submit_details(), level(level), is_frozen(false) {}
-};
 void _begin_cmdbuf(const TransactionSubmitDetail& submit_detail) {
   VkCommandBufferInheritanceInfo cbii {};
   cbii.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_INHERITANCE_INFO;
@@ -1034,7 +1015,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     // Transition image layout for presentation.
     uint32_t& img_idx = *swapchain.dyn_detail->img_idx;
     const Image& img = swapchain.dyn_detail->imgs[img_idx];
-    ImageView img_view = make_img_view(img, 0, 0, img.img_cfg.width,
+    ImageView img_view = img.view(0, 0, 0, img.img_cfg.width,
       img.img_cfg.height, img.img_cfg.depth, L_IMAGE_SAMPLER_NEAREST);
     _transit_rsc(transact, img_view, L_IMAGE_USAGE_PRESENT_BIT);
 
@@ -1075,6 +1056,9 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     do {
       res = vkAcquireNextImageKHR(ctxt.dev->dev, *swapchain.swapchain,
         SPIN_INTERVAL, VK_NULL_HANDLE, acquire_fence->fence, &img_idx);
+      if (res == VK_NOT_READY) {
+        L_DEBUG("failed to acquire image immediately");
+      }
     } while (res == VK_TIMEOUT);
     VK_ASSERT << res;
 
@@ -1250,20 +1234,19 @@ std::vector<sys::FenceRef> _record_invoke_impl(
 
   return {};
 }
-std::vector<sys::FenceRef> _record_invoke(
+void _record_invoke(
   TransactionLike& transact,
   const Invocation& invoke
 ) {
-  std::vector<sys::FenceRef> fences = _record_invoke_impl(transact, invoke);
-  if (fences.empty()) {
+  transact.fences = _record_invoke_impl(transact, invoke);
+  if (transact.fences.empty()) {
     _end_cmdbuf(transact.submit_details.back());
     if (transact.level == VK_COMMAND_BUFFER_LEVEL_PRIMARY) {
       sys::FenceRef fence = sys::Fence::create(transact.ctxt->dev->dev);
       _submit_cmdbuf(transact, fence);
-      fences.emplace_back(std::move(fence));
+      transact.fences.emplace_back(std::move(fence));
     }
   }
-  return fences;
 }
 
 bool _can_bake_invoke(const Invocation& invoke) {
@@ -1283,48 +1266,41 @@ bool _can_bake_invoke(const Invocation& invoke) {
 
   return true;
 }
-void bake_invoke(Invocation& invoke) {
-  if (!_can_bake_invoke(invoke)) { return; }
 
-  TransactionLike transact(*invoke.ctxt, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
-  std::vector<sys::FenceRef> fences = _record_invoke(transact, invoke);
-  L_ASSERT(fences.empty());
+void Invocation::record(TransactionLike& transact) const {
+  _record_invoke(transact, *this);
+}
+
+double Invocation::get_time_us() const {
+  if (!query_pool.is_valid()) { return 0.0; }
+  uint64_t t[2];
+  VK_ASSERT << vkGetQueryPoolResults(ctxt->dev->dev,
+    *query_pool.value(), 0, 2, sizeof(uint64_t) * 2, &t,
+    sizeof(uint64_t),
+    VK_QUERY_RESULT_64_BIT | VK_QUERY_RESULT_WAIT_BIT); // Wait till ready.
+  double ns_per_tick = ctxt->physdev_prop().limits.timestampPeriod;
+  return (t[1] - t[0]) * ns_per_tick / 1000.0;
+}
+
+void Invocation::bake() {
+  if (!_can_bake_invoke(*this)) { return; }
+
+  TransactionLike transact(*ctxt, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+  record(transact);
+  L_ASSERT(transact.fences.empty());
 
   L_ASSERT(transact.submit_details.size() == 1);
   const TransactionSubmitDetail& submit_detail = transact.submit_details[0];
-  L_ASSERT(submit_detail.submit_ty == invoke.submit_ty);
+  L_ASSERT(submit_detail.submit_ty == submit_ty);
   L_ASSERT(submit_detail.signal_sema == VK_NULL_HANDLE);
 
-  InvocationBakingDetail bake_detail {};
-  bake_detail.cmd_pool = submit_detail.cmd_pool;
-  bake_detail.cmdbuf = submit_detail.cmdbuf;
+  bake_detail = std::make_unique<InvocationBakingDetail>();
+  bake_detail->cmd_pool = submit_detail.cmd_pool;
+  bake_detail->cmdbuf = submit_detail.cmdbuf;
 
-  invoke.bake_detail =
-    std::make_unique<InvocationBakingDetail>(std::move(bake_detail));
-
-  L_DEBUG("baked invocation '", invoke.label, "'");
+  L_DEBUG("baked invocation '", label, "'");
 }
 
-
-
-Transaction submit_invoke(const Invocation& invoke) {
-  const Context& ctxt = *invoke.ctxt;
-
-  TransactionLike transact(ctxt, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-  util::Timer timer {};
-  timer.tic();
-  std::vector<sys::FenceRef> fences = _record_invoke(transact, invoke);
-  timer.toc();
-
-  Transaction out {};
-  out.ctxt = &ctxt;
-  out.submit_details = std::move(transact.submit_details);
-  out.fences = fences;
-
-  L_DEBUG("created and submitted transaction for execution, command "
-    "recording took ", timer.us(), "us");
-  return out;
-}
 
 } // namespace vk
 } // namespace liong

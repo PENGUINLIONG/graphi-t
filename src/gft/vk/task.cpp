@@ -5,9 +5,10 @@
 namespace liong {
 namespace vk {
 
-Task create_comp_task(
+bool Task::create(
   const Context& ctxt,
-  const ComputeTaskConfig& cfg
+  const ComputeTaskConfig& cfg,
+  Task& out
 ) {
   L_ASSERT(cfg.workgrp_size.x * cfg.workgrp_size.y * cfg.workgrp_size.z != 0,
     "workgroup size cannot be zero");
@@ -46,18 +47,23 @@ Task create_comp_task(
   rsc_detail.pipe_layout = std::move(pipe_layout);
   rsc_detail.rsc_tys = cfg.rsc_tys;
 
+  out.label = cfg.label;
+  out.submit_ty = L_SUBMIT_TYPE_COMPUTE;
+  out.ctxt = &ctxt;
+  out.pass = nullptr;
+  out.pipe = std::move(pipe);
+  out.workgrp_size = cfg.workgrp_size;
+  out.rsc_detail = std::move(rsc_detail);
   L_DEBUG("created compute task '", cfg.label, "'");
-  return Task {
-    cfg.label, L_SUBMIT_TYPE_COMPUTE, &ctxt, nullptr, std::move(pipe),
-    cfg.workgrp_size, std::move(rsc_detail)
-  };
+  return true;
 }
 
 
 
-Task create_graph_task(
+bool Task::create(
   const RenderPass& pass,
-  const GraphicsTaskConfig& cfg
+  const GraphicsTaskConfig& cfg,
+  Task& out
 ) {
   const Context& ctxt = *pass.ctxt;
 
@@ -131,11 +137,15 @@ Task create_graph_task(
   rsc_detail.pipe_layout = std::move(pipe_layout);
   rsc_detail.rsc_tys = cfg.rsc_tys;
 
+  out.label = cfg.label;
+  out.submit_ty = L_SUBMIT_TYPE_GRAPHICS;
+  out.ctxt = &ctxt;
+  out.pass = &pass;
+  out.pipe = std::move(pipe);
+  out.workgrp_size = {};
+  out.rsc_detail = std::move(rsc_detail);
   L_DEBUG("created graphics task '", cfg.label, "'");
-  return Task {
-    cfg.label, L_SUBMIT_TYPE_GRAPHICS, &ctxt, &pass, std::move(pipe), {},
-    std::move(rsc_detail)
-  };
+  return true;
 }
 Task::~Task() {
   if (pipe) {

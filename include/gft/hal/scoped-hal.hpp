@@ -11,6 +11,15 @@ namespace HAL_IMPL_NAMESPACE {
 
 namespace scoped {
 
+struct Context;
+struct Swapchain;
+struct Buffer;
+struct Image;
+struct DepthImage;
+struct Task;
+struct RenderPass;
+struct Invocation;
+struct Transaction;
 
 
 // Enter a scope of garbage collection so the resources created after this call
@@ -67,23 +76,35 @@ enum ScopedObjectOwnership {
     return *this; \
   } \
   static ty borrow(const HAL_IMPL_NAMESPACE::ty& inner); \
-  static ty own_by_raii(HAL_IMPL_NAMESPACE::ty&& inner); \
-  static ty own_by_gc_frame(HAL_IMPL_NAMESPACE::ty&& inner); \
+  static HAL_IMPL_NAMESPACE::ty* create_gc_frame_obj(); \
+  static HAL_IMPL_NAMESPACE::ty* create_raii_obj(); \
+  inline HAL_IMPL_NAMESPACE::ty##_& proto() { return *(HAL_IMPL_NAMESPACE::ty##_*)inner; } \
+  inline const HAL_IMPL_NAMESPACE::ty##_& proto() const { return *(const HAL_IMPL_NAMESPACE::ty##_*)inner; } \
   inline operator HAL_IMPL_NAMESPACE::ty&() { return *inner; } \
   inline operator const HAL_IMPL_NAMESPACE::ty&() const { return *inner; } \
   constexpr bool is_valid() const { return inner != nullptr; }
 
 
-
 struct Transaction {
   L_DECLR_SCOPED_OBJ(Transaction);
 
-  inline bool is_done() const {
-    return is_transact_done(*this);
+  bool is_done() const;
+  void wait();
+};
+struct InvocationSubmitTransactionBuilder {
+  using Self = InvocationSubmitTransactionBuilder;
+
+  const Invocation& parent;
+  InvocationSubmitTransactionConfig inner {};
+
+  inline InvocationSubmitTransactionBuilder(
+    const Invocation& invoke,
+    const std::string& label = ""
+  ) : parent(invoke), inner() {
+    inner.label = label;
   }
-  inline void wait() {
-    wait_transact(*this);
-  }
+
+  Transaction build(bool gc = true);
 };
 
 
@@ -91,12 +112,8 @@ struct Transaction {
 struct Invocation {
   L_DECLR_SCOPED_OBJ(Invocation);
 
-  inline double get_time_us() const {
-    return get_invoke_time_us(*this);
-  }
-  inline void bake() {
-    bake_invoke(*this);
-  }
+  double get_time_us() const;
+  void bake();
 
   Transaction submit(bool gc = true);
 };
@@ -307,6 +324,18 @@ struct CompositeInvocationBuilder {
 
   Invocation build(bool gc = true);
 };
+struct PresentInvocationBuilder {
+  using Self = PresentInvocationBuilder;
+  const Swapchain& parent;
+  PresentInvocationConfig inner;
+
+  inline PresentInvocationBuilder(
+    const Swapchain& swapchain,
+    const std::string& label = ""
+  ) : parent(swapchain), inner() {}
+
+  Invocation build(bool gc = true);
+};
 
 
 
@@ -425,33 +454,56 @@ struct Image {
   L_DECLR_SCOPED_OBJ(Image);
 
   inline const ImageConfig& cfg() const {
-    return get_img_cfg(*inner);
+    return proto().cfg();
+  }
+
+  inline const std::string& label() const {
+    return cfg().label;
+  }
+  inline uint32_t width() const {
+    return cfg().width;
+  }
+  inline uint32_t height() const {
+    return cfg().height;
+  }
+  inline uint32_t depth() const {
+    return cfg().depth;
+  }
+  inline fmt::Format fmt() const {
+    return cfg().fmt;
+  }
+  inline fmt::ColorSpace cspace() const {
+    return cfg().cspace;
+  }
+  inline ImageUsage usage() const {
+    return cfg().usage;
   }
 
   inline ImageView view(
     uint32_t x_offset,
     uint32_t y_offset,
+    uint32_t z_offset,
     uint32_t width,
     uint32_t height,
     uint32_t depth,
     ImageSampler sampler
   ) const {
-    return make_img_view(*inner, x_offset, y_offset, width, height, depth,
-      sampler);
+    return proto().view(x_offset, y_offset, z_offset, width, height, depth, sampler);
   }
   inline ImageView view(
     uint32_t x_offset,
     uint32_t y_offset,
+    uint32_t z_offset,
     uint32_t width,
     uint32_t height,
     uint32_t depth
   ) const {
-    return view(x_offset, y_offset, width, height, depth,
+    return view(x_offset, y_offset, z_offset, width, height, depth,
       L_IMAGE_SAMPLER_LINEAR);
   }
   inline ImageView view(ImageSampler sampler) const {
-    const ImageConfig& cfg = get_img_cfg(*inner);
-    return view(0, 0, cfg.width, cfg.height, cfg.depth, sampler);
+    const ImageConfig& cfg2 = cfg();
+    return view(0, 0, 0, cfg2.width, cfg2.height, cfg2.depth, sampler);
   }
   inline ImageView view() const {
     return view(L_IMAGE_SAMPLER_LINEAR);
@@ -527,7 +579,23 @@ struct DepthImage {
   L_DECLR_SCOPED_OBJ(DepthImage);
 
   inline const DepthImageConfig& cfg() const {
-    return get_depth_img_cfg(*inner);
+    return proto().cfg();
+  }
+
+  inline const std::string& label() const {
+    return cfg().label;
+  }
+  inline uint32_t width() const {
+    return cfg().width;
+  }
+  inline uint32_t height() const {
+    return cfg().height;
+  }
+  inline fmt::DepthFormat fmt() const {
+    return cfg().fmt;
+  }
+  inline ImageUsage usage() const {
+    return cfg().usage;
   }
 
   inline DepthImageView view(
@@ -537,8 +605,7 @@ struct DepthImage {
     uint32_t height,
     DepthImageSampler sampler
   ) const {
-    return make_depth_img_view(*inner, x_offset, y_offset, width, height,
-      sampler);
+    return proto().view(x_offset, y_offset, width, height, sampler);
   }
   inline DepthImageView view(
     uint32_t x_offset,
@@ -550,8 +617,8 @@ struct DepthImage {
       L_DEPTH_IMAGE_SAMPLER_LINEAR);
   }
   inline DepthImageView view(DepthImageSampler sampler) const {
-    const DepthImageConfig& cfg = get_depth_img_cfg(*inner);
-    return view(0, 0, cfg.width, cfg.height, sampler);
+    const DepthImageConfig& cfg2 = cfg();
+    return view(0, 0, cfg2.width, cfg2.height, sampler);
   }
   inline DepthImageView view() const {
     return view(L_DEPTH_IMAGE_SAMPLER_LINEAR);
@@ -611,20 +678,22 @@ struct Swapchain {
   L_DECLR_SCOPED_OBJ(Swapchain);
 
   inline const SwapchainConfig& cfg() const {
-    return get_swapchain_cfg(*inner);
+    return proto().cfg();
   }
 
-  Invocation create_present_invoke(bool gc = true) const;
+  Invocation create_present_invoke(bool gc = true) const {
+    return PresentInvocationBuilder((const Swapchain&)*this).build(gc);
+  }
 
   inline Image get_img() const {
-    return Image::borrow(get_swapchain_img(*inner));
+    return Image::borrow(proto().get_img());
   }
 
   inline uint32_t width() const {
-    return get_swapchain_img_width(*inner);
+    return get_img().width();
   }
   inline uint32_t height() const {
-    return get_swapchain_img_height(*inner);
+    return get_img().height();
   }
 };
 struct SwapchainBuilder {
@@ -664,27 +733,16 @@ struct SwapchainBuilder {
 
 struct MappedBuffer {
   void* mapped;
-  BufferView view;
+  HAL_IMPL_NAMESPACE::Buffer* buf;
 
-  inline MappedBuffer(const BufferView& view, MemoryAccess map_access) :
-    mapped(nullptr),
-    view(view)
-  {
-    map_buf_mem(view, map_access, mapped);
-  }
+  MappedBuffer(HAL_IMPL_NAMESPACE::Buffer& buf, MemoryAccess map_access);
   MappedBuffer(MappedBuffer&& x) :
     mapped(std::exchange(x.mapped, nullptr)),
-    view(std::exchange(x.view, {})) {}
-  inline ~MappedBuffer() {
-    unmap_buf_mem(view, mapped);
-  }
+    buf(std::exchange(x.buf, nullptr)) {}
+  ~MappedBuffer();
 
-  constexpr void* data() {
-    return mapped;
-  }
-  constexpr const void* data() const {
-    return mapped;
-  }
+  void* data();
+  const void* data() const;
 
   template<typename T, typename _ = std::enable_if_t<std::is_pointer<T>::value>>
   inline operator T() const {
@@ -724,25 +782,34 @@ struct Buffer {
   L_DECLR_SCOPED_OBJ(Buffer);
 
   inline const BufferConfig& cfg() const {
-    return get_buf_cfg(*inner);
+    return proto().cfg();
+  }
+
+  inline const std::string& label() const {
+    return cfg().label;
+  }
+  inline MemoryAccess host_access() const {
+    return cfg().host_access;
+  }
+  inline size_t size() const {
+    return cfg().size;
+  }
+  inline size_t align() const {
+    return cfg().align;
+  }
+  inline BufferUsage usage() const {
+    return cfg().usage;
   }
 
   inline BufferView view(size_t offset, size_t size) const {
-    return make_buf_view(*inner, offset, size);
+    return proto().view(offset, size);
   }
   inline BufferView view() const {
-    return make_buf_view(*inner);
+    return view(0, size());
   }
 
-  inline MappedBuffer map(
-    size_t offset,
-    size_t size,
-    MemoryAccess map_access
-  ) const {
-    return MappedBuffer(view(offset, size), map_access);
-  }
   inline MappedBuffer map(MemoryAccess map_access) const {
-    return MappedBuffer(view(), map_access);
+    return MappedBuffer(*inner, map_access);
   }
   inline MappedBuffer map_read() const {
     return map(L_MEMORY_ACCESS_READ_BIT);
@@ -750,16 +817,6 @@ struct Buffer {
   inline MappedBuffer map_write() const {
     return map(L_MEMORY_ACCESS_WRITE_BIT);
   }
-/*
-  template<typename T>
-  inline std::vector<T> to_cpu() const {
-    const BufferConfig& buf_cfg = get_buf_cfg(*inner);
-    L_ASSERT(buf_cfg.size % sizeof(T) == 0);
-    std::vector<T> out(buf_cfg.size / sizeof(T));
-    read_buf_mem(view(), out.data(), out.size());
-    return out;
-  }
-*/
 };
 struct BufferBuilder {
   using Self = BufferBuilder;
@@ -991,6 +1048,79 @@ struct Context {
     L_ASSERT(succ);
     return out;
   }
+};
+struct ContextBuilder {
+  using Self = ContextBuilder;
+
+  const HAL_IMPL_NAMESPACE::Instance& parent;
+  ContextConfig inner;
+
+  inline ContextBuilder(
+    const std::string& label = ""
+  ) : parent(get_inst()), inner() {
+    inner.label = label;
+  }
+
+  Context build(bool gc = true);
+};
+struct WindowsContextBuilder {
+  using Self = WindowsContextBuilder;
+
+  const HAL_IMPL_NAMESPACE::Instance& parent;
+  ContextWindowsConfig inner;
+
+  inline WindowsContextBuilder(
+    const std::string& label = ""
+  ) : parent(get_inst()), inner() {
+    inner.label = label;
+  }
+
+  Self& hinst(void* hinst) {
+    inner.hinst = hinst;
+    return *this;
+  }
+  Self& hwnd(void* hwnd) {
+    inner.hwnd = hwnd;
+    return *this;
+  }
+
+  Context build(bool gc = true);
+};
+struct AndroidContextBuilder {
+  using Self = AndroidContextBuilder;
+
+  const HAL_IMPL_NAMESPACE::Instance& parent;
+  ContextAndroidConfig inner;
+
+  inline AndroidContextBuilder(
+    const std::string& label = ""
+  ) : parent(get_inst()), inner() {
+    inner.label = label;
+  }
+
+  Self& native_wnd(void* native_wnd) {
+    inner.native_wnd = native_wnd;
+    return *this;
+  }
+
+  Context build(bool gc = true);
+};
+struct MetalContextBuilder {
+  using Self = MetalContextBuilder;
+
+  const HAL_IMPL_NAMESPACE::Instance& parent;
+  ContextMetalConfig inner;
+
+  inline MetalContextBuilder(
+    const std::string& label = ""
+  ) : parent(get_inst()), inner() { inner.label = label; }
+
+  Self& metal_layer(void* metal_layer) {
+    inner.metal_layer = metal_layer;
+    return *this;
+  }
+
+  Context build(bool gc = true);
 };
 
 

@@ -4,9 +4,10 @@
 namespace liong {
 namespace vk {
 
-DepthImage create_depth_img(
+bool DepthImage::create(
   const Context& ctxt,
-  const DepthImageConfig& depth_img_cfg
+  const DepthImageConfig& depth_img_cfg,
+  DepthImage& out
 ) {
   VkFormat fmt = depth_fmt2vk(depth_img_cfg.fmt);
   VkImageUsageFlags usage = 0;
@@ -94,18 +95,38 @@ DepthImage create_depth_img(
   dyn_detail.access = 0;
   dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
 
+  out.ctxt = &ctxt;
+  out.img = std::move(img);
+  out.img_view = std::move(img_view);
+  out.depth_img_cfg = depth_img_cfg;
+  out.dyn_detail = std::move(dyn_detail);
   L_DEBUG("created depth image '", depth_img_cfg.label, "'");
-  return DepthImage {
-    &ctxt, std::move(img), std::move(img_view), depth_img_cfg, std::move(dyn_detail)
-  };
+  return true;
 }
 DepthImage::~DepthImage() {
   if (img) {
     L_DEBUG("destroyed depth image '", depth_img_cfg.label, "'");
   }
 }
-const DepthImageConfig& get_depth_img_cfg(const DepthImage& depth_img) {
-  return depth_img.depth_img_cfg;
+const DepthImageConfig& DepthImage::cfg() const {
+  return depth_img_cfg;
+}
+DepthImageView DepthImage::view(
+  uint32_t x_offset,
+  uint32_t y_offset,
+  uint32_t width,
+  uint32_t height,
+  DepthImageSampler sampler
+) const {
+  const DepthImageConfig& cfg2 = cfg();
+  DepthImageView out {};
+  out.depth_img = this;
+  out.x_offset = x_offset;
+  out.y_offset = y_offset;
+  out.width = width;
+  out.height = height;
+  out.sampler = sampler;
+  return out;
 }
 
 } // namespace vk
