@@ -88,12 +88,12 @@ void* Buffer::map(MemoryAccess map_access) {
     VK_ACCESS_HOST_READ_BIT : VK_ACCESS_HOST_WRITE_BIT;
   dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
 
-  L_DEBUG("mapped buffer '", buf.buf->buf_cfg.label, "'");
+  L_DEBUG("mapped buffer '", buf_cfg.label, "'");
   return (uint8_t*)mapped;
 }
 void Buffer::unmap(void* mapped) {
   vmaUnmapMemory(*ctxt->allocator, buf->alloc);
-  L_DEBUG("unmapped buffer '", buf.buf->buf_cfg.label, "'");
+  L_DEBUG("unmapped buffer '", buf_cfg.label, "'");
 }
 
 BufferView Buffer::view(size_t offset, size_t size) const {
