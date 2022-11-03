@@ -1298,7 +1298,7 @@ void Invocation::bake() {
   bake_detail->cmd_pool = submit_detail.cmd_pool;
   bake_detail->cmdbuf = submit_detail.cmdbuf;
 
-  L_DEBUG("baked invocation '", invoke.label, "'");
+  L_DEBUG("baked invocation '", label, "'");
 }
 
 
