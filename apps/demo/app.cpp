@@ -10,7 +10,7 @@ using namespace vk;
 using namespace fmt;
 
 void copy_buf2host(
-  const BufferView& src,
+  scoped::Buffer& src,
   void* dst,
   size_t size
 ) {
@@ -18,20 +18,20 @@ void copy_buf2host(
     L_WARN("zero-sized copy is ignored");
     return;
   }
-  L_ASSERT(src.size >= size, "src buffer size is too small");
+  L_ASSERT(src.size() >= size, "src buffer size is too small");
   scoped::MappedBuffer mapped(src, L_MEMORY_ACCESS_READ_BIT);
   std::memcpy(dst, (const void*)mapped, size);
 }
 void copy_host2buf(
   const void* src,
-  const BufferView& dst,
+  scoped::Buffer& dst,
   size_t size
 ) {
   if (size == 0) {
     L_WARN("zero-sized copy is ignored");
     return;
   }
-  L_ASSERT(dst.size >= size, "dst buffser size is too small");
+  L_ASSERT(dst.size() >= size, "dst buffser size is too small");
   scoped::MappedBuffer mapped(dst, L_MEMORY_ACCESS_WRITE_BIT);
   std::memcpy((void*)mapped, mapped, size);
 }
