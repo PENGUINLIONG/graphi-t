@@ -17,6 +17,7 @@ private:
   typedef BufferArray<T> Self;
 
   struct Inner {
+    Context ctxt;
     Buffer buf;
     std::vector<size_t> shape;
     size_t count; // Product of elements in `shape`.
@@ -44,6 +45,7 @@ private:
     }
 
     auto inner = std::make_shared<Inner>();
+    inner->ctxt = Context::borrow(ctxt);
     inner->buf = ctxt.build_buf()
       .size(count * sizeof(T))
       .usage(usage)
@@ -93,10 +95,39 @@ public:
   }
 
   inline void read(std::vector<T>& dst) {
-    inner_->buf.map_read().read(dst);
+    if (inner_->host_access) {
+      inner_->buf.map_read().read(dst);
+    } else {
+      Buffer stage_buf = inner_->ctxt.build_buf()
+        .size(inner_->buf.size())
+        .storage()
+        .read_back()
+        .build();
+      inner_->ctxt.build_trans_invoke()
+        .src(inner_->buf.view())
+        .dst(stage_buf.view())
+        .build()
+        .submit()
+        .wait();
+      stage_buf.map_read().read(dst);
+    }
   }
   inline void write(const std::vector<T>& src) {
-    inner_->buf.map_write().write(src);
+    if (inner_->host_access) {
+      inner_->buf.map_write().write(src);
+    } else {
+      Buffer stage_buf = inner_->ctxt.build_buf()
+        .size(inner_->buf.size())
+        .storage()
+        .streaming_with(src)
+        .build();
+      inner_->ctxt.build_trans_invoke()
+        .src(stage_buf.view())
+        .dst(inner_->buf.view())
+        .build()
+        .submit()
+        .wait();
+    }
   }
 
 };
