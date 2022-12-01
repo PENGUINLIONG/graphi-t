@@ -387,10 +387,16 @@ Transaction InvocationSubmitTransactionBuilder::build(bool gc) {
 }
 
 bool Transaction::is_done() const {
-  return inner->is_done();
+  if (inner != nullptr) {
+    return inner->is_done();
+  } else {
+    return true;
+  }
 }
 void Transaction::wait() {
-  inner->wait();
+  if (inner != nullptr) {
+    inner->wait();
+  }
 }
 
 

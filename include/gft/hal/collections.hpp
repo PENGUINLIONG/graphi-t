@@ -129,6 +129,26 @@ public:
         .wait();
     }
   }
+  template<typename U>
+  inline void copy_from(const BufferArray<U>& other) {
+    inner_->ctxt.build_trans_invoke()
+      .src(other.inner_->buf.view())
+      .dst(inner_->buf.view())
+      .build()
+      .submit()
+      .wait();
+  }
+  inline void fill(const T& value) {
+    if (inner_->host_access) {
+      auto mapped = inner_->buf.map_write();
+      for (size_t i = 0; i < count(); ++i) {
+        ((T*)mapped)[i] = value;
+      }
+    } else {
+      std::vector<T> data(count(), value);
+      write(data);
+    }
+  }
 
 };
 
