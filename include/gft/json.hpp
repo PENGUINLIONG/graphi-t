@@ -89,7 +89,7 @@ struct JsonValue {
   JsonArray arr;
 
   inline JsonValue() : ty(L_JSON_NULL) {}
-  inline JsonValue(nullptr_t) : ty(L_JSON_NULL) {}
+  inline JsonValue(std::nullptr_t) : ty(L_JSON_NULL) {}
   inline JsonValue(bool b) : ty(L_JSON_BOOLEAN), b(b) {}
   inline JsonValue(double num) : ty(L_JSON_FLOAT), num_float(num) {}
   inline JsonValue(float num) : ty(L_JSON_FLOAT), num_float(num) {}
