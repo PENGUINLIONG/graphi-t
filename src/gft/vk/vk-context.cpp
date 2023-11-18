@@ -20,6 +20,9 @@
 #include "gft/util.hpp"
 #include "gft/log.hpp"
 #include "gft/vk/vk-context.hpp"
+#include "gft/vk/vk-buffer.hpp"
+#include "gft/vk/vk-image.hpp"
+#include "gft/vk/vk-depth-image.hpp"
 
 namespace liong {
 namespace vk {
@@ -89,16 +92,16 @@ sys::SurfaceRef _create_surf_metal(const VulkanInstance &inst,
 }
 
 ContextRef _create_ctxt(
-  const VulkanInstance& inst,
+  const VulkanInstanceRef& inst,
   const std::string& label,
   uint32_t dev_idx,
   const sys::SurfaceRef& surf
 ) {
-  L_ASSERT(dev_idx < inst.physdev_details.size(),
+  L_ASSERT(dev_idx < inst->physdev_details.size(),
     "wanted vulkan device does not exists (#", dev_idx, " of ",
-    inst.physdev_details.size(), " available devices)");
+    inst->physdev_details.size(), " available devices)");
   const InstancePhysicalDeviceDetail& physdev_detail =
-    inst.physdev_details.at(dev_idx);
+    inst->physdev_details.at(dev_idx);
 
   VkPhysicalDevice physdev = physdev_detail.physdev;
   const auto& prop = physdev_detail.prop;
@@ -292,18 +295,18 @@ ContextRef _create_ctxt(
     VK_FILTER_LINEAR, VK_SAMPLER_MIPMAP_MODE_LINEAR, 4.0f, VK_COMPARE_OP_LESS);
 
   VmaAllocatorCreateInfo allocatorInfo = {};
-  allocatorInfo.vulkanApiVersion = inst.api_ver;
+  allocatorInfo.vulkanApiVersion = inst->api_ver;
   allocatorInfo.physicalDevice = physdev;
-  allocatorInfo.device = dev->dev;
-  allocatorInfo.instance = inst.inst->inst;
+  allocatorInfo.device = *dev;
+  allocatorInfo.instance = *inst->inst;
 
   sys::AllocatorRef allocator = sys::Allocator::create(&allocatorInfo);
 
-  ContextInfo ctxt_info{};
-  ctxt_info.label = label;
-  ctxt_info.device_index = dev_idx;
+  ContextInfo info{};
+  info.label = label;
+  info.device_index = dev_idx;
 
-  VulkanContextRef out = std::make_shared<VulkanContext>(inst, std::move(ctxt_info));
+  VulkanContextRef out = std::make_shared<VulkanContext>(inst, std::move(info));
   out->dev = std::move(dev);
   out->surf = surf;
   out->submit_details = std::move(submit_details);
@@ -315,7 +318,7 @@ ContextRef _create_ctxt(
   out->allocator = std::move(allocator);
 
   L_DEBUG("created vulkan context '", label, "' on device #", dev_idx, ": ",
-          inst.physdev_details.at(dev_idx).desc);
+          inst->physdev_details.at(dev_idx).desc);
 
   return out;
 }
@@ -323,28 +326,28 @@ ContextRef _create_ctxt(
 ContextRef VulkanContext::create(const InstanceRef &inst,
                                  const ContextConfig &cfg) {
   VulkanInstanceRef inst_ = VulkanInstance::from_hal(inst);
-  auto out = _create_ctxt(*inst_, cfg.label, cfg.device_index, VK_NULL_HANDLE);
+  auto out = _create_ctxt(inst_, cfg.label, cfg.device_index, VK_NULL_HANDLE);
   return out;
 }
 ContextRef VulkanContext::create(const InstanceRef &inst,
                                  const ContextWindowsConfig &cfg) {
   VulkanInstanceRef inst_ = VulkanInstance::from_hal(inst);
   sys::SurfaceRef surf = _create_surf_windows(*inst_, cfg);
-  auto out = _create_ctxt(*inst_, cfg.label, cfg.device_index, surf);
+  auto out = _create_ctxt(inst_, cfg.label, cfg.device_index, surf);
   return out;
 }
 ContextRef VulkanContext::create(const InstanceRef &inst,
                                  const ContextAndroidConfig &cfg) {
   VulkanInstanceRef inst_ = VulkanInstance::from_hal(inst);
   sys::SurfaceRef surf = _create_surf_android(*inst_, cfg);
-  auto out = _create_ctxt(*inst_, cfg.label, cfg.device_index, surf);
+  auto out = _create_ctxt(inst_, cfg.label, cfg.device_index, surf);
   return out;
 }
 ContextRef VulkanContext::create(const InstanceRef &inst,
                                  const ContextMetalConfig &cfg) {
   VulkanInstanceRef inst_ = VulkanInstance::from_hal(inst);
   sys::SurfaceRef surf = _create_surf_metal(*inst_, cfg);
-  auto out = _create_ctxt(*inst_, cfg.label, cfg.device_index, surf);
+  auto out = _create_ctxt(inst_, cfg.label, cfg.device_index, surf);
   return out;
 }
 
@@ -538,6 +541,16 @@ QueryPoolPoolItem VulkanContext::acquire_query_pool() {
     sys::QueryPoolRef query_pool = _create_query_pool(*this, VK_QUERY_TYPE_TIMESTAMP, 2);
     return query_pool_pool.create(0, std::move(query_pool));
   }
+}
+
+BufferRef VulkanContext::create_buffer(const BufferConfig &cfg) {
+  return VulkanBuffer::create(shared_from_this(), cfg);
+}
+ImageRef VulkanContext::create_image(const ImageConfig &cfg) {
+  return VulkanImage::create(shared_from_this(), cfg);
+}
+DepthImageRef VulkanContext::create_depth_image(const DepthImageConfig &cfg) {
+  return VulkanDepthImage::create(shared_from_this(), cfg);
 }
 
 } // namespace vk

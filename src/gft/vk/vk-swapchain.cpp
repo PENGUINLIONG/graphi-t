@@ -202,8 +202,7 @@ SwapchainRef VulkanSwapchain::create(const ContextRef &ctxt, const SwapchainConf
   info.format = format;
   info.color_space = cfg.color_space;
 
-  VulkanSwapchainRef out = std::make_shared<VulkanSwapchain>(info);
-  out->ctxt = ctxt_;
+  VulkanSwapchainRef out = std::make_shared<VulkanSwapchain>(ctxt_, std::move(info));
   out->swapchain = VK_NULL_HANDLE;
   out->dyn_detail = nullptr;
 
@@ -211,6 +210,9 @@ SwapchainRef VulkanSwapchain::create(const ContextRef &ctxt, const SwapchainConf
 
   return out;
 }
+
+VulkanSwapchain::VulkanSwapchain(VulkanContextRef ctxt, SwapchainInfo &&info)
+    : Swapchain(std::move(info)), ctxt(ctxt) {}
 VulkanSwapchain::~VulkanSwapchain() {
   if (swapchain) {
     L_DEBUG("destroyed swapchain '", info.label, "'");

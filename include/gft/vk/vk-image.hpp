@@ -20,7 +20,7 @@ struct VulkanImage: public Image {
   ImageDynamicDetail dyn_detail;
 
   static ImageRef create(const ContextRef &ctxt, const ImageConfig &cfg);
-  VulkanImage(VulkanContextRef ctxt, ImageConfig &&cfg);
+  VulkanImage(VulkanContextRef ctxt, ImageInfo &&info);
   ~VulkanImage();
 
   inline static VulkanImageRef from_hal(const ImageRef &ref) {

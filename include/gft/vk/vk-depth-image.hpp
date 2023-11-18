@@ -19,11 +19,10 @@ struct VulkanDepthImage : public DepthImage {
   sys::ImageViewRef img_view;
   DepthImageDynamicDetail dyn_detail;
 
-  static DepthImageRef create(const ContextRef& ctxt, const DepthImageConfig& cfg);
+  static DepthImageRef create(const ContextRef &ctxt,
+                              const DepthImageConfig &cfg);
+  VulkanDepthImage(VulkanContextRef ctxt, DepthImageInfo&& info);
   ~VulkanDepthImage();
-
-  DepthImageView view(uint32_t x_offset, uint32_t y_offset, uint32_t width,
-                      uint32_t height, DepthImageSampler sampler) const;
 
   inline static VulkanDepthImageRef from_hal(const DepthImageRef &ref) {
     return std::static_pointer_cast<VulkanDepthImage>(ref);

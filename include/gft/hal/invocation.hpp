@@ -18,8 +18,9 @@ struct Invocation : std::enable_shared_from_this<Invocation> {
   Invocation(InvocationInfo&& info) : info(std::move(info)) {}
   virtual ~Invocation() {}
 
-  // Submit the invocation to device for execution.
-  virtual TransactionRef submit() = 0;
+  // Submit the invocation to device for execution and create a transaction for
+  // the user to track the execution status.
+  virtual TransactionRef create_transact(const TransactionConfig& cfg) = 0;
 
   // Get the execution time of the last WAITED invocation.
   virtual double get_time_us() = 0;

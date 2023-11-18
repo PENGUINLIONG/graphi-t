@@ -141,7 +141,9 @@ struct VulkanInvocation : public Invocation {
   VulkanInvocation(const VulkanContextRef& ctxt, InvocationInfo &&info);
   ~VulkanInvocation();
 
-  void record(TransactionLike& transact) const;
+  void record(TransactionLike &transact) const;
+
+  virtual TransactionRef create_transact(const TransactionConfig& cfg) override final;
 
   virtual double get_time_us() override final;
   virtual void bake() override final;

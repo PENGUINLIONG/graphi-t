@@ -25,6 +25,7 @@ struct VulkanInstance : public Instance {
   std::vector<InstancePhysicalDeviceDetail> physdev_details;
   bool is_imported;
 
+  static VulkanInstanceRef create();
   static VulkanInstanceRef create(uint32_t api_ver, sys::InstanceRef &&inst);
   virtual ~VulkanInstance();
 

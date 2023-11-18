@@ -20,7 +20,9 @@ struct VulkanSwapchain : public Swapchain {
   sys::SwapchainRef swapchain;
   std::unique_ptr<SwapchainDynamicDetail> dyn_detail;
 
-  static SwapchainRef create(const ContextRef& ctxt, const SwapchainConfig& cfg);
+  static SwapchainRef create(const ContextRef &ctxt,
+                             const SwapchainConfig &cfg);
+  VulkanSwapchain(VulkanContextRef ctxt, SwapchainInfo&& info);
   ~VulkanSwapchain();
 
   ImageRef get_current_image();

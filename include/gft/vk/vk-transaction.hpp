@@ -14,8 +14,8 @@ struct VulkanTransaction : public Transaction {
   std::vector<sys::FenceRef> fences;
 
   static TransactionRef create(const InvocationRef &invoke,
-                               TransactionConfig &cfg);
-  VulkanTransaction(const VulkanContextRef &ctxt, TransactionInfo &&info);
+                               const TransactionConfig &cfg);
+  VulkanTransaction(VulkanContextRef ctxt, TransactionInfo &&info);
   ~VulkanTransaction();
 
   virtual bool is_done() override final;

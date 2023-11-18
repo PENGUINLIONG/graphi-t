@@ -3,6 +3,7 @@
 #include "gft/vk/vk-image.hpp"
 #include "gft/vk/vk-depth-image.hpp"
 #include "gft/vk/vk-task.hpp"
+#include "gft/vk/vk-transaction.hpp"
 #include "gft/log.hpp"
 
 namespace liong {
@@ -1296,6 +1297,11 @@ bool _can_bake_invoke(const VulkanInvocation& invoke) {
 void VulkanInvocation::record(TransactionLike& transact) const {
   _record_invoke(transact, *this);
 }
+
+TransactionRef VulkanInvocation::create_transact(const TransactionConfig& cfg) {
+  return VulkanTransaction::create(shared_from_this(), cfg);
+}
+
 
 double VulkanInvocation::get_time_us() {
   if (!query_pool.is_valid()) { return 0.0; }

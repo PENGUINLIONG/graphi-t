@@ -1,4 +1,4 @@
-#include "gft/vk.hpp"
+/*
 #include "gft/hal/renderer.hpp"
 #include "gft/glslang.hpp"
 #include "glm/glm.hpp"
@@ -689,3 +689,4 @@ Renderer& Renderer::draw_point_cloud(const mesh::PointCloud& point_cloud) {
 } // namespace scoped
 } // namespace vk
 } // namespace liong
+*/

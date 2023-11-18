@@ -79,6 +79,10 @@ struct VulkanContext : public Context {
   inline static VulkanContextRef from_hal(const ContextRef &ref) {
     return std::static_pointer_cast<VulkanContext>(ref);
   }
+
+  virtual BufferRef create_buffer(const BufferConfig &cfg) override final;
+  virtual ImageRef create_image(const ImageConfig &cfg) override final;
+  virtual DepthImageRef create_depth_image(const DepthImageConfig &cfg) override final;
 };
 
 } // namespace vk

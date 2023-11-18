@@ -16,7 +16,7 @@ struct Swapchain : public std::enable_shared_from_this<Swapchain> {
   Swapchain(SwapchainInfo&& info) : info(std::move(info)) {}
   virtual ~Swapchain() {}
 
-  virtual const ImageRef& get_img() const = 0;
+  virtual ImageRef get_current_image() = 0;
 };
 
 } // namespace hal

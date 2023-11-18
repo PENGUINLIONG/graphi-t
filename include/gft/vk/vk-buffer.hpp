@@ -16,19 +16,14 @@ struct VulkanBuffer : public Buffer {
   VulkanContextRef ctxt;
 
   sys::BufferRef buf;
-  BufferConfig buf_cfg;
   BufferDynamicDetail dyn_detail;
 
   static BufferRef create(const ContextRef &ctxt, const BufferConfig &cfg);
   VulkanBuffer(VulkanContextRef ctxt, BufferInfo &&info);
   ~VulkanBuffer();
 
-  const BufferConfig& cfg() const;
-
   void* map(MemoryAccess map_access);
-  void unmap(void* mapped);
-
-  BufferView view(size_t offset, size_t size) const;
+  void unmap();
 
   inline static VulkanBufferRef from_hal(const BufferRef &ref) {
     return std::static_pointer_cast<VulkanBuffer>(ref);

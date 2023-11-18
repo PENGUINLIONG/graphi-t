@@ -17,8 +17,6 @@ struct DepthImage : public std::enable_shared_from_this<DepthImage> {
   DepthImage(DepthImageInfo&& info) : info(std::move(info)) {}
   virtual ~DepthImage() {}
 
-  virtual const DepthImageConfig& cfg() const = 0;
-
   virtual DepthImageView view(uint32_t x_offset, uint32_t y_offset,
                               uint32_t width, uint32_t height,
                               DepthImageSampler sampler) {

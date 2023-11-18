@@ -7,8 +7,6 @@
 namespace liong {
 namespace vk {
 
-std::shared_ptr<Instance> INST;
-
 void desc_physdev_prop(
   std::stringstream& ss,
   const VkPhysicalDeviceProperties& prop
@@ -104,37 +102,31 @@ std::vector<InstancePhysicalDeviceDetail> collect_physdev_details(
   return out;
 }
 
-void initialize(uint32_t api_ver, sys::InstanceRef&& inst) {
-  if (INST != nullptr) {
-    L_WARN("ignored redundant vulkan module initialization");
-    return;
-  }
+VulkanInstanceRef VulkanInstance::create(uint32_t api_ver, sys::InstanceRef&& inst) {
+  VulkanInstanceRef out = std::make_shared<VulkanInstance>();
+  out->api_ver = api_ver;
+  out->inst = std::move(inst);
+  out->physdev_details = collect_physdev_details(inst->inst);
+  out->is_imported = false;
 
-  VulkanInstance out {};
-  out.api_ver = api_ver;
-  out.inst = std::move(inst);
-  out.physdev_details = collect_physdev_details(inst->inst);
-  out.is_imported = false;
-  INST = std::make_shared<Instance>(out);
   L_INFO("vulkan backend initialized with external instance");
-}
-void initialize() {
-  if (INST != nullptr) {
-    L_WARN("ignored redundant vulkan module initialization");
-    return;
-  }
 
+  return out;
+}
+VulkanInstanceRef VulkanInstance::create() {
   sys::InstanceRef inst = sys::create_inst(VK_API_VERSION_1_0);
   std::vector<InstancePhysicalDeviceDetail> physdev_details =
     collect_physdev_details(inst->inst);
 
-  VulkanInstanceRef out = std::shared_ptr<VulkanInstance>();
+  VulkanInstanceRef out = std::make_shared<VulkanInstance>();
   out->api_ver = VK_API_VERSION_1_0;
   out->inst = std::move(inst);
   out->physdev_details = std::move(physdev_details);
   out->is_imported = true;
-  INST = std::make_shared<Instance>(out);
+
   L_INFO("vulkan backend initialized");
+
+  return out;
 }
 void finalize() {
   L_INFO("vulkan backend finalized");
@@ -143,10 +135,6 @@ std::string VulkanInstance::describe_device(uint32_t device_index) {
   return device_index < physdev_details.size() ?
     physdev_details.at(device_index).desc : std::string {};
 }
-InstanceRef get_inst() {
-  return INST;
-}
-
 
 
 } // namespace vk

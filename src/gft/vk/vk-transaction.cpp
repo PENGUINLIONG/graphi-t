@@ -5,7 +5,7 @@ namespace liong {
 namespace vk {
 
 TransactionRef VulkanTransaction::create(const InvocationRef &invoke,
-                                               TransactionConfig &cfg) {
+                                         const TransactionConfig &cfg) {
   const VulkanInvocationRef& invoke_ = VulkanInvocation::from_hal(invoke);
   const VulkanContextRef& ctxt = VulkanContext::from_hal(invoke_->ctxt);
 
@@ -18,7 +18,7 @@ TransactionRef VulkanTransaction::create(const InvocationRef &invoke,
   TransactionInfo info{};
   info.label = cfg.label;
 
-  VulkanTransactionRef out = std::make_shared<VulkanTransaction>(ctxt, info);
+  VulkanTransactionRef out = std::make_shared<VulkanTransaction>(ctxt, std::move(info));
   out->submit_details = std::move(transact.submit_details);
   out->fences = std::move(transact.fences);
   L_DEBUG("created and submitted transaction for execution, command "

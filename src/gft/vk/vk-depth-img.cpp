@@ -104,8 +104,7 @@ DepthImageRef VulkanDepthImage::create(const ContextRef &ctxt,
   info.depth_format = depth_img_cfg.depth_format;
   info.usage = depth_img_cfg.usage;
 
-  VulkanDepthImageRef out = std::make_shared<VulkanDepthImage>(ctxt, info);
-  out->ctxt = ctxt_;
+  VulkanDepthImageRef out = std::make_shared<VulkanDepthImage>(ctxt_, std::move(info));
   out->img = std::move(img);
   out->img_view = std::move(img_view);
   out->dyn_detail = std::move(dyn_detail);
@@ -114,27 +113,12 @@ DepthImageRef VulkanDepthImage::create(const ContextRef &ctxt,
 
   return out;
 }
+VulkanDepthImage::VulkanDepthImage(VulkanContextRef ctxt, DepthImageInfo &&info)
+    : DepthImage(std::move(info)), ctxt(ctxt) {}
 VulkanDepthImage::~VulkanDepthImage() {
   if (img) {
     L_DEBUG("destroyed depth image '", info.label, "'");
   }
-}
-DepthImageView VulkanDepthImage::view(
-  uint32_t x_offset,
-  uint32_t y_offset,
-  uint32_t width,
-  uint32_t height,
-  DepthImageSampler sampler
-) const {
-  const DepthImageConfig& cfg2 = cfg();
-  DepthImageView out {};
-  out.depth_img = std::static_pointer_cast<DepthImage>(shared_from_this());
-  out.x_offset = x_offset;
-  out.y_offset = y_offset;
-  out.width = width;
-  out.height = height;
-  out.sampler = sampler;
-  return out;
 }
 
 } // namespace vk

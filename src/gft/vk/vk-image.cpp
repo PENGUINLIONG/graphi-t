@@ -127,7 +127,6 @@ ImageRef VulkanImage::create(const ContextRef &ctxt,
   info.usage = img_cfg.usage;
 
   VulkanImageRef out = std::make_shared<VulkanImage>(ctxt_, std::move(info));
-  out->ctxt = ctxt_;
   out->img = std::move(img);
   out->img_view = std::move(img_view);
   out->dyn_detail = std::move(dyn_detail);
