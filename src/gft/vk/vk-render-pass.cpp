@@ -1,5 +1,7 @@
-#include "gft/vk.hpp"
 #include "gft/log.hpp"
+#include "gft/vk/vk-render-pass.hpp"
+#include "gft/vk/vk-image.hpp"
+#include "gft/vk/vk-depth-image.hpp"
 
 namespace liong {
 namespace vk {
@@ -20,7 +22,7 @@ VkAttachmentStoreOp _get_store_op(AttachmentAccess attm_access) {
   return VK_ATTACHMENT_STORE_OP_DONT_CARE;
 }
 sys::RenderPassRef _create_pass(
-  const Context& ctxt,
+  const VulkanContext& ctxt,
   const std::vector<AttachmentConfig>& attm_cfgs
 ) {
   struct SubpassAttachmentReference {
@@ -45,7 +47,7 @@ sys::RenderPassRef _create_pass(
     case L_ATTACHMENT_TYPE_COLOR:
     {
       ar.layout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
-      ad.format = fmt2vk(attm_cfg.color_fmt, attm_cfg.cspace);
+      ad.format = format2vk(attm_cfg.color_fmt, attm_cfg.cspace);
       ad.initialLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
       ad.finalLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
       sar.color_attm_ref.emplace_back(std::move(ar));
@@ -56,7 +58,7 @@ sys::RenderPassRef _create_pass(
       L_ASSERT(!sar.has_depth_attm,
         "subpass can only have one depth attachment");
       ar.layout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
-      ad.format = depth_fmt2vk(attm_cfg.depth_fmt);
+      ad.format = depth_format2vk(attm_cfg.depth_fmt);
       ad.initialLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
       ad.finalLayout = VK_IMAGE_LAYOUT_DEPTH_STENCIL_ATTACHMENT_OPTIMAL;
       sar.has_depth_attm = true;
@@ -99,24 +101,23 @@ sys::RenderPassRef _create_pass(
 }
 
 sys::FramebufferRef _create_framebuf(
-  const RenderPass& pass,
+  const VulkanRenderPass& pass,
   const std::vector<ResourceView>& attms
 ) {
-  const RenderPassConfig& pass_cfg = pass.pass_cfg;
-  L_ASSERT(pass_cfg.attm_cfgs.size() == attms.size());
+  L_ASSERT(pass.info.attm_count == attms.size());
 
-  uint32_t width = pass_cfg.width;
-  uint32_t height = pass_cfg.height;
+  uint32_t width = pass.info.width;
+  uint32_t height = pass.info.height;
 
   std::vector<VkImageView> img_views(attms.size());
   for (size_t i = 0; i < attms.size(); ++i) {
     const ResourceView& attm = attms.at(i);
     switch (attm.rsc_view_ty) {
     case L_RESOURCE_VIEW_TYPE_IMAGE:
-      img_views.at(i) = *attm.img_view.img->img_view;
+      img_views.at(i) = *VulkanImage::from_hal(attm.img_view.img)->img_view;
       break;
     case L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE:
-      img_views.at(i) = *attm.depth_img_view.depth_img->img_view;
+      img_views.at(i) = *VulkanDepthImage::from_hal(attm.depth_img_view.depth_img)->img_view;
       break;
     default:
       L_PANIC("unexpected attachment resource view type");
@@ -135,12 +136,11 @@ sys::FramebufferRef _create_framebuf(
   return sys::Framebuffer::create(pass.ctxt->dev->dev, &fci);
 }
 
-bool RenderPass::create(
-  const Context& ctxt,
-  const RenderPassConfig& cfg,
-  RenderPass& out
-) {
-  sys::RenderPassRef pass = _create_pass(ctxt, cfg.attm_cfgs);
+RenderPassRef VulkanRenderPass::create(const ContextRef &ctxt,
+                                       const RenderPassConfig &cfg) {
+  VulkanContextRef ctxt_ = VulkanContext::from_hal(ctxt);
+  
+  sys::RenderPassRef pass = _create_pass(*ctxt_, cfg.attm_cfgs);
 
   VkRect2D viewport {};
   viewport.extent.width = cfg.width;
@@ -165,23 +165,29 @@ bool RenderPass::create(
     }
   }
 
-  out.ctxt = &ctxt;
-  out.width = cfg.width;
-  out.height = cfg.height;
-  out.pass = std::move(pass);
-  out.pass_cfg = cfg;
-  out.clear_values = clear_values;
+  RenderPassInfo info{};
+  info.label = cfg.label;
+  info.width = cfg.width;
+  info.height = cfg.height;
+  info.attm_count = cfg.attm_cfgs.size();
+
+  VulkanRenderPassRef out = std::make_shared<VulkanRenderPass>(ctxt_, std::move(info));
+  out->ctxt = ctxt_;
+  out->pass = std::move(pass);
+  out->clear_values = clear_values;
+
   L_DEBUG("created render pass '", cfg.label, "'");
-  return true;
+
+  return std::static_pointer_cast<RenderPass>(out);
 }
-RenderPass::~RenderPass() {
+VulkanRenderPass::~VulkanRenderPass() {
   if (pass) {
-    L_DEBUG("destroyed render pass '", pass_cfg.label, "'");
+    L_DEBUG("destroyed render pass '", info.label, "'");
   }
 }
 
 FramebufferKey FramebufferKey::create(
-  const RenderPass& pass,
+  const VulkanRenderPass& pass,
   const std::vector<ResourceView>& rsc_views
 ) {
   std::stringstream ss;
@@ -190,13 +196,13 @@ FramebufferKey FramebufferKey::create(
     switch (rsc_view.rsc_view_ty) {
     case L_RESOURCE_VIEW_TYPE_IMAGE:
     {
-      VkImageView img_view = rsc_view.img_view.img->img_view->img_view;
+      VkImageView img_view = VulkanImage::from_hal(rsc_view.img_view.img)->img_view->img_view;
       ss << "," << img_view;
       break;
     }
     case L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE:
     {
-      VkImageView img_view = rsc_view.depth_img_view.depth_img->img_view->img_view;
+      VkImageView img_view = VulkanDepthImage::from_hal(rsc_view.depth_img_view.depth_img)->img_view->img_view;
       ss << "," << img_view;
       break;
     }
@@ -206,7 +212,7 @@ FramebufferKey FramebufferKey::create(
   return { ss.str() };
 }
 
-FramebufferPoolItem RenderPass::acquire_framebuf(
+FramebufferPoolItem VulkanRenderPass::acquire_framebuf(
   const std::vector<ResourceView>& attms
 ) {
   FramebufferKey key = FramebufferKey::create(*this, attms);

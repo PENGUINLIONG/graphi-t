@@ -1,15 +1,17 @@
-#include "gft/vk.hpp"
+#include "sys.hpp"
+#include "gft/assert.hpp"
+#include "gft/util.hpp"
 #include "gft/log.hpp"
+#include "gft/vk/vk-depth-image.hpp"
 
 namespace liong {
 namespace vk {
 
-bool DepthImage::create(
-  const Context& ctxt,
-  const DepthImageConfig& depth_img_cfg,
-  DepthImage& out
-) {
-  VkFormat fmt = depth_fmt2vk(depth_img_cfg.fmt);
+DepthImageRef VulkanDepthImage::create(const ContextRef &ctxt,
+                                       const DepthImageConfig &depth_img_cfg) {
+  VulkanContextRef ctxt_ = VulkanContext::from_hal(ctxt);
+
+  VkFormat fmt = depth_format2vk(depth_img_cfg.depth_format);
   VkImageUsageFlags usage = 0;
   SubmitType init_submit_ty = L_SUBMIT_TYPE_ANY;
 
@@ -35,7 +37,7 @@ bool DepthImage::create(
 
   // Check whether the device support our use case.
   VkImageFormatProperties ifp;
-  VK_ASSERT << vkGetPhysicalDeviceImageFormatProperties(ctxt.physdev(), fmt,
+  VK_ASSERT << vkGetPhysicalDeviceImageFormatProperties(ctxt_->physdev(), fmt,
     VK_IMAGE_TYPE_2D, VK_IMAGE_TILING_OPTIMAL, usage, 0, &ifp);
 
   VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
@@ -61,14 +63,14 @@ bool DepthImage::create(
   VkResult res = VK_ERROR_OUT_OF_DEVICE_MEMORY;
   if (is_tile_mem) {
     aci.usage = VMA_MEMORY_USAGE_GPU_LAZILY_ALLOCATED;
-    img = sys::Image::create(*ctxt.allocator, &ici, &aci);
+    img = sys::Image::create(*ctxt_->allocator, &ici, &aci);
   }
   if (res != VK_SUCCESS) {
     if (is_tile_mem) {
       L_WARN("tile-memory is unsupported, fall back to regular memory");
     }
     aci.usage = VMA_MEMORY_USAGE_GPU_ONLY;
-    img = sys::Image::create(*ctxt.allocator, &ici, &aci);
+    img = sys::Image::create(*ctxt_->allocator, &ici, &aci);
   }
 
   VkImageViewCreateInfo ivci {};
@@ -81,37 +83,43 @@ bool DepthImage::create(
   ivci.components.b = VK_COMPONENT_SWIZZLE_IDENTITY;
   ivci.components.a = VK_COMPONENT_SWIZZLE_IDENTITY;
   ivci.subresourceRange.aspectMask =
-    (fmt::get_fmt_depth_nbit(depth_img_cfg.fmt) > 0 ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) |
-    (fmt::get_fmt_stencil_nbit(depth_img_cfg.fmt) > 0 ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
+    (fmt::get_fmt_depth_nbit(depth_img_cfg.depth_format) > 0 ? VK_IMAGE_ASPECT_DEPTH_BIT : 0) |
+    (fmt::get_fmt_stencil_nbit(depth_img_cfg.depth_format) > 0 ? VK_IMAGE_ASPECT_STENCIL_BIT : 0);
   ivci.subresourceRange.baseArrayLayer = 0;
   ivci.subresourceRange.layerCount = 1;
   ivci.subresourceRange.baseMipLevel = 0;
   ivci.subresourceRange.levelCount = 1;
 
-  sys::ImageViewRef img_view = sys::ImageView::create(ctxt.dev->dev, &ivci);
+  sys::ImageViewRef img_view = sys::ImageView::create(*ctxt_->dev, &ivci);
 
   DepthImageDynamicDetail dyn_detail {};
   dyn_detail.layout = layout;
   dyn_detail.access = 0;
   dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
 
-  out.ctxt = &ctxt;
-  out.img = std::move(img);
-  out.img_view = std::move(img_view);
-  out.depth_img_cfg = depth_img_cfg;
-  out.dyn_detail = std::move(dyn_detail);
+  DepthImageInfo info{};
+  info.label = depth_img_cfg.label;
+  info.width = depth_img_cfg.width;
+  info.height = depth_img_cfg.height;
+  info.depth_format = depth_img_cfg.depth_format;
+  info.usage = depth_img_cfg.usage;
+
+  VulkanDepthImageRef out = std::make_shared<VulkanDepthImage>(ctxt, info);
+  out->ctxt = ctxt_;
+  out->img = std::move(img);
+  out->img_view = std::move(img_view);
+  out->dyn_detail = std::move(dyn_detail);
+
   L_DEBUG("created depth image '", depth_img_cfg.label, "'");
-  return true;
+
+  return out;
 }
-DepthImage::~DepthImage() {
+VulkanDepthImage::~VulkanDepthImage() {
   if (img) {
-    L_DEBUG("destroyed depth image '", depth_img_cfg.label, "'");
+    L_DEBUG("destroyed depth image '", info.label, "'");
   }
 }
-const DepthImageConfig& DepthImage::cfg() const {
-  return depth_img_cfg;
-}
-DepthImageView DepthImage::view(
+DepthImageView VulkanDepthImage::view(
   uint32_t x_offset,
   uint32_t y_offset,
   uint32_t width,
@@ -120,7 +128,7 @@ DepthImageView DepthImage::view(
 ) const {
   const DepthImageConfig& cfg2 = cfg();
   DepthImageView out {};
-  out.depth_img = this;
+  out.depth_img = std::static_pointer_cast<DepthImage>(shared_from_this());
   out.x_offset = x_offset;
   out.y_offset = y_offset;
   out.width = width;

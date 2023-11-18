@@ -1,23 +1,23 @@
-#include "gft/vk.hpp"
-#include "gft/log.hpp"
 #include "sys.hpp"
+#include "gft/log.hpp"
+#include "gft/vk/vk-task.hpp"
 
 namespace liong {
 namespace vk {
 
-bool Task::create(
-  const Context& ctxt,
-  const ComputeTaskConfig& cfg,
-  Task& out
-) {
+TaskRef VulkanTask::create(const ContextRef &ctxt,
+                           const ComputeTaskConfig &cfg) {
   L_ASSERT(cfg.workgrp_size.x * cfg.workgrp_size.y * cfg.workgrp_size.z != 0,
-    "workgroup size cannot be zero");
+           "workgroup size cannot be zero");
+
+  const VulkanContextRef &ctxt_ = VulkanContext::from_hal(ctxt);
+
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   sys::DescriptorSetLayoutRef desc_set_layout =
-    const_cast<Context&>(ctxt).get_desc_set_layout(cfg.rsc_tys);
-  sys::PipelineLayoutRef pipe_layout = sys::create_pipe_layout(ctxt.dev->dev,
+      ctxt_->get_desc_set_layout(cfg.rsc_tys);
+  sys::PipelineLayoutRef pipe_layout = sys::create_pipe_layout(*ctxt_->dev,
     desc_set_layout->desc_set_layout);
-  VkShaderModule shader_mod = sys::create_shader_mod(ctxt.dev->dev,
+  VkShaderModule shader_mod = sys::create_shader_mod(*ctxt_->dev,
     (const uint32_t*)cfg.code, cfg.code_size);
 
   // Specialize to set local group size.
@@ -39,43 +39,44 @@ bool Task::create(
   pssci.module = shader_mod;
   pssci.pSpecializationInfo = &spec_info;
 
-  sys::PipelineRef pipe = sys::create_comp_pipe(ctxt.dev->dev, pipe_layout->pipe_layout, pssci);
+  sys::PipelineRef pipe = sys::create_comp_pipe(*ctxt_->dev, pipe_layout->pipe_layout, pssci);
 
-  sys::destroy_shader_mod(ctxt.dev->dev, shader_mod);
+  sys::destroy_shader_mod(*ctxt_->dev, shader_mod);
 
   TaskResourceDetail rsc_detail {};
   rsc_detail.pipe_layout = std::move(pipe_layout);
   rsc_detail.rsc_tys = cfg.rsc_tys;
 
-  out.label = cfg.label;
-  out.submit_ty = L_SUBMIT_TYPE_COMPUTE;
-  out.ctxt = &ctxt;
-  out.pass = nullptr;
-  out.pipe = std::move(pipe);
-  out.workgrp_size = cfg.workgrp_size;
-  out.rsc_detail = std::move(rsc_detail);
+  TaskInfo info{};
+  info.label = cfg.label;
+  info.submit_ty = L_SUBMIT_TYPE_COMPUTE;
+
+  VulkanTaskRef out = std::make_shared<VulkanTask>(ctxt_, std::move(info));
+  out->ctxt = ctxt_;
+  out->pass = nullptr;
+  out->pipe = std::move(pipe);
+  out->workgrp_size = cfg.workgrp_size;
+  out->rsc_detail = std::move(rsc_detail);
+
   L_DEBUG("created compute task '", cfg.label, "'");
-  return true;
+
+  return out;
 }
 
-
-
-bool Task::create(
-  const RenderPass& pass,
-  const GraphicsTaskConfig& cfg,
-  Task& out
-) {
-  const Context& ctxt = *pass.ctxt;
+TaskRef VulkanTask::create(const RenderPassRef &pass,
+                           const GraphicsTaskConfig &cfg) {
+  const VulkanRenderPassRef &pass_ = VulkanRenderPass::from_hal(pass);
+  const VulkanContextRef& ctxt = pass_->ctxt;
 
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   sys::DescriptorSetLayoutRef desc_set_layout =
-    const_cast<Context&>(ctxt).get_desc_set_layout(cfg.rsc_tys);
+      ctxt->get_desc_set_layout(cfg.rsc_tys);
 
-  sys::PipelineLayoutRef pipe_layout = sys::create_pipe_layout(ctxt.dev->dev,
+  sys::PipelineLayoutRef pipe_layout = sys::create_pipe_layout(*ctxt->dev,
     desc_set_layout->desc_set_layout);
-  VkShaderModule vert_shader_mod = sys::create_shader_mod(ctxt.dev->dev,
+  VkShaderModule vert_shader_mod = sys::create_shader_mod(*ctxt->dev,
     (const uint32_t*)cfg.vert_code, cfg.vert_code_size);
-  VkShaderModule frag_shader_mod = sys::create_shader_mod(ctxt.dev->dev,
+  VkShaderModule frag_shader_mod = sys::create_shader_mod(*ctxt->dev,
     (const uint32_t*)cfg.frag_code, cfg.frag_code_size);
 
   VkPipelineInputAssemblyStateCreateInfo piasci {};
@@ -126,30 +127,35 @@ bool Task::create(
     pssci.module = frag_shader_mod;
   }
 
-  sys::PipelineRef pipe = sys::create_graph_pipe(ctxt.dev->dev,
-    pipe_layout->pipe_layout, pass.pass->pass, pass.width, pass.height, piasci,
-    prsci, psscis);
+  sys::PipelineRef pipe = sys::create_graph_pipe(
+      *ctxt->dev, pipe_layout->pipe_layout, *pass_->pass, pass_->info.width,
+      pass->info.height, piasci, prsci, psscis);
 
-  sys::destroy_shader_mod(ctxt.dev->dev, vert_shader_mod);
-  sys::destroy_shader_mod(ctxt.dev->dev, frag_shader_mod);
+  sys::destroy_shader_mod(*ctxt->dev, vert_shader_mod);
+  sys::destroy_shader_mod(*ctxt->dev, frag_shader_mod);
 
   TaskResourceDetail rsc_detail {};
   rsc_detail.pipe_layout = std::move(pipe_layout);
   rsc_detail.rsc_tys = cfg.rsc_tys;
 
-  out.label = cfg.label;
-  out.submit_ty = L_SUBMIT_TYPE_GRAPHICS;
-  out.ctxt = &ctxt;
-  out.pass = &pass;
-  out.pipe = std::move(pipe);
-  out.workgrp_size = {};
-  out.rsc_detail = std::move(rsc_detail);
+  TaskInfo info{};
+  info.label = cfg.label;
+  info.submit_ty = L_SUBMIT_TYPE_GRAPHICS;
+
+  VulkanTaskRef out = std::make_shared<VulkanTask>(pass_, std::move(info));
+  out->ctxt = ctxt;
+  out->pass = pass_;
+  out->pipe = std::move(pipe);
+  out->workgrp_size = {};
+  out->rsc_detail = std::move(rsc_detail);
+
   L_DEBUG("created graphics task '", cfg.label, "'");
-  return true;
+
+  return out;
 }
-Task::~Task() {
+VulkanTask::~VulkanTask() {
   if (pipe) {
-    L_DEBUG("destroyed task '", label, "'");
+    L_DEBUG("destroyed task '", info.label, "'");
   }
 }
 

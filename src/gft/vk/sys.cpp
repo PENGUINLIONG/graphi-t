@@ -1,6 +1,5 @@
 #include "gft/assert.hpp"
 #include "gft/log.hpp"
-#include "gft/vk.hpp"
 #include "sys.hpp"
 
 namespace liong {

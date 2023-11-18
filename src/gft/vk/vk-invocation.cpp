@@ -1,11 +1,15 @@
-#include "gft/vk.hpp"
+#include "gft/vk/vk-invocation.hpp"
+#include "gft/vk/vk-buffer.hpp"
+#include "gft/vk/vk-image.hpp"
+#include "gft/vk/vk-depth-image.hpp"
+#include "gft/vk/vk-task.hpp"
 #include "gft/log.hpp"
 
 namespace liong {
 namespace vk {
 
 void _update_desc_set(
-  const Context& ctxt,
+  const VulkanContext& ctxt,
   VkDescriptorSet desc_set,
   const std::vector<ResourceType>& rsc_tys,
   const std::vector<ResourceView>& rsc_views
@@ -19,40 +23,45 @@ void _update_desc_set(
 
   auto push_dbi = [&](const ResourceView& rsc_view) {
     L_ASSERT(rsc_view.rsc_view_ty == L_RESOURCE_VIEW_TYPE_BUFFER);
-    const BufferView& buf_view = rsc_view.buf_view;
+    const BufferView &buf_view = rsc_view.buf_view;
+    const VulkanBuffer& buf = *VulkanBuffer::from_hal(buf_view.buf);
 
     VkDescriptorBufferInfo dbi {};
-    dbi.buffer = buf_view.buf->buf->buf;
+    dbi.buffer = *buf.buf;
     dbi.offset = buf_view.offset;
     dbi.range = buf_view.size;
     dbis.emplace_back(std::move(dbi));
 
     L_DEBUG("bound pool resource #", wdss.size(), " to buffer '",
-      buf_view.buf->buf_cfg.label, "'");
+      buf.info.label, "'");
 
     return &dbis.back();
   };
   auto push_dii = [&](const ResourceView& rsc_view, VkImageLayout layout) {
     VkDescriptorImageInfo dii {};
     if (rsc_view.rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE) {
-      const ImageView& img_view = rsc_view.img_view;
+      const ImageView &img_view = rsc_view.img_view;
+      const VulkanImage& img = *VulkanImage::from_hal(img_view.img);
+
       dii.sampler = ctxt.img_samplers.at(img_view.sampler)->sampler;
-      dii.imageView = img_view.img->img_view->img_view;
+      dii.imageView = *img.img_view;
       dii.imageLayout = layout;
       diis.emplace_back(std::move(dii));
 
       L_DEBUG("bound pool resource #", wdss.size(), " to image '",
-        img_view.img->img_cfg.label, "'");
+        img.info.label, "'");
     } else if (rsc_view.rsc_view_ty == L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE) {
-      const DepthImageView& depth_img_view = rsc_view.depth_img_view;
+      const DepthImageView &depth_img_view = rsc_view.depth_img_view;
+      const VulkanDepthImage& depth_img =
+        *VulkanDepthImage::from_hal(depth_img_view.depth_img);
 
       dii.sampler = ctxt.depth_img_samplers.at(depth_img_view.sampler)->sampler;
-      dii.imageView = depth_img_view.depth_img->img_view->img_view;
+      dii.imageView = *depth_img.img_view;
       dii.imageLayout = layout;
       diis.emplace_back(std::move(dii));
 
       L_DEBUG("bound pool resource #", wdss.size(), " to depth image '",
-        depth_img_view.depth_img->depth_img_cfg.label, "'");
+        depth_img.info.label, "'");
     } else {
       panic();
     }
@@ -149,44 +158,43 @@ void _collect_task_invoke_transit(
   }
 }
 void _merge_subinvoke_transits(
-  const std::vector<const Invocation*>& subinvokes,
+  const std::vector<InvocationRef>& subinvokes,
   InvocationTransitionDetail& transit_detail
 ) {
-  for (const auto& subinvoke : subinvokes) {
+  for (const auto &subinvoke : subinvokes) {
+    const VulkanInvocationRef &subinvoke_ = VulkanInvocation::from_hal(subinvoke);
     L_ASSERT(subinvoke != nullptr);
-    for (const auto& pair : subinvoke->transit_detail.buf_transit) {
+    for (const auto& pair : subinvoke_->transit_detail.buf_transit) {
       transit_detail.buf_transit.emplace_back(pair);
     }
-    for (const auto& pair : subinvoke->transit_detail.img_transit) {
+    for (const auto& pair : subinvoke_->transit_detail.img_transit) {
       transit_detail.img_transit.emplace_back(pair);
     }
-    for (const auto& pair : subinvoke->transit_detail.depth_img_transit) {
+    for (const auto& pair : subinvoke_->transit_detail.depth_img_transit) {
       transit_detail.depth_img_transit.emplace_back(pair);
     }
   }
 }
-void _merge_subinvoke_transits(
-  const Invocation* subinvoke,
-  InvocationTransitionDetail& transit_detail
-) {
-  std::vector<const Invocation*> subinvokes { subinvoke };
+void _merge_subinvoke_transits(const VulkanInvocationRef &subinvoke,
+                               InvocationTransitionDetail &transit_detail) {
+  std::vector<InvocationRef> subinvokes { subinvoke };
   _merge_subinvoke_transits(subinvokes, transit_detail);
 }
-SubmitType _infer_submit_ty(const std::vector<const Invocation*>& subinvokes) {
+SubmitType _infer_submit_ty(const std::vector<InvocationRef> &subinvokes) {
   for (size_t i = 0; i < subinvokes.size(); ++i) {
-    SubmitType submit_ty = subinvokes[i]->submit_ty;
+    SubmitType submit_ty = subinvokes[i]->info.submit_ty;
     if (submit_ty != L_SUBMIT_TYPE_ANY) { return submit_ty; }
   }
   return L_SUBMIT_TYPE_ANY;
 }
-VkBufferCopy _make_bc(const BufferView& src, const BufferView& dst) {
+VkBufferCopy _make_bc(const BufferView &src, const BufferView &dst) {
   VkBufferCopy bc {};
   bc.srcOffset = src.offset;
   bc.dstOffset = dst.offset;
   bc.size = dst.size;
   return bc;
 }
-VkImageCopy _make_ic(const ImageView& src, const ImageView& dst) {
+VkImageCopy _make_ic(const ImageView &src, const ImageView &dst) {
   VkImageCopy ic {};
   ic.srcOffset.x = src.x_offset;
   ic.srcOffset.y = src.y_offset;
@@ -205,11 +213,11 @@ VkImageCopy _make_ic(const ImageView& src, const ImageView& dst) {
   ic.extent.depth = dst.depth == 0 ? 1 : dst.depth;
   return ic;
 }
-VkBufferImageCopy _make_bic(const BufferView& buf, const ImageView& img) {
+VkBufferImageCopy _make_bic(const BufferView &buf, const ImageView &img) {
   VkBufferImageCopy bic {};
   bic.bufferOffset = buf.offset;
   bic.bufferRowLength = 0;
-  bic.bufferImageHeight = (uint32_t)img.img->img_cfg.height;
+  bic.bufferImageHeight = (uint32_t)img.img->info.height;
   bic.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   bic.imageSubresource.mipLevel = 0;
   bic.imageSubresource.baseArrayLayer = 0;
@@ -224,12 +232,12 @@ VkBufferImageCopy _make_bic(const BufferView& buf, const ImageView& img) {
 void _fill_transfer_b2b_invoke(
   const BufferView& src,
   const BufferView& dst,
-  Invocation& out
+  VulkanInvocation& out
 ) {
   InvocationCopyBufferToBufferDetail b2b_detail {};
   b2b_detail.bc = _make_bc(src, dst);
-  b2b_detail.src = src.buf->buf;
-  b2b_detail.dst = dst.buf->buf;
+  b2b_detail.src = VulkanBuffer::from_hal(src.buf)->buf;
+  b2b_detail.dst = VulkanBuffer::from_hal(dst.buf)->buf;
 
   out.b2b_detail =
     std::make_unique<InvocationCopyBufferToBufferDetail>(std::move(b2b_detail));
@@ -240,12 +248,12 @@ void _fill_transfer_b2b_invoke(
 void _fill_transfer_b2i_invoke(
   const BufferView& src,
   const ImageView& dst,
-  Invocation& out
+  VulkanInvocation& out
 ) {
   InvocationCopyBufferToImageDetail b2i_detail {};
   b2i_detail.bic = _make_bic(src, dst);
-  b2i_detail.src = src.buf->buf;
-  b2i_detail.dst = dst.img->img;
+  b2i_detail.src = VulkanBuffer::from_hal(src.buf)->buf;
+  b2i_detail.dst = VulkanImage::from_hal(dst.img)->img;
 
   out.b2i_detail =
     std::make_unique<InvocationCopyBufferToImageDetail>(std::move(b2i_detail));
@@ -256,12 +264,12 @@ void _fill_transfer_b2i_invoke(
 void _fill_transfer_i2b_invoke(
   const ImageView& src,
   const BufferView& dst,
-  Invocation& out
+  VulkanInvocation& out
 ) {
   InvocationCopyImageToBufferDetail i2b_detail {};
   i2b_detail.bic = _make_bic(dst, src);
-  i2b_detail.src = src.img->img;
-  i2b_detail.dst = dst.buf->buf;
+  i2b_detail.src = VulkanImage::from_hal(src.img)->img;
+  i2b_detail.dst = VulkanBuffer::from_hal(dst.buf)->buf;
 
   out.i2b_detail =
     std::make_unique<InvocationCopyImageToBufferDetail>(std::move(i2b_detail));
@@ -272,12 +280,12 @@ void _fill_transfer_i2b_invoke(
 void _fill_transfer_i2i_invoke(
   const ImageView& src,
   const ImageView& dst,
-  Invocation& out
+  VulkanInvocation& out
 ) {
   InvocationCopyImageToImageDetail i2i_detail {};
   i2i_detail.ic = _make_ic(src, dst);
-  i2i_detail.src = src.img->img;
-  i2i_detail.dst = dst.img->img;
+  i2i_detail.src = VulkanImage::from_hal(src.img)->img;
+  i2i_detail.dst = VulkanImage::from_hal(dst.img)->img;
 
   out.i2i_detail =
     std::make_unique<InvocationCopyImageToImageDetail>(std::move(i2i_detail));
@@ -285,110 +293,114 @@ void _fill_transfer_i2i_invoke(
   out.transit_detail.reg(src, L_IMAGE_USAGE_TRANSFER_SRC_BIT);
   out.transit_detail.reg(dst, L_IMAGE_USAGE_TRANSFER_DST_BIT);
 }
-bool Invocation::create(
-  const Context& ctxt,
-  const TransferInvocationConfig& cfg,
-  Invocation& out
-) {
+InvocationRef VulkanInvocation::create(const ContextRef &ctxt,
+                                       const TransferInvocationConfig &cfg) {
+  const VulkanContextRef &ctxt_ = VulkanContext::from_hal(ctxt);
+
   const ResourceView& src_rsc_view = cfg.src_rsc_view;
   const ResourceView& dst_rsc_view = cfg.dst_rsc_view;
   ResourceViewType src_rsc_view_ty = src_rsc_view.rsc_view_ty;
   ResourceViewType dst_rsc_view_ty = dst_rsc_view.rsc_view_ty;
 
-  out.label = cfg.label;
-  out.ctxt = &ctxt;
-  out.submit_ty = L_SUBMIT_TYPE_TRANSFER;
-  out.query_pool = cfg.is_timed ? const_cast<Context&>(ctxt).acquire_query_pool() : QueryPoolPoolItem {};
+  InvocationInfo info{};
+  info.label = cfg.label;
+  info.submit_ty = L_SUBMIT_TYPE_TRANSFER;
+
+  VulkanInvocationRef out = std::make_shared<VulkanInvocation>(ctxt_, std::move(info));
+  out->ctxt = ctxt_;
+  out->query_pool = cfg.is_timed ? ctxt_->acquire_query_pool() : QueryPoolPoolItem {};
 
   if (
     src_rsc_view_ty == L_RESOURCE_VIEW_TYPE_BUFFER &&
     dst_rsc_view_ty == L_RESOURCE_VIEW_TYPE_BUFFER
   ) {
     _fill_transfer_b2b_invoke(
-      src_rsc_view.buf_view, dst_rsc_view.buf_view, out);
+      src_rsc_view.buf_view, dst_rsc_view.buf_view, *out);
   } else if (
     src_rsc_view_ty == L_RESOURCE_VIEW_TYPE_BUFFER &&
     dst_rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE
   ) {
     _fill_transfer_b2i_invoke(
-      src_rsc_view.buf_view, dst_rsc_view.img_view, out);
+      src_rsc_view.buf_view, dst_rsc_view.img_view, *out);
   } else if (
     src_rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE &&
     dst_rsc_view_ty == L_RESOURCE_VIEW_TYPE_BUFFER
   ) {
     _fill_transfer_i2b_invoke(
-      src_rsc_view.img_view, dst_rsc_view.buf_view, out);
+      src_rsc_view.img_view, dst_rsc_view.buf_view, *out);
   } else if (
     src_rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE &&
     dst_rsc_view_ty == L_RESOURCE_VIEW_TYPE_IMAGE
   ) {
     _fill_transfer_i2i_invoke(
-      src_rsc_view.img_view, dst_rsc_view.img_view, out);
+      src_rsc_view.img_view, dst_rsc_view.img_view, *out);
   } else {
     panic("depth image cannot be transferred");
   }
 
   L_DEBUG("created transfer invocation");
-  return true;
+  return out;
 }
-bool Invocation::create(
-  const Task& task,
-  const ComputeInvocationConfig& cfg,
-  Invocation& out
-) {
-  L_ASSERT(task.rsc_detail.rsc_tys.size() == cfg.rsc_views.size());
-  L_ASSERT(task.submit_ty == L_SUBMIT_TYPE_COMPUTE);
-  const Context& ctxt = *task.ctxt;
+InvocationRef VulkanInvocation::create(const TaskRef &task,
+                                       const ComputeInvocationConfig &cfg) {
+  const VulkanTaskRef &task_ = VulkanTask::from_hal(task);
+  L_ASSERT(task_->rsc_detail.rsc_tys.size() == cfg.rsc_views.size());
+  L_ASSERT(task_->info.submit_ty == L_SUBMIT_TYPE_COMPUTE);
+  const VulkanContextRef& ctxt = task_->ctxt;
 
-  out.label = cfg.label;
-  out.ctxt = &ctxt;
-  out.submit_ty = L_SUBMIT_TYPE_COMPUTE;
-  out.query_pool = cfg.is_timed ? const_cast<Context&>(ctxt).acquire_query_pool() : QueryPoolPoolItem {};
+  InvocationInfo info{};
+  info.label = cfg.label;
+  info.submit_ty = L_SUBMIT_TYPE_COMPUTE;
+
+  VulkanInvocationRef out = std::make_shared<VulkanInvocation>(ctxt, std::move(info));
+  out->ctxt = ctxt;
+  out->query_pool = cfg.is_timed ? ctxt->acquire_query_pool() : QueryPoolPoolItem {};
 
   InvocationTransitionDetail transit_detail {};
-  _collect_task_invoke_transit(cfg.rsc_views, task.rsc_detail.rsc_tys, transit_detail);
-  out.transit_detail = std::move(transit_detail);
+  _collect_task_invoke_transit(cfg.rsc_views, task_->rsc_detail.rsc_tys, transit_detail);
+  out->transit_detail = std::move(transit_detail);
 
   InvocationComputeDetail comp_detail {};
-  comp_detail.task = &task;
+  comp_detail.task = task_;
   comp_detail.bind_pt = VK_PIPELINE_BIND_POINT_COMPUTE;
-  if (task.rsc_detail.rsc_tys.size() > 0) {
+  if (task_->rsc_detail.rsc_tys.size() > 0) {
     comp_detail.desc_set =
-      const_cast<Context&>(ctxt).acquire_desc_set(task.rsc_detail.rsc_tys);
-    _update_desc_set(ctxt, comp_detail.desc_set.value()->desc_set,
-      task.rsc_detail.rsc_tys, cfg.rsc_views);
+      ctxt->acquire_desc_set(task_->rsc_detail.rsc_tys);
+    _update_desc_set(*ctxt, comp_detail.desc_set.value()->desc_set,
+      task_->rsc_detail.rsc_tys, cfg.rsc_views);
   }
   comp_detail.workgrp_count = cfg.workgrp_count;
 
-  out.comp_detail =
+  out->comp_detail =
     std::make_unique<InvocationComputeDetail>(std::move(comp_detail));
 
   L_DEBUG("created compute invocation");
-  return true;
+  return out;
 }
-bool Invocation::create(
-  const Task& task,
-  const GraphicsInvocationConfig& cfg,
-  Invocation& out
-) {
-  L_ASSERT(task.rsc_detail.rsc_tys.size() == cfg.rsc_views.size());
-  L_ASSERT(task.submit_ty == L_SUBMIT_TYPE_GRAPHICS);
-  const Context& ctxt = *task.ctxt;
+InvocationRef VulkanInvocation::create(const TaskRef &task,
+                                       const GraphicsInvocationConfig &cfg) {
+  const VulkanTaskRef &task_ = VulkanTask::from_hal(task);
+  L_ASSERT(task_->rsc_detail.rsc_tys.size() == cfg.rsc_views.size());
+  L_ASSERT(task_->info.submit_ty == L_SUBMIT_TYPE_GRAPHICS);
+  const VulkanContextRef& ctxt = task_->ctxt;
 
-  out.label = cfg.label;
-  out.ctxt = &ctxt;
-  out.submit_ty = L_SUBMIT_TYPE_GRAPHICS;
-  out.query_pool = cfg.is_timed ? const_cast<Context&>(ctxt).acquire_query_pool() : QueryPoolPoolItem {};
+  InvocationInfo info{};
+  info.label = cfg.label;
+  info.submit_ty = L_SUBMIT_TYPE_GRAPHICS;
+
+  VulkanInvocationRef out = std::make_shared<VulkanInvocation>(ctxt, std::move(info));
+  out->ctxt = ctxt;
+  out->query_pool = cfg.is_timed ? ctxt->acquire_query_pool() : QueryPoolPoolItem {};
 
   InvocationTransitionDetail transit_detail {};
-  _collect_task_invoke_transit(cfg.rsc_views, task.rsc_detail.rsc_tys, transit_detail);
+  _collect_task_invoke_transit(cfg.rsc_views, task_->rsc_detail.rsc_tys, transit_detail);
   for (size_t i = 0; i < cfg.vert_bufs.size(); ++i) {
     transit_detail.reg(cfg.vert_bufs[i], L_BUFFER_USAGE_VERTEX_BIT);
   }
   if (cfg.nidx > 0) {
     transit_detail.reg(cfg.idx_buf, L_BUFFER_USAGE_INDEX_BIT);
   }
-  out.transit_detail = std::move(transit_detail);
+  out->transit_detail = std::move(transit_detail);
 
   std::vector<sys::BufferRef> vert_bufs;
   std::vector<VkDeviceSize> vert_buf_offsets;
@@ -396,23 +408,23 @@ bool Invocation::create(
   vert_buf_offsets.reserve(cfg.vert_bufs.size());
   for (size_t i = 0; i < cfg.vert_bufs.size(); ++i) {
     const BufferView& vert_buf = cfg.vert_bufs[i];
-    vert_bufs.emplace_back(vert_buf.buf->buf);
+    vert_bufs.emplace_back(VulkanBuffer::from_hal(vert_buf.buf)->buf);
     vert_buf_offsets.emplace_back(vert_buf.offset);
   }
 
   InvocationGraphicsDetail graph_detail {};
-  graph_detail.task = &task;
+  graph_detail.task = task_;
   graph_detail.bind_pt = VK_PIPELINE_BIND_POINT_GRAPHICS;
-  if (task.rsc_detail.rsc_tys.size() > 0) {
+  if (task_->rsc_detail.rsc_tys.size() > 0) {
     graph_detail.desc_set =
-      const_cast<Context&>(ctxt).acquire_desc_set(task.rsc_detail.rsc_tys);
-    _update_desc_set(ctxt, graph_detail.desc_set.value()->desc_set,
-      task.rsc_detail.rsc_tys, cfg.rsc_views);
+      ctxt->acquire_desc_set(task_->rsc_detail.rsc_tys);
+    _update_desc_set(*ctxt, graph_detail.desc_set.value()->desc_set,
+      task_->rsc_detail.rsc_tys, cfg.rsc_views);
   }
   graph_detail.vert_bufs = std::move(vert_bufs);
   graph_detail.vert_buf_offsets = std::move(vert_buf_offsets);
   if (cfg.idx_buf.buf != VK_NULL_HANDLE) {
-    graph_detail.idx_buf = cfg.idx_buf.buf->buf;
+    graph_detail.idx_buf = VulkanBuffer::from_hal(cfg.idx_buf.buf)->buf;
     graph_detail.idx_buf_offset = cfg.idx_buf.offset;
   }
   graph_detail.ninst = cfg.ninst;
@@ -420,23 +432,24 @@ bool Invocation::create(
   graph_detail.idx_ty = cfg.idx_ty;
   graph_detail.nidx = cfg.nidx;
 
-  out.graph_detail =
+  out->graph_detail =
     std::make_unique<InvocationGraphicsDetail>(std::move(graph_detail));
 
   L_DEBUG("created graphics invocation");
-  return true;
+  return out;
 }
-bool Invocation::create(
-  const RenderPass& pass,
-  const RenderPassInvocationConfig& cfg,
-  Invocation& out
-) {
-  const Context& ctxt = *pass.ctxt;
+InvocationRef VulkanInvocation::create(const RenderPassRef &pass,
+                                       const RenderPassInvocationConfig &cfg) {
+  const VulkanRenderPassRef &pass_ = VulkanRenderPass::from_hal(pass);
+  const VulkanContextRef &ctxt = pass_->ctxt;
 
-  out.label = cfg.label;
-  out.ctxt = &ctxt;
-  out.submit_ty = L_SUBMIT_TYPE_GRAPHICS;
-  out.query_pool = cfg.is_timed ? const_cast<Context&>(ctxt).acquire_query_pool() : QueryPoolPoolItem {};
+  InvocationInfo info{};
+  info.label = cfg.label;
+  info.submit_ty = L_SUBMIT_TYPE_GRAPHICS;
+
+  VulkanInvocationRef out = std::make_shared<VulkanInvocation>(ctxt, std::move(info));
+  out->ctxt = ctxt;
+  out->query_pool = cfg.is_timed ? ctxt->acquire_query_pool() : QueryPoolPoolItem {};
 
   InvocationTransitionDetail transit_detail {};
   for (size_t i = 0; i < cfg.attms.size(); ++i) {
@@ -454,94 +467,107 @@ bool Invocation::create(
     }
   }
   _merge_subinvoke_transits(cfg.invokes, transit_detail);
-  out.transit_detail = std::move(transit_detail);
+  out->transit_detail = std::move(transit_detail);
 
   InvocationRenderPassDetail pass_detail {};
-  pass_detail.pass = &pass;
-  pass_detail.framebuf = const_cast<RenderPass&>(pass).acquire_framebuf(cfg.attms);
+  pass_detail.pass = pass_;
+  pass_detail.framebuf = pass_->acquire_framebuf(cfg.attms);
   // TODO: (penguinliong) Command buffer baking.
   pass_detail.is_baked = false;
-  pass_detail.subinvokes = cfg.invokes;
 
   for (size_t i = 0; i < cfg.invokes.size(); ++i) {
-    const Invocation& invoke = *cfg.invokes[i];
-    L_ASSERT(invoke.graph_detail != nullptr,
-      "render pass invocation constituent must be graphics task invocation");
+    const InvocationRef &invoke = cfg.invokes[i];
+    const VulkanInvocationRef &invoke_ = VulkanInvocation::from_hal(invoke);
+    L_ASSERT(
+        invoke_->graph_detail != nullptr,
+        "render pass invocation constituent must be graphics task invocation");
+    pass_detail.subinvokes.emplace_back(invoke_);
   }
 
-  out.pass_detail =
+  out->pass_detail =
     std::make_unique<InvocationRenderPassDetail>(std::move(pass_detail));
 
   L_DEBUG("created render pass invocation");
-  return true;
+  return out;
 }
-bool Invocation::create(
-  const Swapchain& swapchain,
-  const PresentInvocationConfig& cfg,
-  Invocation& out
-) {
-  L_ASSERT(swapchain.dyn_detail != nullptr,
+InvocationRef VulkanInvocation::create(const SwapchainRef &swapchain,
+                                       const PresentInvocationConfig &cfg) {
+  const VulkanSwapchainRef &swapchain_ = VulkanSwapchain::from_hal(swapchain);
+
+  L_ASSERT(swapchain_->dyn_detail != nullptr,
     "swapchain need to be recreated with `acquire_swapchain_img`");
 
-  const Context& ctxt = *swapchain.ctxt;
-  SwapchainDynamicDetail& dyn_detail =
-    (SwapchainDynamicDetail&)*swapchain.dyn_detail;
+  const VulkanContextRef& ctxt = VulkanContext::from_hal(swapchain_->ctxt);
+  SwapchainDynamicDetail& dyn_detail = *swapchain_->dyn_detail;
 
   L_ASSERT(dyn_detail.img_idx != nullptr,
     "swapchain has not acquired an image to present for the current frame");
 
-  out.label = util::format(swapchain.swapchain_cfg.label);
-  out.ctxt = &ctxt;
-  out.submit_ty = L_SUBMIT_TYPE_PRESENT;
-  out.query_pool = QueryPoolPoolItem {};
+  InvocationInfo info{};
+  info.label = util::format(swapchain_->info.label);
+  info.submit_ty = L_SUBMIT_TYPE_PRESENT;
+
+  VulkanInvocationRef out = std::make_shared<VulkanInvocation>(ctxt, std::move(info));
+  out->ctxt = ctxt;
+  out->query_pool = QueryPoolPoolItem {};
 
   InvocationPresentDetail present_detail {};
-  present_detail.swapchain = &swapchain;
+  present_detail.swapchain = swapchain_;
 
-  out.present_detail =
+  out->present_detail =
     std::make_unique<InvocationPresentDetail>(std::move(present_detail));
 
   L_DEBUG("created present invocation");
-  return true;
+  return out;
 }
-bool Invocation::create(
-  const Context& ctxt,
-  const CompositeInvocationConfig& cfg,
-  Invocation& out
-) {
-  out.label = cfg.label;
-  out.ctxt = &ctxt;
-  out.submit_ty = _infer_submit_ty(cfg.invokes);
-  out.query_pool = cfg.is_timed ? const_cast<Context&>(ctxt).acquire_query_pool() : QueryPoolPoolItem {};
+InvocationRef VulkanInvocation::create(const ContextRef &ctxt,
+                                 const CompositeInvocationConfig &cfg) {
+  const VulkanContextRef &ctxt_ = VulkanContext::from_hal(ctxt);
+
+  InvocationInfo info{};
+  info.label = cfg.label;
+  info.submit_ty = _infer_submit_ty(cfg.invokes);
+
+  VulkanInvocationRef out =
+      std::make_shared<VulkanInvocation>(ctxt_, std::move(info));
+  out->ctxt = ctxt_;
+  out->query_pool = cfg.is_timed ? ctxt_->acquire_query_pool() : QueryPoolPoolItem {};
 
   InvocationTransitionDetail transit_detail {};
   _merge_subinvoke_transits(cfg.invokes, transit_detail);
-  out.transit_detail = std::move(transit_detail);
+  out->transit_detail = std::move(transit_detail);
 
-  InvocationCompositeDetail composite_detail {};
-  composite_detail.subinvokes = cfg.invokes;
+  InvocationCompositeDetail composite_detail{};
+  for (size_t i = 0; i < cfg.invokes.size(); ++i) {
+    const InvocationRef &invoke = cfg.invokes[i];
+    const VulkanInvocationRef &invoke_ = VulkanInvocation::from_hal(invoke);
+    composite_detail.subinvokes.emplace_back(invoke_);
+  }
 
-  out.composite_detail =
+  out->composite_detail =
     std::make_unique<InvocationCompositeDetail>(std::move(composite_detail));
 
   L_DEBUG("created composition invocation");
-  return true;
+  return out;
 }
-Invocation::~Invocation() {
+VulkanInvocation::VulkanInvocation(const VulkanContextRef &ctxt,
+                                   InvocationInfo &&info)
+    : Invocation(std::move(info)), ctxt(ctxt) {}
+VulkanInvocation::~VulkanInvocation() {
   if (b2b_detail || b2i_detail || i2b_detail || i2i_detail) {
-    L_DEBUG("destroyed transfer invocation '", label, "'");
+    L_DEBUG("destroyed transfer invocation '", info.label, "'");
   }
   if (comp_detail) {
-    L_DEBUG("destroyed compute invocation '", label, "'");
+    L_DEBUG("destroyed compute invocation '", info.label, "'");
   }
   if (graph_detail) {
-    L_DEBUG("destroyed graphics invocation '", label, "'");
+    L_DEBUG("destroyed graphics invocation '", info.label, "'");
   }
   if (pass_detail) {
-    L_DEBUG("destroyed render pass invocation '", label, "'");
+    L_DEBUG("destroyed render pass invocation '", info.label, "'");
   }
   if (composite_detail) {
-    L_DEBUG("destroyed composite invocation '", label, "'");
+    L_DEBUG("destroyed composite invocation '", info.label, "'");
   }
 
   if (bake_detail) {
@@ -568,7 +594,7 @@ void _end_cmdbuf(const TransactionSubmitDetail& submit_detail) {
 }
 
 sys::CommandBufferRef _alloc_cmdbuf(
-  const Context& ctxt,
+  const VulkanContextRef& ctxt,
   VkCommandPool cmd_pool,
   VkCommandBufferLevel level
 ) {
@@ -578,29 +604,29 @@ sys::CommandBufferRef _alloc_cmdbuf(
   cbai.commandBufferCount = 1;
   cbai.commandPool = cmd_pool;
 
-  return sys::CommandBuffer::create(ctxt.dev->dev, &cbai);
+  return sys::CommandBuffer::create(*ctxt->dev, &cbai);
 }
 
 void _push_transact_submit_detail(
-  const Context& ctxt,
+  const VulkanContextRef& ctxt,
   std::vector<TransactionSubmitDetail>& submit_details,
   SubmitType submit_ty,
   VkCommandBufferLevel level
 ) {
-  auto cmd_pool = const_cast<Context&>(ctxt).acquire_cmd_pool(submit_ty);
+  auto cmd_pool = ctxt->acquire_cmd_pool(submit_ty);
   auto cmdbuf = _alloc_cmdbuf(ctxt, *cmd_pool.value(), level);
 
   TransactionSubmitDetail submit_detail {};
   submit_detail.submit_ty = submit_ty;
   submit_detail.cmd_pool = cmd_pool;
   submit_detail.cmdbuf = cmdbuf;
-  submit_detail.queue = ctxt.submit_details.at(submit_detail.submit_ty).queue;
+  submit_detail.queue = ctxt->submit_details.at(submit_detail.submit_ty).queue;
   submit_detail.wait_sema = submit_details.empty() ?
     VK_NULL_HANDLE : submit_details.back().signal_sema;
   if (level == VK_COMMAND_BUFFER_LEVEL_SECONDARY) {
     submit_detail.signal_sema = VK_NULL_HANDLE;
   } else {
-    submit_detail.signal_sema = sys::Semaphore::create(ctxt.dev->dev);
+    submit_detail.signal_sema = sys::Semaphore::create(*ctxt->dev);
   }
 
   submit_details.emplace_back(std::move(submit_detail));
@@ -678,7 +704,7 @@ VkCommandBuffer _get_cmdbuf(
   // submit the recorded commands.
   _seal_cmdbuf(transact);
 
-  _push_transact_submit_detail(*transact.ctxt, transact.submit_details,
+  _push_transact_submit_detail(transact.ctxt, transact.submit_details,
     submit_ty, transact.level);
   _begin_cmdbuf(transact.submit_details.back());
   return transact.submit_details.back().cmdbuf->cmdbuf;
@@ -818,7 +844,8 @@ const BufferView& _transit_rsc(
   const BufferView& buf_view,
   BufferUsage dst_usage
 ) {
-  auto& dyn_detail = (BufferDynamicDetail&)buf_view.buf->dyn_detail;
+  BufferDynamicDetail &dyn_detail =
+      VulkanBuffer::from_hal(buf_view.buf)->dyn_detail;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
 
   VkAccessFlags src_access = dyn_detail.access;
@@ -834,7 +861,7 @@ const BufferView& _transit_rsc(
 
   VkBufferMemoryBarrier bmb {};
   bmb.sType = VK_STRUCTURE_TYPE_BUFFER_MEMORY_BARRIER;
-  bmb.buffer = buf_view.buf->buf->buf;
+  bmb.buffer = *VulkanBuffer::from_hal(buf_view.buf)->buf;
   bmb.srcAccessMask = src_access;
   bmb.dstAccessMask = dst_access;
   bmb.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
@@ -865,7 +892,7 @@ const ImageView& _transit_rsc(
   const ImageView& img_view,
   ImageUsage dst_usage
 ) {
-  auto& dyn_detail = (ImageDynamicDetail&)img_view.img->dyn_detail;
+  ImageDynamicDetail& dyn_detail = VulkanImage::from_hal(img_view.img)->dyn_detail;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
 
   VkAccessFlags src_access = dyn_detail.access;
@@ -887,7 +914,7 @@ const ImageView& _transit_rsc(
 
   VkImageMemoryBarrier imb {};
   imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  imb.image = img_view.img->img->img;
+  imb.image = *VulkanImage::from_hal(img_view.img)->img;
   imb.srcAccessMask = src_access;
   imb.dstAccessMask = dst_access;
   imb.oldLayout = src_layout;
@@ -925,8 +952,8 @@ const DepthImageView& _transit_rsc(
   const DepthImageView& depth_img_view,
   DepthImageUsage dst_usage
 ) {
-  auto& dyn_detail =
-    (DepthImageDynamicDetail&)depth_img_view.depth_img->dyn_detail;
+  DepthImageDynamicDetail& dyn_detail =
+    VulkanDepthImage::from_hal(depth_img_view.depth_img)->dyn_detail;
   auto cmdbuf = _get_cmdbuf(transact, L_SUBMIT_TYPE_ANY);
 
   VkAccessFlags src_access = dyn_detail.access;
@@ -948,7 +975,7 @@ const DepthImageView& _transit_rsc(
 
   VkImageMemoryBarrier imb {};
   imb.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-  imb.image = depth_img_view.depth_img->img->img;
+  imb.image = *VulkanDepthImage::from_hal(depth_img_view.depth_img)->img;
   imb.srcAccessMask = src_access;
   imb.dstAccessMask = dst_access;
   imb.oldLayout = src_layout;
@@ -999,7 +1026,7 @@ void _transit_rscs(
 // Return true if the invocation forces an termination.
 std::vector<sys::FenceRef> _record_invoke_impl(
   TransactionLike& transact,
-  const Invocation& invoke
+  const VulkanInvocation& invoke
 ) {
   L_ASSERT(!transact.is_frozen, "invocations cannot be recorded while the "
     "transaction is frozen");
@@ -1009,26 +1036,25 @@ std::vector<sys::FenceRef> _record_invoke_impl(
       "present invocation cannot be baked");
 
     const InvocationPresentDetail& present_detail = *invoke.present_detail;
-    Swapchain& swapchain = (Swapchain&)*present_detail.swapchain;
-    const Context& ctxt = *swapchain.ctxt;
+    const VulkanSwapchainRef& swapchain = VulkanSwapchain::from_hal(present_detail.swapchain);
+    const VulkanContextRef& ctxt = swapchain->ctxt;
 
     // Transition image layout for presentation.
-    uint32_t& img_idx = *swapchain.dyn_detail->img_idx;
-    const Image& img = swapchain.dyn_detail->imgs[img_idx];
-    ImageView img_view = img.view(0, 0, 0, img.img_cfg.width,
-      img.img_cfg.height, img.img_cfg.depth, L_IMAGE_SAMPLER_NEAREST);
+    uint32_t& img_idx = *swapchain->dyn_detail->img_idx;
+    const VulkanImageRef& img = swapchain->dyn_detail->imgs[img_idx];
+    ImageView img_view = img->view(L_IMAGE_SAMPLER_NEAREST);
     _transit_rsc(transact, img_view, L_IMAGE_USAGE_PRESENT_BIT);
 
 
     // Present the rendered image.
-    sys::FenceRef present_fence = sys::Fence::create(ctxt.dev->dev);
-    sys::FenceRef acquire_fence = sys::Fence::create(ctxt.dev->dev);
+    sys::FenceRef present_fence = sys::Fence::create(*ctxt->dev);
+    sys::FenceRef acquire_fence = sys::Fence::create(*ctxt->dev);
 
     VkResult present_res = VK_SUCCESS;
     VkPresentInfoKHR pi {};
     pi.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
     pi.swapchainCount = 1;
-    pi.pSwapchains = &swapchain.swapchain->swapchain;
+    pi.pSwapchains = &swapchain->swapchain->swapchain;
     pi.pImageIndices = &img_idx;
     pi.pResults = &present_res;
     if (transact.submit_details.size() != 0) {
@@ -1042,11 +1068,11 @@ std::vector<sys::FenceRef> _record_invoke_impl(
       pi.pWaitSemaphores = &transact.submit_details.back().signal_sema->sema;
     }
 
-    VkQueue queue = ctxt.submit_details.at(L_SUBMIT_TYPE_PRESENT).queue;
+    VkQueue queue = ctxt->submit_details.at(L_SUBMIT_TYPE_PRESENT).queue;
     VkResult res = vkQueuePresentKHR(queue, &pi);
     if (res == VK_SUBOPTIMAL_KHR) {
       // Request for swapchain recreation and suppress the result.
-      swapchain.dyn_detail = nullptr;
+      swapchain->dyn_detail = nullptr;
       res = VK_SUCCESS;
     }
     VK_ASSERT << res;
@@ -1054,7 +1080,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     img_idx = ~0u;
     res = VK_NOT_READY;
     do {
-      res = vkAcquireNextImageKHR(ctxt.dev->dev, *swapchain.swapchain,
+      res = vkAcquireNextImageKHR(*ctxt->dev, *swapchain->swapchain,
         SPIN_INTERVAL, VK_NULL_HANDLE, acquire_fence->fence, &img_idx);
       if (res == VK_NOT_READY) {
         L_DEBUG("failed to acquire image immediately");
@@ -1068,7 +1094,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     return { present_fence, acquire_fence };
   }
 
-  VkCommandBuffer cmdbuf = _get_cmdbuf(transact, invoke.submit_ty);
+  VkCommandBuffer cmdbuf = _get_cmdbuf(transact, invoke.info.submit_ty);
 
   // If the invocation has been baked, simply inline the baked secondary command
   // buffer.
@@ -1082,7 +1108,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     vkCmdWriteTimestamp(cmdbuf, VK_PIPELINE_STAGE_ALL_COMMANDS_BIT,
       *invoke.query_pool.value(), 0);
 
-    L_DEBUG("invocation '", invoke.label, "' will be timed");
+    L_DEBUG("invocation '", invoke.info.label, "' will be timed");
   }
 
   _transit_rscs(transact, invoke.transit_detail);
@@ -1091,52 +1117,52 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     const InvocationCopyBufferToBufferDetail& b2b_detail =
       *invoke.b2b_detail;
     vkCmdCopyBuffer(cmdbuf, b2b_detail.src->buf, b2b_detail.dst->buf, 1, &b2b_detail.bc);
-    L_DEBUG("applied transfer invocation '", invoke.label, "'");
+    L_DEBUG("applied transfer invocation '", invoke.info.label, "'");
 
   } else if (invoke.b2i_detail) {
     const InvocationCopyBufferToImageDetail& b2i_detail = *invoke.b2i_detail;
     vkCmdCopyBufferToImage(cmdbuf, b2i_detail.src->buf, b2i_detail.dst->img,
       VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &b2i_detail.bic);
-    L_DEBUG("applied transfer invocation '", invoke.label, "'");
+    L_DEBUG("applied transfer invocation '", invoke.info.label, "'");
 
   } else if (invoke.i2b_detail) {
     const InvocationCopyImageToBufferDetail& i2b_detail = *invoke.i2b_detail;
     vkCmdCopyImageToBuffer(cmdbuf, i2b_detail.src->img,
       VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL, i2b_detail.dst->buf, 1, &i2b_detail.bic);
-    L_DEBUG("applied transfer invocation '", invoke.label, "'");
+    L_DEBUG("applied transfer invocation '", invoke.info.label, "'");
 
   } else if (invoke.i2i_detail) {
     const InvocationCopyImageToImageDetail& i2i_detail = *invoke.i2i_detail;
     vkCmdCopyImage(cmdbuf, i2i_detail.src->img, VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL,
       i2i_detail.dst->img, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &i2i_detail.ic);
-    L_DEBUG("applied transfer invocation '", invoke.label, "'");
+    L_DEBUG("applied transfer invocation '", invoke.info.label, "'");
 
   } else if (invoke.comp_detail) {
     const InvocationComputeDetail& comp_detail = *invoke.comp_detail;
-    const Task& task = *comp_detail.task;
+    const VulkanTaskRef& task = comp_detail.task;
     const DispatchSize& workgrp_count = comp_detail.workgrp_count;
 
-    vkCmdBindPipeline(cmdbuf, comp_detail.bind_pt, task.pipe->pipe);
+    vkCmdBindPipeline(cmdbuf, comp_detail.bind_pt, task->pipe->pipe);
     if (comp_detail.desc_set.value()->desc_set != VK_NULL_HANDLE) {
       vkCmdBindDescriptorSets(cmdbuf, comp_detail.bind_pt,
-        task.rsc_detail.pipe_layout->pipe_layout, 0, 1, &comp_detail.desc_set.value()->desc_set, 0, nullptr);
+        task->rsc_detail.pipe_layout->pipe_layout, 0, 1, &comp_detail.desc_set.value()->desc_set, 0, nullptr);
     }
     vkCmdDispatch(cmdbuf, workgrp_count.x, workgrp_count.y, workgrp_count.z);
-    L_DEBUG("applied compute invocation '", invoke.label, "'");
+    L_DEBUG("applied compute invocation '", invoke.info.label, "'");
 
   } else if (invoke.graph_detail) {
     const InvocationGraphicsDetail& graph_detail = *invoke.graph_detail;
-    const Task& task = *graph_detail.task;
+    const VulkanTaskRef& task = graph_detail.task;
 
     std::vector<VkBuffer> vert_bufs {};
     for (const auto& vert_buf : graph_detail.vert_bufs) {
       vert_bufs.emplace_back(vert_buf->buf);
     }
 
-    vkCmdBindPipeline(cmdbuf, graph_detail.bind_pt, task.pipe->pipe);
+    vkCmdBindPipeline(cmdbuf, graph_detail.bind_pt, *task->pipe);
     if (graph_detail.desc_set.value()->desc_set != VK_NULL_HANDLE) {
       vkCmdBindDescriptorSets(cmdbuf, graph_detail.bind_pt,
-        task.rsc_detail.pipe_layout->pipe_layout, 0, 1, &graph_detail.desc_set.value()->desc_set, 0, nullptr);
+        task->rsc_detail.pipe_layout->pipe_layout, 0, 1, &graph_detail.desc_set.value()->desc_set, 0, nullptr);
     }
     // TODO: (penguinliong) Vertex, index buffer transition.
     vkCmdBindVertexBuffers(cmdbuf, 0, (uint32_t)vert_bufs.size(),
@@ -1155,12 +1181,12 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     } else {
       vkCmdDraw(cmdbuf, graph_detail.nvert, graph_detail.ninst, 0, 0);
     }
-    L_DEBUG("applied graphics invocation '", invoke.label, "'");
+    L_DEBUG("applied graphics invocation '", invoke.info.label, "'");
 
   } else if (invoke.pass_detail) {
     const InvocationRenderPassDetail& pass_detail = *invoke.pass_detail;
-    const RenderPass& pass = *pass_detail.pass;
-    const std::vector<const Invocation*>& subinvokes = pass_detail.subinvokes;
+    const VulkanRenderPassRef& pass = VulkanRenderPass::from_hal(pass_detail.pass);
+    const std::vector<VulkanInvocationRef>& subinvokes = pass_detail.subinvokes;
 
     VkSubpassContents sc = subinvokes.size() > 0 && subinvokes[0]->bake_detail ?
       VK_SUBPASS_CONTENTS_SECONDARY_COMMAND_BUFFERS :
@@ -1168,12 +1194,12 @@ std::vector<sys::FenceRef> _record_invoke_impl(
 
     VkRenderPassBeginInfo rpbi {};
     rpbi.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    rpbi.renderPass = pass.pass->pass;
+    rpbi.renderPass = *pass->pass;
     rpbi.framebuffer = pass_detail.framebuf.value()->framebuf;
-    rpbi.renderArea.extent.width = pass.width;
-    rpbi.renderArea.extent.height = pass.height;
-    rpbi.clearValueCount = (uint32_t)pass.clear_values.size();
-    rpbi.pClearValues = pass.clear_values.data();
+    rpbi.renderArea.extent.width = pass->info.width;
+    rpbi.renderArea.extent.height = pass->info.height;
+    rpbi.clearValueCount = (uint32_t)pass->clear_values.size();
+    rpbi.pClearValues = pass->clear_values.data();
 
     std::vector<VkImageView> img_views(pass_detail.attms.size());
     for (size_t i = 0; i < pass_detail.attms.size(); ++i) {
@@ -1181,7 +1207,7 @@ std::vector<sys::FenceRef> _record_invoke_impl(
     }
 
     vkCmdBeginRenderPass(cmdbuf, &rpbi, sc);
-    L_DEBUG("render pass invocation '", invoke.label, "' began");
+    L_DEBUG("render pass invocation '", invoke.info.label, "' began");
 
     for (size_t i = 0; i < pass_detail.subinvokes.size(); ++i) {
       //if (i > 0) {
@@ -1193,28 +1219,28 @@ std::vector<sys::FenceRef> _record_invoke_impl(
       //    "next subpass");
       //}
 
-      const Invocation* subinvoke = pass_detail.subinvokes[i];
+      const VulkanInvocationRef& subinvoke = pass_detail.subinvokes[i];
       L_ASSERT(subinvoke != nullptr, "null subinvocation is not allowed");
       std::vector<sys::FenceRef> fences = _record_invoke_impl(transact, *subinvoke);
       if (!fences.empty()) { return fences; }
     }
     vkCmdEndRenderPass(cmdbuf);
-    L_DEBUG("render pass invocation '", invoke.label, "' ended");
+    L_DEBUG("render pass invocation '", invoke.info.label, "' ended");
 
   } else if (invoke.composite_detail) {
     const InvocationCompositeDetail& composite_detail =
       *invoke.composite_detail;
 
-    L_DEBUG("composite invocation '", invoke.label, "' began");
+    L_DEBUG("composite invocation '", invoke.info.label, "' began");
 
     for (size_t i = 0; i < composite_detail.subinvokes.size(); ++i) {
-      const Invocation* subinvoke = composite_detail.subinvokes[i];
+      const VulkanInvocationRef &subinvoke = composite_detail.subinvokes[i];
       L_ASSERT(subinvoke != nullptr, "null subinvocation is not allowed");
       std::vector<sys::FenceRef> fences = _record_invoke_impl(transact, *subinvoke);
       if (!fences.empty()) { return fences; }
     }
 
-    L_DEBUG("composite invocation '", invoke.label, "' ended");
+    L_DEBUG("composite invocation '", invoke.info.label, "' ended");
 
   } else {
     unreachable();
@@ -1230,13 +1256,13 @@ std::vector<sys::FenceRef> _record_invoke_impl(
       *invoke.query_pool.value(), 1);
   }
 
-  L_DEBUG("scheduled invocation '", invoke.label, "' for execution");
+  L_DEBUG("scheduled invocation '", invoke.info.label, "' for execution");
 
   return {};
 }
 void _record_invoke(
   TransactionLike& transact,
-  const Invocation& invoke
+  const VulkanInvocation& invoke
 ) {
   transact.fences = _record_invoke_impl(transact, invoke);
   if (transact.fences.empty()) {
@@ -1249,16 +1275,16 @@ void _record_invoke(
   }
 }
 
-bool _can_bake_invoke(const Invocation& invoke) {
+bool _can_bake_invoke(const VulkanInvocation& invoke) {
   // Render pass is never baked, enforced by Vulkan specification.
   if (invoke.pass_detail != nullptr) { return false; }
 
   if (invoke.composite_detail != nullptr) {
     uint32_t submit_ty = ~uint32_t(0);
-    for (const Invocation* subinvoke : invoke.composite_detail->subinvokes) {
+    for (const VulkanInvocationRef& subinvoke : invoke.composite_detail->subinvokes) {
       // If a subinvocation cannot be baked, this invocation too cannot.
       if (!_can_bake_invoke(*subinvoke)) { return false; }
-      submit_ty &= subinvoke->submit_ty;
+      submit_ty &= subinvoke->info.submit_ty;
     }
     // Multiple subinvocations but their submit types mismatch.
     if (submit_ty == 0) { return 0; }
@@ -1267,11 +1293,11 @@ bool _can_bake_invoke(const Invocation& invoke) {
   return true;
 }
 
-void Invocation::record(TransactionLike& transact) const {
+void VulkanInvocation::record(TransactionLike& transact) const {
   _record_invoke(transact, *this);
 }
 
-double Invocation::get_time_us() const {
+double VulkanInvocation::get_time_us() {
   if (!query_pool.is_valid()) { return 0.0; }
   uint64_t t[2];
   VK_ASSERT << vkGetQueryPoolResults(ctxt->dev->dev,
@@ -1282,23 +1308,23 @@ double Invocation::get_time_us() const {
   return (t[1] - t[0]) * ns_per_tick / 1000.0;
 }
 
-void Invocation::bake() {
+void VulkanInvocation::bake() {
   if (!_can_bake_invoke(*this)) { return; }
 
-  TransactionLike transact(*ctxt, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
+  TransactionLike transact(ctxt, VK_COMMAND_BUFFER_LEVEL_SECONDARY);
   record(transact);
   L_ASSERT(transact.fences.empty());
 
   L_ASSERT(transact.submit_details.size() == 1);
   const TransactionSubmitDetail& submit_detail = transact.submit_details[0];
-  L_ASSERT(submit_detail.submit_ty == submit_ty);
+  L_ASSERT(submit_detail.submit_ty == info.submit_ty);
   L_ASSERT(submit_detail.signal_sema == VK_NULL_HANDLE);
 
   bake_detail = std::make_unique<InvocationBakingDetail>();
   bake_detail->cmd_pool = submit_detail.cmd_pool;
   bake_detail->cmdbuf = submit_detail.cmdbuf;
 
-  L_DEBUG("baked invocation '", label, "'");
+  L_DEBUG("baked invocation '", info.label, "'");
 }
 
 

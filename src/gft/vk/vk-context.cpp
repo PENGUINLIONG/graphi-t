@@ -15,26 +15,28 @@
 #include "vulkan/vulkan_metal.h"
 #endif // defined(__MACH__) && defined(__APPLE__)
 
-#include "gft/vk.hpp"
-#include "gft/log.hpp"
-#include "gft/assert.hpp"
 #include "sys.hpp"
+#include "gft/assert.hpp"
+#include "gft/util.hpp"
+#include "gft/log.hpp"
+#include "gft/vk/vk-context.hpp"
 
 namespace liong {
 namespace vk {
 
-sys::SurfaceRef _create_surf_windows(const ContextWindowsConfig& cfg) {
+sys::SurfaceRef _create_surf_windows(const VulkanInstance &inst,
+                                     const ContextWindowsConfig &cfg) {
 #if VK_KHR_win32_surface
-  L_ASSERT(cfg.dev_idx < get_inst().physdev_details.size(),
+  L_ASSERT(cfg.dev_idx < inst.physdev_details.size(),
     "wanted vulkan device does not exists (#", cfg.dev_idx, " of ",
-    get_inst().physdev_details.size(), " available devices)");
-  auto physdev = get_inst().physdev_details.at(cfg.dev_idx);
+    inst.physdev_details.size(), " available devices)");
+  auto physdev = inst.physdev_details.at(cfg.dev_idx);
 
   VkWin32SurfaceCreateInfoKHR wsci {};
   wsci.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
   wsci.hinstance = (HINSTANCE)cfg.hinst;
   wsci.hwnd = (HWND)cfg.hwnd;
-  sys::SurfaceRef surf = sys::Surface::create(get_inst().inst->inst, &wsci);
+  sys::SurfaceRef surf = sys::Surface::create(inst.inst->inst, &wsci);
 
   L_DEBUG("created windows surface '", cfg.label, "'");
   return surf;
@@ -44,17 +46,18 @@ sys::SurfaceRef _create_surf_windows(const ContextWindowsConfig& cfg) {
 #endif // VK_KHR_win32_surface
 }
 
-sys::SurfaceRef _create_surf_android(const ContextAndroidConfig& cfg) {
+sys::SurfaceRef _create_surf_android(const VulkanInstance &inst,
+                                     const ContextAndroidConfig &cfg) {
 #if VK_KHR_android_surface
-  L_ASSERT(cfg.dev_idx < get_inst().physdev_details.size(),
+  L_ASSERT(cfg.dev_idx < inst.physdev_details.size(),
     "wanted vulkan device does not exists (#", cfg.dev_idx, " of ",
-      get_inst().physdev_details.size(), " available devices)");
-  auto physdev = get_inst().physdev_details.at(cfg.dev_idx);
+      inst.physdev_details.size(), " available devices)");
+  auto physdev = inst.physdev_details.at(cfg.dev_idx);
 
   VkAndroidSurfaceCreateInfoKHR asci {};
   asci.sType = VK_STRUCTURE_TYPE_ANDROID_SURFACE_CREATE_INFO_KHR;
-  asci.window = (struct ANativeWindow* const)cfg.native_wnd;
-  sys::SurfaceRef surf = sys::Surface::create(get_inst().inst->inst, &asci);
+  asci.window = (struct ANativeWindow* const)cfg.native_window;
+  sys::SurfaceRef surf = sys::Surface::create(inst.inst->inst, &asci);
 
   L_DEBUG("created android surface '", cfg.label, "'");
   return surf;
@@ -64,17 +67,18 @@ sys::SurfaceRef _create_surf_android(const ContextAndroidConfig& cfg) {
 #endif // VK_KHR_android_surface
 }
 
-sys::SurfaceRef _create_surf_metal(const ContextMetalConfig& cfg) {
+sys::SurfaceRef _create_surf_metal(const VulkanInstance &inst,
+                                   const ContextMetalConfig &cfg) {
 #if VK_EXT_metal_surface
-  L_ASSERT(cfg.dev_idx < get_inst().physdev_details.size(),
-    "wanted vulkan device does not exists (#", cfg.dev_idx, " of ",
-    get_inst().physdev_details.size(), " available devices)");
-  auto physdev = get_inst().physdev_details.at(cfg.dev_idx);
+  L_ASSERT(cfg.device_index < inst.physdev_details.size(),
+    "wanted vulkan device does not exists (#", cfg.device_index, " of ",
+    inst.physdev_details.size(), " available devices)");
+  auto physdev = inst.physdev_details.at(cfg.device_index);
 
   VkMetalSurfaceCreateInfoEXT msci {};
   msci.sType = VK_STRUCTURE_TYPE_METAL_SURFACE_CREATE_INFO_EXT;
   msci.pLayer = (const CAMetalLayer*)cfg.metal_layer;
-  sys::SurfaceRef surf = sys::Surface::create(get_inst().inst->inst, &msci);
+  sys::SurfaceRef surf = sys::Surface::create(inst.inst->inst, &msci);
 
   L_DEBUG("created windows surface '", cfg.label, "'");
   return surf;
@@ -84,12 +88,11 @@ sys::SurfaceRef _create_surf_metal(const ContextMetalConfig& cfg) {
 #endif // VK_EXT_metal_surface
 }
 
-void _create_ctxt(
-  const Instance& inst,
+ContextRef _create_ctxt(
+  const VulkanInstance& inst,
   const std::string& label,
   uint32_t dev_idx,
-  const sys::SurfaceRef& surf,
-  Context& out
+  const sys::SurfaceRef& surf
 ) {
   L_ASSERT(dev_idx < inst.physdev_details.size(),
     "wanted vulkan device does not exists (#", dev_idx, " of ",
@@ -296,50 +299,67 @@ void _create_ctxt(
 
   sys::AllocatorRef allocator = sys::Allocator::create(&allocatorInfo);
 
-  out.label = label;
-  out.iphysdev = dev_idx;
-  out.dev = std::move(dev);
-  out.surf = surf;
-  out.submit_details = std::move(submit_details);
-  out.img_samplers = std::move(img_samplers);
-  out.depth_img_samplers = std::move(depth_img_samplers);
-  out.desc_set_detail = {};
-  out.cmd_pool_pool = {};
-  out.query_pool_pool = {};
-  out.allocator = std::move(allocator);
+  ContextInfo ctxt_info{};
+  ctxt_info.label = label;
+  ctxt_info.device_index = dev_idx;
+
+  VulkanContextRef out = std::make_shared<VulkanContext>(inst, std::move(ctxt_info));
+  out->dev = std::move(dev);
+  out->surf = surf;
+  out->submit_details = std::move(submit_details);
+  out->img_samplers = std::move(img_samplers);
+  out->depth_img_samplers = std::move(depth_img_samplers);
+  out->desc_set_detail = {};
+  out->cmd_pool_pool = {};
+  out->query_pool_pool = {};
+  out->allocator = std::move(allocator);
 
   L_DEBUG("created vulkan context '", label, "' on device #", dev_idx, ": ",
-    inst.physdev_details.at(dev_idx).desc);
+          inst.physdev_details.at(dev_idx).desc);
+
+  return out;
 }
 
-bool Context::create(const Instance& inst, const ContextConfig& cfg, Context& out) {
-  _create_ctxt(inst, cfg.label, cfg.dev_idx, VK_NULL_HANDLE, out);
-  return true;
+ContextRef VulkanContext::create(const InstanceRef &inst,
+                                 const ContextConfig &cfg) {
+  VulkanInstanceRef inst_ = VulkanInstance::from_hal(inst);
+  auto out = _create_ctxt(*inst_, cfg.label, cfg.device_index, VK_NULL_HANDLE);
+  return out;
 }
-bool Context::create(const Instance& inst, const ContextWindowsConfig& cfg, Context& out) {
-  sys::SurfaceRef surf = _create_surf_windows(cfg);
-  _create_ctxt(inst, cfg.label, cfg.dev_idx, surf, out);
-  return true;
+ContextRef VulkanContext::create(const InstanceRef &inst,
+                                 const ContextWindowsConfig &cfg) {
+  VulkanInstanceRef inst_ = VulkanInstance::from_hal(inst);
+  sys::SurfaceRef surf = _create_surf_windows(*inst_, cfg);
+  auto out = _create_ctxt(*inst_, cfg.label, cfg.device_index, surf);
+  return out;
 }
-bool Context::create(const Instance& inst, const ContextAndroidConfig& cfg, Context& out) {
-  sys::SurfaceRef surf = _create_surf_android(cfg);
-  _create_ctxt(inst, cfg.label, cfg.dev_idx, surf, out);
-  return true;
+ContextRef VulkanContext::create(const InstanceRef &inst,
+                                 const ContextAndroidConfig &cfg) {
+  VulkanInstanceRef inst_ = VulkanInstance::from_hal(inst);
+  sys::SurfaceRef surf = _create_surf_android(*inst_, cfg);
+  auto out = _create_ctxt(*inst_, cfg.label, cfg.device_index, surf);
+  return out;
 }
-bool Context::create(const Instance& inst, const ContextMetalConfig& cfg, Context& out) {
-  sys::SurfaceRef surf = _create_surf_metal(cfg);
-  _create_ctxt(inst, cfg.label, cfg.dev_idx, surf, out);
-  return true;
+ContextRef VulkanContext::create(const InstanceRef &inst,
+                                 const ContextMetalConfig &cfg) {
+  VulkanInstanceRef inst_ = VulkanInstance::from_hal(inst);
+  sys::SurfaceRef surf = _create_surf_metal(*inst_, cfg);
+  auto out = _create_ctxt(*inst_, cfg.label, cfg.device_index, surf);
+  return out;
 }
-Context::~Context() {
+
+VulkanContext::VulkanContext(VulkanInstanceRef inst, ContextInfo &&info)
+    : Context(std::move(info)), inst(inst) {
+}
+VulkanContext::~VulkanContext() {
   if (dev) {
-    L_DEBUG("destroyed vulkan context '", label, "'");
+    L_DEBUG("destroyed vulkan context '", info.label, "'");
   }
 }
 
 
 sys::DescriptorSetLayoutRef _create_desc_set_layout(
-  const Context& ctxt,
+  const VulkanContext& ctxt,
   const std::vector<ResourceType>& rsc_tys
 ) {
   std::vector<VkDescriptorSetLayoutBinding> dslbs;
@@ -374,7 +394,7 @@ sys::DescriptorSetLayoutRef _create_desc_set_layout(
   return sys::create_desc_set_layout(ctxt.dev->dev, dslbs);
 }
 
-sys::DescriptorSetLayoutRef Context::get_desc_set_layout(
+sys::DescriptorSetLayoutRef VulkanContext::get_desc_set_layout(
   const std::vector<ResourceType>& rsc_tys
 ) {
   DescriptorSetKey desc_set_key = DescriptorSetKey::create(rsc_tys);
@@ -390,7 +410,7 @@ sys::DescriptorSetLayoutRef Context::get_desc_set_layout(
 }
 
 sys::DescriptorPoolRef _create_desc_pool(
-  const Context& ctxt,
+  const VulkanContext& ctxt,
   const std::vector<ResourceType>& rsc_tys
 ) {
   if (rsc_tys.empty()) {
@@ -437,7 +457,7 @@ sys::DescriptorPoolRef _create_desc_pool(
   return sys::DescriptorPool::create(ctxt.dev->dev, &dpci);
 }
 sys::DescriptorSetRef _alloc_desc_set(
-  const Context& ctxt,
+  const VulkanContext& ctxt,
   VkDescriptorPool desc_pool,
   VkDescriptorSetLayout desc_set_layout
 ) {
@@ -461,7 +481,8 @@ DescriptorSetKey DescriptorSetKey::create(
 }
 
 
-DescriptorSetPoolItem Context::acquire_desc_set(const std::vector<ResourceType>& rsc_tys) {
+DescriptorSetPoolItem
+VulkanContext::acquire_desc_set(const std::vector<ResourceType> &rsc_tys) {
   L_ASSERT(!rsc_tys.empty());
   DescriptorSetKey key = DescriptorSetKey::create(rsc_tys);
   if (desc_set_detail.desc_set_pool.has_free_item(key)) {
@@ -475,7 +496,8 @@ DescriptorSetPoolItem Context::acquire_desc_set(const std::vector<ResourceType>&
   }
 }
 
-sys::CommandPoolRef _create_cmd_pool(const Context& ctxt, SubmitType submit_ty) {
+sys::CommandPoolRef _create_cmd_pool(const VulkanContext &ctxt,
+                                     SubmitType submit_ty) {
   VkCommandPoolCreateInfo cpci {};
   cpci.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
   cpci.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
@@ -484,7 +506,7 @@ sys::CommandPoolRef _create_cmd_pool(const Context& ctxt, SubmitType submit_ty) 
   return sys::CommandPool::create(ctxt.dev->dev, &cpci);
 }
 
-CommandPoolPoolItem Context::acquire_cmd_pool(SubmitType submit_ty) {
+CommandPoolPoolItem VulkanContext::acquire_cmd_pool(SubmitType submit_ty) {
   if (cmd_pool_pool.has_free_item(submit_ty)) {
     CommandPoolPoolItem item {};
     item = cmd_pool_pool.acquire(std::move(submit_ty));
@@ -498,7 +520,7 @@ CommandPoolPoolItem Context::acquire_cmd_pool(SubmitType submit_ty) {
 
 
 sys::QueryPoolRef _create_query_pool(
-  const Context& ctxt,
+  const VulkanContext& ctxt,
   VkQueryType query_ty,
   uint32_t nquery
 ) {
@@ -509,7 +531,7 @@ sys::QueryPoolRef _create_query_pool(
   return sys::QueryPool::create(*ctxt.dev, &qpci);
 }
 
-QueryPoolPoolItem Context::acquire_query_pool() {
+QueryPoolPoolItem VulkanContext::acquire_query_pool() {
   if (query_pool_pool.has_free_item(0)) {
     return query_pool_pool.acquire(0);
   } else {

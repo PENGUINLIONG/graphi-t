@@ -1,7 +1,9 @@
 // # Wrapper for common Vulkan procedures.
 // @PENGUINLIONG
 #pragma once
+#include <map>
 #include <vulkan/vulkan.h>
+#include "gft/vk-sys.hpp"
 
 namespace liong {
 namespace vk {
