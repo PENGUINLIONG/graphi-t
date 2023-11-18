@@ -1,3 +1,4 @@
+#include <array>
 #include "gft/assert.hpp"
 #include "gft/log.hpp"
 #include "sys.hpp"

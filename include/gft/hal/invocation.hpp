@@ -19,12 +19,8 @@ struct Invocation : std::enable_shared_from_this<Invocation> {
   virtual ~Invocation() {}
 
   // Submit the invocation to device for execution.
-  virtual void submit() = 0;
-  // Check whether the transaction is finished. `true` is returned if so.
-  virtual bool is_done() = 0;
-  // Wait the invocation submitted to device for execution. Returns immediately
-  // if the invocation has already been waited.
-  virtual void wait() = 0;
+  virtual TransactionRef submit() = 0;
+
   // Get the execution time of the last WAITED invocation.
   virtual double get_time_us() = 0;
   // Pre-encode the invocation commands to reduce host-side overhead on constant

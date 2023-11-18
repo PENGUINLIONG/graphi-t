@@ -1,31 +1,36 @@
-#include "gft/vk.hpp"
+#include "gft/vk/vk-transaction.hpp"
 #include "gft/log.hpp"
 
 namespace liong {
 namespace vk {
 
-bool Transaction::create(const Invocation& invoke, InvocationSubmitTransactionConfig& cfg, Transaction& out) {
-  const Context& ctxt = *invoke.ctxt;
+TransactionRef VulkanTransaction::create(const InvocationRef &invoke,
+                                               TransactionConfig &cfg) {
+  const VulkanInvocationRef& invoke_ = VulkanInvocation::from_hal(invoke);
+  const VulkanContextRef& ctxt = VulkanContext::from_hal(invoke_->ctxt);
 
   TransactionLike transact(ctxt, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
   util::Timer timer {};
   timer.tic();
-  invoke.record(transact);
+  invoke_->record(transact);
   timer.toc();
 
-  out.ctxt = &ctxt;
-  out.submit_details = std::move(transact.submit_details);
-  out.fences = std::move(transact.fences);
+  TransactionInfo info{};
+  info.label = cfg.label;
+
+  VulkanTransactionRef out = std::make_shared<VulkanTransaction>(ctxt, info);
+  out->submit_details = std::move(transact.submit_details);
+  out->fences = std::move(transact.fences);
   L_DEBUG("created and submitted transaction for execution, command "
     "recording took ", timer.us(), "us");
-  return true;  
+  return out;
 }
-Transaction::~Transaction() {
+VulkanTransaction::~VulkanTransaction() {
   if (fences.size() > 0) {
     L_DEBUG("destroyed transaction");
   }
 }
-bool Transaction::is_done() const {
+bool VulkanTransaction::is_done() {
   for (const auto& fence : fences) {
     VkResult err = vkGetFenceStatus(*ctxt->dev, fence->fence);
     if (err == VK_NOT_READY) {
@@ -36,7 +41,7 @@ bool Transaction::is_done() const {
   }
   return true;
 }
-void Transaction::wait() const {
+void VulkanTransaction::wait() {
   std::vector<VkFence> fences2(fences.size());
   for (size_t i = 0; i < fences.size(); ++i) {
     fences2.at(i) = fences.at(i)->fence;

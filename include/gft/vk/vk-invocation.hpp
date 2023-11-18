@@ -143,10 +143,6 @@ struct VulkanInvocation : public Invocation {
 
   void record(TransactionLike& transact) const;
 
-  virtual void submit() override final;
-  virtual bool is_done() override final;
-  virtual void wait() override final;
-
   virtual double get_time_us() override final;
   virtual void bake() override final;
 

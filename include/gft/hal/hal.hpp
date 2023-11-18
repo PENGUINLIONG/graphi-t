@@ -31,6 +31,7 @@ L_DEF_INTERFACE_TYPE(Swapchain);
 L_DEF_INTERFACE_TYPE(Task);
 L_DEF_INTERFACE_TYPE(RenderPass);
 L_DEF_INTERFACE_TYPE(Invocation);
+L_DEF_INTERFACE_TYPE(Transaction);
 
 #undef L_DEF_INTERFACE_TYPE
 
@@ -407,7 +408,11 @@ struct CompositeInvocationConfig {
   // Set `true` if the device-side execution time is wanted.
   bool is_timed;
 };
-struct PresentInvocationConfig {
+struct PresentInvocationConfig {};
+
+struct TransactionConfig {
+  // Human-readable label of the transaction.
+  std::string label;
 };
 
 } // namespace hal

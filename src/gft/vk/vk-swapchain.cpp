@@ -136,16 +136,20 @@ void _collect_swapchain_images(const VulkanSwapchain &swapchain,
 
     sys::ImageViewRef img_view = sys::ImageView::create(dev->dev, &ivci);
 
-    VulkanImageRef out = std::make_shared<VulkanImage>(swapchain.ctxt);
-    out->img = std::make_shared<sys::Image>(*swapchain.ctxt->allocator, img, nullptr, false);
-    out->img_view = std::move(img_view);
-    out->img_cfg.label = util::format(info.label, " #", i);
-    out->img_cfg.width = dyn_detail.width;
-    out->img_cfg.height = dyn_detail.height;
-    out->img_cfg.usage =
+    ImageInfo img_info{};
+    img_info.label = util::format(info.label, " #", i);
+    img_info.width = dyn_detail.width;
+    img_info.height = dyn_detail.height;
+    img_info.depth = 1;
+    img_info.format = info.format;
+    img_info.color_space = info.color_space;
+    img_info.usage =
       L_IMAGE_USAGE_ATTACHMENT_BIT |
       L_IMAGE_USAGE_PRESENT_BIT;
-    out->img_cfg.format = info.format;
+    
+    VulkanImageRef out = std::make_shared<VulkanImage>(swapchain.ctxt, std::move(img_info));
+    out->img = std::make_shared<sys::Image>(*swapchain.ctxt->allocator, img, nullptr, false);
+    out->img_view = std::move(img_view);
     out->dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
     out->dyn_detail.layout = VK_IMAGE_LAYOUT_UNDEFINED;
     out->dyn_detail.access = 0;
