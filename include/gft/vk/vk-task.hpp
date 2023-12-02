@@ -21,18 +21,23 @@ struct VulkanTask : public Task {
   DispatchSize workgrp_size; // Only for compute task.
   TaskResourceDetail rsc_detail;
 
-  static TaskRef create(const ContextRef &ctxt, const ComputeTaskConfig &cfg);
-  static TaskRef create(const RenderPassRef &pass,
-                        const GraphicsTaskConfig &cfg);
+  static TaskRef create(const ContextRef& ctxt, const ComputeTaskConfig& cfg);
+  static TaskRef create(
+    const RenderPassRef& pass,
+    const GraphicsTaskConfig& cfg
+  );
 
-  VulkanTask(const ContextRef &ctxt, TaskInfo &&info);
-  VulkanTask(const RenderPassRef &pass, TaskInfo &&info);
+  VulkanTask(const ContextRef& ctxt, TaskInfo&& info);
+  VulkanTask(const RenderPassRef& pass, TaskInfo&& info);
   ~VulkanTask();
 
-  inline static VulkanTaskRef from_hal(const TaskRef &ref) {
+  inline static VulkanTaskRef from_hal(const TaskRef& ref) {
     return std::static_pointer_cast<VulkanTask>(ref);
   }
+
+  InvocationRef create_graphics_invocation(const GraphicsInvocationConfig& cfg);
+  InvocationRef create_compute_invocation(const ComputeInvocationConfig& cfg);
 };
 
-} // namespace liong
 } // namespace vk
+} // namespace liong

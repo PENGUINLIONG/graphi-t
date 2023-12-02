@@ -13,17 +13,17 @@ struct ImageDynamicDetail {
   VkAccessFlags access;
   VkImageLayout layout;
 };
-struct VulkanImage: public Image {
+struct VulkanImage : public Image {
   VulkanContextRef ctxt; // Lifetime bound.
   sys::ImageRef img;
   sys::ImageViewRef img_view;
   ImageDynamicDetail dyn_detail;
 
-  static ImageRef create(const ContextRef &ctxt, const ImageConfig &cfg);
-  VulkanImage(VulkanContextRef ctxt, ImageInfo &&info);
+  static ImageRef create(const ContextRef& ctxt, const ImageConfig& cfg);
+  VulkanImage(VulkanContextRef ctxt, ImageInfo&& info);
   ~VulkanImage();
 
-  inline static VulkanImageRef from_hal(const ImageRef &ref) {
+  inline static VulkanImageRef from_hal(const ImageRef& ref) {
     return std::static_pointer_cast<VulkanImage>(ref);
   }
 };
@@ -43,12 +43,18 @@ inline VkFormat format2vk(fmt::Format format, fmt::ColorSpace color_space) {
     } else {
       return VK_FORMAT_B8G8R8A8_UNORM;
     }
-  case L_FORMAT_B10G11R11_UFLOAT_PACK32: return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
-  case L_FORMAT_R16G16B16A16_SFLOAT: return VK_FORMAT_R16G16B16A16_SFLOAT;
-  case L_FORMAT_R32_SFLOAT: return VK_FORMAT_R32_SFLOAT;
-  case L_FORMAT_R32G32_SFLOAT: return VK_FORMAT_R32G32_SFLOAT;
-  case L_FORMAT_R32G32B32A32_SFLOAT: return VK_FORMAT_R32G32B32A32_SFLOAT;
-  default: panic("unrecognized pixel format");
+  case L_FORMAT_B10G11R11_UFLOAT_PACK32:
+    return VK_FORMAT_B10G11R11_UFLOAT_PACK32;
+  case L_FORMAT_R16G16B16A16_SFLOAT:
+    return VK_FORMAT_R16G16B16A16_SFLOAT;
+  case L_FORMAT_R32_SFLOAT:
+    return VK_FORMAT_R32_SFLOAT;
+  case L_FORMAT_R32G32_SFLOAT:
+    return VK_FORMAT_R32G32_SFLOAT;
+  case L_FORMAT_R32G32B32A32_SFLOAT:
+    return VK_FORMAT_R32G32B32A32_SFLOAT;
+  default:
+    panic("unrecognized pixel format");
   }
   return VK_FORMAT_UNDEFINED;
 }

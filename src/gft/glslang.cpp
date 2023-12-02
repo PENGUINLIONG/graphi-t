@@ -1,17 +1,21 @@
-#include <memory>
-#include "glslang/SPIRV/GlslangToSpv.h"
-#include "glslang/glslang/Public/ShaderLang.h"
-#include "glslang/glslang/Include/BaseTypes.h"
 #include "gft/glslang.hpp"
+
+#include <memory>
+
 #include "gft/assert.hpp"
 #include "gft/log.hpp"
+#include "glslang/SPIRV/GlslangToSpv.h"
+#include "glslang/glslang/Include/BaseTypes.h"
+#include "glslang/glslang/Public/ShaderLang.h"
 
 namespace liong {
 
 namespace glslang {
 
-::glslang::EshTargetClientVersion TARGET_CLIENT_VER = ::glslang::EshTargetClientVersion::EShTargetVulkan_1_0;
-::glslang::EShTargetLanguageVersion TARGET_LANG_VER = ::glslang::EShTargetLanguageVersion::EShTargetSpv_1_0;
+::glslang::EshTargetClientVersion TARGET_CLIENT_VER =
+  ::glslang::EshTargetClientVersion::EShTargetVulkan_1_0;
+::glslang::EShTargetLanguageVersion TARGET_LANG_VER =
+  ::glslang::EShTargetLanguageVersion::EShTargetSpv_1_0;
 
 void _initialize(bool silent) {
   static bool is_initialized = false;
@@ -25,8 +29,14 @@ void _initialize(bool silent) {
   bool res = ::glslang::InitializeProcess();
   L_ASSERT(res, "cannot initialize glslang");
   ::glslang::Version glslang_ver = ::glslang::GetVersion();
-  L_INFO("glslang version: ", glslang_ver.major, ".",
-    glslang_ver.minor, ".", glslang_ver.patch);
+  L_INFO(
+    "glslang version: ",
+    glslang_ver.major,
+    ".",
+    glslang_ver.minor,
+    ".",
+    glslang_ver.patch
+  );
 
   const char* glsl_ver_str = ::glslang::GetGlslVersionString();
   L_INFO("supported glsl version: ", glsl_ver_str);
@@ -35,20 +45,23 @@ void _initialize(bool silent) {
 }
 void initialize(GlslangTarget target) {
   switch (target) {
-  case L_GLSLANG_TARGET_VULKAN_1_0:
-    TARGET_CLIENT_VER = ::glslang::EshTargetClientVersion::EShTargetVulkan_1_0;
-    TARGET_LANG_VER = ::glslang::EShTargetLanguageVersion::EShTargetSpv_1_0;
-    break;
-  case L_GLSLANG_TARGET_VULKAN_1_1:
-    TARGET_CLIENT_VER = ::glslang::EshTargetClientVersion::EShTargetVulkan_1_1;
-    TARGET_LANG_VER = ::glslang::EShTargetLanguageVersion::EShTargetSpv_1_3;
-    break;
-  case L_GLSLANG_TARGET_VULKAN_1_2:
-    TARGET_CLIENT_VER = ::glslang::EshTargetClientVersion::EShTargetVulkan_1_2;
-    TARGET_LANG_VER = ::glslang::EShTargetLanguageVersion::EShTargetSpv_1_5;
-    break;
-  default:
-    L_PANIC("invalid glslang target");
+    case L_GLSLANG_TARGET_VULKAN_1_0:
+      TARGET_CLIENT_VER =
+        ::glslang::EshTargetClientVersion::EShTargetVulkan_1_0;
+      TARGET_LANG_VER = ::glslang::EShTargetLanguageVersion::EShTargetSpv_1_0;
+      break;
+    case L_GLSLANG_TARGET_VULKAN_1_1:
+      TARGET_CLIENT_VER =
+        ::glslang::EshTargetClientVersion::EShTargetVulkan_1_1;
+      TARGET_LANG_VER = ::glslang::EShTargetLanguageVersion::EShTargetSpv_1_3;
+      break;
+    case L_GLSLANG_TARGET_VULKAN_1_2:
+      TARGET_CLIENT_VER =
+        ::glslang::EshTargetClientVersion::EShTargetVulkan_1_2;
+      TARGET_LANG_VER = ::glslang::EShTargetLanguageVersion::EShTargetSpv_1_5;
+      break;
+    default:
+      L_PANIC("invalid glslang target");
   }
   _initialize(false);
 }
@@ -170,22 +183,18 @@ TBuiltInResource make_default_builtin_rsc() {
 }
 
 class Glsl2Spv {
-private:
+ private:
   using Shader = ::glslang::TShader;
   using Program = ::glslang::TProgram;
 
   std::unique_ptr<Program> program;
   std::vector<std::unique_ptr<Shader>> shaders;
 
-public:
-  Glsl2Spv() :
-    program(_create_program()),
-    shaders() {}
+ public:
+  Glsl2Spv() : program(_create_program()), shaders() {}
 
-  constexpr static EShMessages MSG_OPTS = (EShMessages)(
-    EShMsgSpvRules |
-    EShMsgVulkanRules |
-    EShMsgDebugInfo);
+  constexpr static EShMessages MSG_OPTS =
+    (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules | EShMsgDebugInfo);
 
   Glsl2Spv& with_shader(
     EShLanguage stage,
@@ -196,11 +205,11 @@ public:
 
     auto src_c_str = src.c_str();
     auto ver = 100;
-    auto src_lang          = ::glslang::EShSourceGlsl;
-    auto target_client     = ::glslang::EShClientVulkan;
+    auto src_lang = ::glslang::EShSourceGlsl;
+    auto target_client = ::glslang::EShClientVulkan;
     auto target_client_ver = TARGET_CLIENT_VER;
-    auto target_lang       = ::glslang::EShTargetSpv;
-    auto target_lang_ver   = TARGET_LANG_VER;
+    auto target_lang = ::glslang::EShTargetSpv;
+    auto target_lang_ver = TARGET_LANG_VER;
     shader->setStrings(&src_c_str, 1);
     shader->setEntryPoint("main");
     shader->setSourceEntryPoint(entry_point.c_str());
@@ -215,9 +224,16 @@ public:
     ::glslang::TShader::ForbidIncluder includer;
 
     std::string dummy;
-    if (!shader->preprocess(&builtin_rsc, ver, ENoProfile, false, false,
-      MSG_OPTS, &dummy, includer)
-    ) {
+    if (!shader->preprocess(
+          &builtin_rsc,
+          ver,
+          ENoProfile,
+          false,
+          false,
+          MSG_OPTS,
+          &dummy,
+          includer
+        )) {
       panic("preprocessing failed: ", shader->getInfoLog());
     }
 
@@ -237,21 +253,21 @@ public:
   std::vector<uint32_t> to_spv(EShLanguage stage) {
     ::spv::SpvBuildLogger logger;
     ::glslang::SpvOptions opts;
-    opts.validate          = true;
+    opts.validate = true;
     opts.generateDebugInfo = true;
-    opts.optimizeSize      = true;
-    opts.stripDebugInfo    = false;
-    opts.disableOptimizer  = false;
-    opts.disassemble       = false;
+    opts.optimizeSize = true;
+    opts.stripDebugInfo = false;
+    opts.disableOptimizer = false;
+    opts.disassemble = false;
 
     std::vector<uint32_t> spv;
-    ::glslang::GlslangToSpv(*program->getIntermediate((EShLanguage)stage), spv,
-      &logger, &opts);
+    ::glslang::GlslangToSpv(
+      *program->getIntermediate((EShLanguage)stage), spv, &logger, &opts
+    );
 
     std::string msg = logger.getAllMessages();
     if (msg.size() != 0) {
-      L_WARN("compiler reported issues when translating glsl into spirv",
-        msg);
+      L_WARN("compiler reported issues when translating glsl into spirv", msg);
     }
 
     return spv;
@@ -261,7 +277,7 @@ public:
       panic("reflection failed: ", program->getInfoLog());
     }
     // Uncomment this line to print reflection details:
-    //program->dumpReflection();
+    // program->dumpReflection();
 
     bool is_graph_pipe = program->getShaders(EShLangCompute).size() == 0;
 
@@ -271,7 +287,9 @@ public:
       L_ASSERT(nubo <= 1, "a pipeline can only bind to one uniform block");
       if (nubo != 0) {
         auto ubo = program->getUniformBlock(0);
-        L_ASSERT(ubo.getBinding() == 0, "uniform block binding point must be 0");
+        L_ASSERT(
+          ubo.getBinding() == 0, "uniform block binding point must be 0"
+        );
         L_ASSERT(ubo.size != 0, "unexpected zero-sized uniform block");
         ubo_size = ubo.size;
       } else {
@@ -281,31 +299,32 @@ public:
 
     // Make sure there is exactly one fragment output.
     if (is_graph_pipe) {
-      L_ASSERT(program->getNumPipeOutputs() == 1, "must have exactly one "
-        "fragment output");
+      L_ASSERT(
+        program->getNumPipeOutputs() == 1,
+        "must have exactly one "
+        "fragment output"
+      );
       const auto output = program->getPipeOutput(0);
-      L_ASSERT(output.index == 0, "fragment output must be bound to location 0");
+      L_ASSERT(
+        output.index == 0, "fragment output must be bound to location 0"
+      );
     }
   }
 };
 
 class Hlsl2Spv {
-private:
+ private:
   using Shader = ::glslang::TShader;
   using Program = ::glslang::TProgram;
 
   std::unique_ptr<Program> program;
   std::vector<std::unique_ptr<Shader>> shaders;
 
-public:
-  Hlsl2Spv() :
-    program(_create_program()),
-    shaders() {}
+ public:
+  Hlsl2Spv() : program(_create_program()), shaders() {}
 
-  constexpr static EShMessages MSG_OPTS = (EShMessages)(
-    EShMsgSpvRules |
-    EShMsgVulkanRules |
-    EShMsgDebugInfo);
+  constexpr static EShMessages MSG_OPTS =
+    (EShMessages)(EShMsgSpvRules | EShMsgVulkanRules | EShMsgDebugInfo);
 
   Hlsl2Spv& with_shader(
     EShLanguage stage,
@@ -316,11 +335,11 @@ public:
 
     auto src_c_str = src.c_str();
     auto ver = 100;
-    auto src_lang          = ::glslang::EShSourceHlsl;
-    auto target_client     = ::glslang::EShClientVulkan;
+    auto src_lang = ::glslang::EShSourceHlsl;
+    auto target_client = ::glslang::EShClientVulkan;
     auto target_client_ver = TARGET_CLIENT_VER;
-    auto target_lang       = ::glslang::EShTargetSpv;
-    auto target_lang_ver   = TARGET_LANG_VER;
+    auto target_lang = ::glslang::EShTargetSpv;
+    auto target_lang_ver = TARGET_LANG_VER;
     shader->setStrings(&src_c_str, 1);
     shader->setEntryPoint("main");
     shader->setSourceEntryPoint(entry_point.c_str());
@@ -335,9 +354,16 @@ public:
     ::glslang::TShader::ForbidIncluder includer;
 
     std::string dummy;
-    if (!shader->preprocess(&builtin_rsc, ver, ENoProfile, false, false,
-      MSG_OPTS, &dummy, includer)
-    ) {
+    if (!shader->preprocess(
+          &builtin_rsc,
+          ver,
+          ENoProfile,
+          false,
+          false,
+          MSG_OPTS,
+          &dummy,
+          includer
+        )) {
       panic("preprocessing failed: ", shader->getInfoLog());
     }
 
@@ -357,21 +383,25 @@ public:
   std::vector<uint32_t> to_spv(EShLanguage stage) {
     ::spv::SpvBuildLogger logger;
     ::glslang::SpvOptions opts;
-    opts.validate          = true;
+    opts.validate = true;
     opts.generateDebugInfo = true;
-    opts.optimizeSize      = true;
-    opts.stripDebugInfo    = false;
-    opts.disableOptimizer  = false;
-    opts.disassemble       = false;
+    opts.optimizeSize = true;
+    opts.stripDebugInfo = false;
+    opts.disableOptimizer = false;
+    opts.disassemble = false;
 
     std::vector<uint32_t> spv;
-    ::glslang::GlslangToSpv(*program->getIntermediate((EShLanguage)stage), spv,
-      &logger, &opts);
+    ::glslang::GlslangToSpv(
+      *program->getIntermediate((EShLanguage)stage), spv, &logger, &opts
+    );
 
     std::string msg = logger.getAllMessages();
     if (msg.size() != 0) {
-      L_WARN("compiler reported issues when translating glsl into "
-        "spirv", msg);
+      L_WARN(
+        "compiler reported issues when translating glsl into "
+        "spirv",
+        msg
+      );
     }
 
     return spv;
@@ -381,7 +411,7 @@ public:
       panic("reflection failed: ", program->getInfoLog());
     }
     // Uncomment this line to print reflection details:
-    //program->dumpReflection();
+    // program->dumpReflection();
 
     bool is_graph_pipe = program->getShaders(EShLangCompute).size() == 0;
 
@@ -401,11 +431,14 @@ public:
 
     // Make sure there is exactly one fragment output.
     if (is_graph_pipe) {
-      L_ASSERT(program->getNumPipeOutputs() == 1,
-        "must have exactly one fragment output");
+      L_ASSERT(
+        program->getNumPipeOutputs() == 1,
+        "must have exactly one fragment output"
+      );
       const auto output = program->getPipeOutput(0);
-      L_ASSERT(output.index == 0,
-        "fragment output must be bound to location 0");
+      L_ASSERT(
+        output.index == 0, "fragment output must be bound to location 0"
+      );
     }
   }
 };
@@ -415,30 +448,20 @@ ComputeSpirvArtifact compile_comp(
   const std::string& comp_entry_point
 ) {
   Glsl2Spv conv {};
-  conv
-    .with_shader(EShLangCompute, comp_src, comp_entry_point)
-    .link();
+  conv.with_shader(EShLangCompute, comp_src, comp_entry_point).link();
   size_t ubo_size;
   conv.reflect(ubo_size);
-  return {
-    conv.to_spv(EShLangCompute),
-    ubo_size
-  };
+  return { conv.to_spv(EShLangCompute), ubo_size };
 }
 ComputeSpirvArtifact compile_comp_hlsl(
   const std::string& comp_src,
   const std::string& comp_entry_point
 ) {
   Hlsl2Spv conv {};
-  conv
-    .with_shader(EShLangCompute, comp_src, comp_entry_point)
-    .link();
+  conv.with_shader(EShLangCompute, comp_src, comp_entry_point).link();
   size_t ubo_size;
   conv.reflect(ubo_size);
-  return {
-    conv.to_spv(EShLangCompute),
-    ubo_size
-  };
+  return { conv.to_spv(EShLangCompute), ubo_size };
 }
 
 GraphicsSpirvArtifact compile_graph(
@@ -448,17 +471,12 @@ GraphicsSpirvArtifact compile_graph(
   const std::string& frag_entry_point
 ) {
   Glsl2Spv conv {};
-  conv
-    .with_shader(EShLangVertex, vert_src, vert_entry_point)
+  conv.with_shader(EShLangVertex, vert_src, vert_entry_point)
     .with_shader(EShLangFragment, frag_src, frag_entry_point)
     .link();
   size_t ubo_size;
   conv.reflect(ubo_size);
-  return {
-    conv.to_spv(EShLangVertex),
-    conv.to_spv(EShLangFragment),
-    ubo_size
-  };
+  return { conv.to_spv(EShLangVertex), conv.to_spv(EShLangFragment), ubo_size };
 }
 GraphicsSpirvArtifact compile_graph_hlsl(
   const std::string& vert_src,
@@ -467,17 +485,12 @@ GraphicsSpirvArtifact compile_graph_hlsl(
   const std::string& frag_entry_point
 ) {
   Hlsl2Spv conv {};
-  conv
-    .with_shader(EShLangVertex, vert_src, vert_entry_point)
+  conv.with_shader(EShLangVertex, vert_src, vert_entry_point)
     .with_shader(EShLangFragment, frag_src, frag_entry_point)
     .link();
   size_t ubo_size;
   conv.reflect(ubo_size);
-  return {
-    conv.to_spv(EShLangVertex),
-    conv.to_spv(EShLangFragment),
-    ubo_size
-  };
+  return { conv.to_spv(EShLangVertex), conv.to_spv(EShLangFragment), ubo_size };
 }
 
 } // namespace glslang

@@ -13,14 +13,16 @@ struct VulkanTransaction : public Transaction {
   std::vector<TransactionSubmitDetail> submit_details;
   std::vector<sys::FenceRef> fences;
 
-  static TransactionRef create(const InvocationRef &invoke,
-                               const TransactionConfig &cfg);
-  VulkanTransaction(VulkanContextRef ctxt, TransactionInfo &&info);
+  static TransactionRef create(
+    const InvocationRef& invoke,
+    const TransactionConfig& cfg
+  );
+  VulkanTransaction(VulkanContextRef ctxt, TransactionInfo&& info);
   ~VulkanTransaction();
 
   virtual bool is_done() override final;
   virtual void wait() override final;
 };
 
-} // namespace liong
 } // namespace vk
+} // namespace liong

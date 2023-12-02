@@ -1,7 +1,8 @@
+#include "gft/util.hpp"
+
 #include "gft/assert.hpp"
 #include "gft/log.hpp"
 #include "gft/test.hpp"
-#include "gft/util.hpp"
 
 L_TEST(Crc32Correctness) {
   std::string data = "penguinliongpenguinliongpenguinliongpenguinliong";

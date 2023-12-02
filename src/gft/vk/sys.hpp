@@ -18,7 +18,9 @@ extern std::map<std::string, uint32_t> collect_physdev_ext_props(
   VkPhysicalDevice physdev
 );
 extern VkPhysicalDeviceProperties get_physdev_prop(VkPhysicalDevice physdev);
-extern VkPhysicalDeviceMemoryProperties get_physdev_mem_prop(VkPhysicalDevice physdev);
+extern VkPhysicalDeviceMemoryProperties get_physdev_mem_prop(
+  VkPhysicalDevice physdev
+);
 extern VkPhysicalDeviceFeatures get_physdev_feat(VkPhysicalDevice physdev);
 extern std::vector<VkQueueFamilyProperties> collect_qfam_props(
   VkPhysicalDevice physdev

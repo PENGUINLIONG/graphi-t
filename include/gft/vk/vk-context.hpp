@@ -18,12 +18,16 @@ struct DescriptorSetKey {
 
   static DescriptorSetKey create(const std::vector<ResourceType>& rsc_tys);
 
-  inline friend bool operator<(const DescriptorSetKey& a, const DescriptorSetKey& b) {
+  inline friend bool operator<(
+    const DescriptorSetKey& a,
+    const DescriptorSetKey& b
+  ) {
     return a.inner < b.inner;
   }
 };
 typedef pool::Pool<DescriptorSetKey, sys::DescriptorSetRef> DescriptorSetPool;
-typedef pool::PoolItem<DescriptorSetKey, sys::DescriptorSetRef> DescriptorSetPoolItem;
+typedef pool::PoolItem<DescriptorSetKey, sys::DescriptorSetRef>
+  DescriptorSetPoolItem;
 
 typedef pool::Pool<int, sys::QueryPoolRef> QueryPoolPool;
 typedef pool::PoolItem<int, sys::QueryPoolRef> QueryPoolPoolItem;
@@ -51,12 +55,21 @@ struct VulkanContext : public Context {
   QueryPoolPool query_pool_pool;
   sys::AllocatorRef allocator;
 
-  static ContextRef create(const InstanceRef &inst, const ContextConfig& cfg);
-  static ContextRef create(const InstanceRef &inst, const ContextWindowsConfig& cfg);
-  static ContextRef create(const InstanceRef &inst, const ContextAndroidConfig& cfg);
-  static ContextRef create(const InstanceRef &inst,const ContextMetalConfig &cfg);
+  static ContextRef create(const InstanceRef& inst, const ContextConfig& cfg);
+  static ContextRef create(
+    const InstanceRef& inst,
+    const ContextWindowsConfig& cfg
+  );
+  static ContextRef create(
+    const InstanceRef& inst,
+    const ContextAndroidConfig& cfg
+  );
+  static ContextRef create(
+    const InstanceRef& inst,
+    const ContextMetalConfig& cfg
+  );
 
-  VulkanContext(VulkanInstanceRef inst, ContextInfo &&info);
+  VulkanContext(VulkanInstanceRef inst, ContextInfo&& info);
   virtual ~VulkanContext();
 
   inline VkPhysicalDevice physdev() const {
@@ -69,20 +82,29 @@ struct VulkanContext : public Context {
     return inst->physdev_details.at(info.device_index).feat;
   }
 
-  sys::DescriptorSetLayoutRef get_desc_set_layout(const std::vector<ResourceType>& rsc_tys);
-  DescriptorSetPoolItem acquire_desc_set(const std::vector<ResourceType>& rsc_tys);
+  sys::DescriptorSetLayoutRef get_desc_set_layout(
+    const std::vector<ResourceType>& rsc_tys
+  );
+  DescriptorSetPoolItem acquire_desc_set(
+    const std::vector<ResourceType>& rsc_tys
+  );
 
   CommandPoolPoolItem acquire_cmd_pool(SubmitType submit_ty);
 
   QueryPoolPoolItem acquire_query_pool();
 
-  inline static VulkanContextRef from_hal(const ContextRef &ref) {
+  inline static VulkanContextRef from_hal(const ContextRef& ref) {
     return std::static_pointer_cast<VulkanContext>(ref);
   }
 
-  virtual BufferRef create_buffer(const BufferConfig &cfg) override final;
-  virtual ImageRef create_image(const ImageConfig &cfg) override final;
-  virtual DepthImageRef create_depth_image(const DepthImageConfig &cfg) override final;
+  virtual BufferRef create_buffer(const BufferConfig& cfg) override final;
+  virtual ImageRef create_image(const ImageConfig& cfg) override final;
+  virtual DepthImageRef create_depth_image(const DepthImageConfig& cfg
+  ) override final;
+  virtual SwapchainRef create_swapchain(const SwapchainConfig& cfg
+  ) override final;
+  virtual RenderPassRef create_render_pass(const RenderPassConfig& cfg
+  ) override final;
 };
 
 } // namespace vk

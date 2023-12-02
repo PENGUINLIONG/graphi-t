@@ -26,16 +26,22 @@ struct VulkanInstance : public Instance {
   bool is_imported;
 
   static VulkanInstanceRef create();
-  static VulkanInstanceRef create(uint32_t api_ver, sys::InstanceRef &&inst);
-  virtual ~VulkanInstance();
+  static VulkanInstanceRef create(uint32_t api_ver, sys::InstanceRef&& inst);
+  ~VulkanInstance();
 
-  inline static VulkanInstanceRef from_hal(const InstanceRef &ref) {
+  inline static VulkanInstanceRef from_hal(const InstanceRef& ref) {
     return std::static_pointer_cast<VulkanInstance>(ref);
   }
 
   virtual std::string describe_device(uint32_t device_index) override final;
 
-  virtual ContextRef create_context(const ContextConfig &config) override final;
+  virtual ContextRef create_context(const ContextConfig& config) override final;
+  virtual ContextRef create_context(const ContextWindowsConfig& config
+  ) override final;
+  virtual ContextRef create_context(const ContextAndroidConfig& config
+  ) override final;
+  virtual ContextRef create_context(const ContextMetalConfig& config
+  ) override final;
 };
 
 } // namespace vk

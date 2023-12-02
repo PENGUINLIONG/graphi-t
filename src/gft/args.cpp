@@ -27,7 +27,6 @@ struct ArgumentConfig {
 } arg_cfg;
 
 
-
 void init_arg_parse(const char* app_name, const char* desc) {
   arg_cfg.app_name = app_name;
   arg_cfg.desc = desc;
@@ -41,9 +40,8 @@ void print_help() {
     std::cout << arg_cfg.desc << std::endl;
   }
   for (const auto& help : arg_cfg.helps) {
-    std::cout << help.short_flag << "\t"
-      << help.long_flag << "\t\t"
-      << help.help << std::endl;
+    std::cout << help.short_flag << "\t" << help.long_flag << "\t\t"
+              << help.help << std::endl;
   }
   std::cout << "-h\t--help\t\tPrint this message." << std::endl;
   std::exit(0);
@@ -84,8 +82,7 @@ void parse_args(int argc, const char** argv) {
     if (iarg_entry >= 0) {
       auto& parse_cfg = arg_cfg.parse_cfgs[iarg_entry];
       bool res = parse_cfg.parser(argv + i, parse_cfg.dst);
-      L_ASSERT(res, "unable to parse "
-        "argument");
+      L_ASSERT(res, "unable to parse argument");
       L_ASSERT((argc - i >= parse_cfg.narg), "no enough argument segments");
       i += parse_cfg.narg;
       iarg_entry = -1;
@@ -95,7 +92,9 @@ void parse_args(int argc, const char** argv) {
         // Free argument.
         panic("free argument is currently unsupported");
       } else if (arg[1] != '-') {
-        if (arg[1] == 'h') { print_help(); }
+        if (arg[1] == 'h') {
+          print_help();
+        }
         // Short flag argument.
         auto it = arg_cfg.short_map.find(arg[1]);
         if (it != arg_cfg.short_map.end()) {
@@ -105,7 +104,9 @@ void parse_args(int argc, const char** argv) {
         }
         ++i;
       } else {
-        if (std::strcmp(arg + 2, "help") == 0) { print_help(); }
+        if (std::strcmp(arg + 2, "help") == 0) {
+          print_help();
+        }
         // Long flag argument.
         auto it = (arg_cfg.long_map.find(arg + 2));
         if (it != arg_cfg.long_map.end()) {
@@ -118,7 +119,6 @@ void parse_args(int argc, const char** argv) {
     }
   }
 }
-
 
 } // namespace args
 

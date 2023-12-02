@@ -16,6 +16,13 @@ struct Task : std::enable_shared_from_this<Task> {
 
   Task(TaskInfo&& info) : info(std::move(info)) {}
   virtual ~Task() {}
+
+  virtual InvocationRef create_graphics_invocation(
+    const GraphicsInvocationConfig& cfg
+  ) = 0;
+  virtual InvocationRef create_compute_invocation(
+    const ComputeInvocationConfig& cfg
+  ) = 0;
 };
 
 } // namespace hal

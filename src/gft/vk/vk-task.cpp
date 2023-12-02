@@ -1,49 +1,63 @@
 #include "sys.hpp"
 #include "gft/log.hpp"
 #include "gft/vk/vk-task.hpp"
+#include "gft/vk/vk-invocation.hpp"
 
 namespace liong {
 namespace vk {
 
-TaskRef VulkanTask::create(const ContextRef &ctxt,
-                           const ComputeTaskConfig &cfg) {
-  L_ASSERT(cfg.workgrp_size.x * cfg.workgrp_size.y * cfg.workgrp_size.z != 0,
-           "workgroup size cannot be zero");
+VulkanTask::VulkanTask(const ContextRef& ctxt, TaskInfo&& info) :
+  Task(std::move(info)), ctxt(VulkanContext::from_hal(ctxt)) {}
+VulkanTask::VulkanTask(const RenderPassRef& pass, TaskInfo&& info) :
+  Task(std::move(info)),
+  pass(VulkanRenderPass::from_hal(pass)),
+  ctxt(VulkanRenderPass::from_hal(pass)->ctxt) {}
 
-  const VulkanContextRef &ctxt_ = VulkanContext::from_hal(ctxt);
+TaskRef VulkanTask::create(
+  const ContextRef& ctxt,
+  const ComputeTaskConfig& cfg
+) {
+  L_ASSERT(
+    cfg.workgrp_size.x * cfg.workgrp_size.y * cfg.workgrp_size.z != 0,
+    "workgroup size cannot be zero"
+  );
+
+  const VulkanContextRef& ctxt_ = VulkanContext::from_hal(ctxt);
 
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   sys::DescriptorSetLayoutRef desc_set_layout =
-      ctxt_->get_desc_set_layout(cfg.rsc_tys);
-  sys::PipelineLayoutRef pipe_layout = sys::create_pipe_layout(*ctxt_->dev,
-    desc_set_layout->desc_set_layout);
-  VkShaderModule shader_mod = sys::create_shader_mod(*ctxt_->dev,
-    (const uint32_t*)cfg.code, cfg.code_size);
+    ctxt_->get_desc_set_layout(cfg.rsc_tys);
+  sys::PipelineLayoutRef pipe_layout =
+    sys::create_pipe_layout(*ctxt_->dev, desc_set_layout->desc_set_layout);
+  VkShaderModule shader_mod = sys::create_shader_mod(
+    *ctxt_->dev, (const uint32_t*)cfg.code, cfg.code_size
+  );
 
   // Specialize to set local group size.
   VkSpecializationMapEntry spec_map_entries[] = {
-    VkSpecializationMapEntry { 0, 0 * sizeof(int32_t), sizeof(int32_t) },
-    VkSpecializationMapEntry { 1, 1 * sizeof(int32_t), sizeof(int32_t) },
-    VkSpecializationMapEntry { 2, 2 * sizeof(int32_t), sizeof(int32_t) },
+    VkSpecializationMapEntry{0, 0 * sizeof(int32_t), sizeof(int32_t)},
+    VkSpecializationMapEntry{1, 1 * sizeof(int32_t), sizeof(int32_t)},
+    VkSpecializationMapEntry{2, 2 * sizeof(int32_t), sizeof(int32_t)},
   };
-  VkSpecializationInfo spec_info {};
+  VkSpecializationInfo spec_info{};
   spec_info.pData = &cfg.workgrp_size;
   spec_info.dataSize = sizeof(cfg.workgrp_size);
   spec_info.mapEntryCount = 3;
   spec_info.pMapEntries = spec_map_entries;
 
-  VkPipelineShaderStageCreateInfo pssci {};
+  VkPipelineShaderStageCreateInfo pssci{};
   pssci.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   pssci.pName = cfg.entry_name.c_str();
   pssci.stage = VK_SHADER_STAGE_COMPUTE_BIT;
   pssci.module = shader_mod;
   pssci.pSpecializationInfo = &spec_info;
 
-  sys::PipelineRef pipe = sys::create_comp_pipe(*ctxt_->dev, pipe_layout->pipe_layout, pssci);
+  sys::PipelineRef pipe =
+    sys::create_comp_pipe(*ctxt_->dev, pipe_layout->pipe_layout, pssci);
 
   sys::destroy_shader_mod(*ctxt_->dev, shader_mod);
 
-  TaskResourceDetail rsc_detail {};
+  TaskResourceDetail rsc_detail{};
   rsc_detail.pipe_layout = std::move(pipe_layout);
   rsc_detail.rsc_tys = cfg.rsc_tys;
 
@@ -63,55 +77,59 @@ TaskRef VulkanTask::create(const ContextRef &ctxt,
   return out;
 }
 
-TaskRef VulkanTask::create(const RenderPassRef &pass,
-                           const GraphicsTaskConfig &cfg) {
-  const VulkanRenderPassRef &pass_ = VulkanRenderPass::from_hal(pass);
+TaskRef VulkanTask::create(
+  const RenderPassRef& pass,
+  const GraphicsTaskConfig& cfg
+) {
+  const VulkanRenderPassRef& pass_ = VulkanRenderPass::from_hal(pass);
   const VulkanContextRef& ctxt = pass_->ctxt;
 
   std::vector<VkDescriptorPoolSize> desc_pool_sizes;
   sys::DescriptorSetLayoutRef desc_set_layout =
-      ctxt->get_desc_set_layout(cfg.rsc_tys);
+    ctxt->get_desc_set_layout(cfg.rsc_tys);
 
-  sys::PipelineLayoutRef pipe_layout = sys::create_pipe_layout(*ctxt->dev,
-    desc_set_layout->desc_set_layout);
-  VkShaderModule vert_shader_mod = sys::create_shader_mod(*ctxt->dev,
-    (const uint32_t*)cfg.vert_code, cfg.vert_code_size);
-  VkShaderModule frag_shader_mod = sys::create_shader_mod(*ctxt->dev,
-    (const uint32_t*)cfg.frag_code, cfg.frag_code_size);
+  sys::PipelineLayoutRef pipe_layout =
+    sys::create_pipe_layout(*ctxt->dev, desc_set_layout->desc_set_layout);
+  VkShaderModule vert_shader_mod = sys::create_shader_mod(
+    *ctxt->dev, (const uint32_t*)cfg.vert_code, cfg.vert_code_size
+  );
+  VkShaderModule frag_shader_mod = sys::create_shader_mod(
+    *ctxt->dev, (const uint32_t*)cfg.frag_code, cfg.frag_code_size
+  );
 
-  VkPipelineInputAssemblyStateCreateInfo piasci {};
+  VkPipelineInputAssemblyStateCreateInfo piasci{};
   piasci.sType = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
   switch (cfg.topo) {
-  case L_TOPOLOGY_POINT:
-    piasci.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
-    break;
-  case L_TOPOLOGY_LINE:
-    piasci.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
-    break;
-  case L_TOPOLOGY_TRIANGLE:
-  case L_TOPOLOGY_TRIANGLE_WIREFRAME:
-    piasci.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    break;
-  default:
-    panic("unexpected topology (", cfg.topo, ")");
+    case L_TOPOLOGY_POINT:
+      piasci.topology = VK_PRIMITIVE_TOPOLOGY_POINT_LIST;
+      break;
+    case L_TOPOLOGY_LINE:
+      piasci.topology = VK_PRIMITIVE_TOPOLOGY_LINE_LIST;
+      break;
+    case L_TOPOLOGY_TRIANGLE:
+    case L_TOPOLOGY_TRIANGLE_WIREFRAME:
+      piasci.topology = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
+      break;
+    default:
+      panic("unexpected topology (", cfg.topo, ")");
   }
   piasci.primitiveRestartEnable = VK_FALSE;
 
-  VkPipelineRasterizationStateCreateInfo prsci {};
+  VkPipelineRasterizationStateCreateInfo prsci{};
   prsci.sType = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
   prsci.cullMode = VK_CULL_MODE_NONE;
   prsci.frontFace = VK_FRONT_FACE_CLOCKWISE;
   switch (cfg.topo) {
-  case L_TOPOLOGY_TRIANGLE_WIREFRAME:
-    prsci.polygonMode = VK_POLYGON_MODE_LINE;
-    break;
-  default:
-    prsci.polygonMode = VK_POLYGON_MODE_FILL;
-    break;
+    case L_TOPOLOGY_TRIANGLE_WIREFRAME:
+      prsci.polygonMode = VK_POLYGON_MODE_LINE;
+      break;
+    default:
+      prsci.polygonMode = VK_POLYGON_MODE_FILL;
+      break;
   }
   prsci.lineWidth = 1.0f;
 
-  std::array<VkPipelineShaderStageCreateInfo, 2> psscis {};
+  std::array<VkPipelineShaderStageCreateInfo, 2> psscis{};
   {
     VkPipelineShaderStageCreateInfo& pssci = psscis[0];
     pssci.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
@@ -128,13 +146,20 @@ TaskRef VulkanTask::create(const RenderPassRef &pass,
   }
 
   sys::PipelineRef pipe = sys::create_graph_pipe(
-      *ctxt->dev, pipe_layout->pipe_layout, *pass_->pass, pass_->info.width,
-      pass->info.height, piasci, prsci, psscis);
+    *ctxt->dev,
+    pipe_layout->pipe_layout,
+    *pass_->pass,
+    pass_->info.width,
+    pass->info.height,
+    piasci,
+    prsci,
+    psscis
+  );
 
   sys::destroy_shader_mod(*ctxt->dev, vert_shader_mod);
   sys::destroy_shader_mod(*ctxt->dev, frag_shader_mod);
 
-  TaskResourceDetail rsc_detail {};
+  TaskResourceDetail rsc_detail{};
   rsc_detail.pipe_layout = std::move(pipe_layout);
   rsc_detail.rsc_tys = cfg.rsc_tys;
 
@@ -159,5 +184,16 @@ VulkanTask::~VulkanTask() {
   }
 }
 
-} // namespace vk
-} // namespace liong
+InvocationRef VulkanTask::create_graphics_invocation(
+  const GraphicsInvocationConfig& cfg
+) {
+  return VulkanInvocation::create(shared_from_this(), cfg);
+}
+InvocationRef VulkanTask::create_compute_invocation(
+  const ComputeInvocationConfig& cfg
+) {
+  return VulkanInvocation::create(shared_from_this(), cfg);
+}
+
+}  // namespace vk
+}  // namespace liong

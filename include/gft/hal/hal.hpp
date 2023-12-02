@@ -18,8 +18,8 @@ namespace hal {
 
 // - [Interfaces] --------------------------------------------------------------
 
-#define L_DEF_INTERFACE_TYPE(name)                                             \
-  struct name;                                                                 \
+#define L_DEF_INTERFACE_TYPE(name) \
+  struct name;                     \
   typedef std::shared_ptr<name> name##Ref;
 
 L_DEF_INTERFACE_TYPE(Instance);
@@ -163,24 +163,26 @@ enum AttachmentType {
 };
 enum AttachmentAccess {
   // Don't care about the access pattern
-  L_ATTACHMENT_ACCESS_DONT_CARE = 0b0000,
+  L_ATTACHMENT_ACCESS_DONT_CARE = 1,
   // When the attachment is read-accessed, the previous value of the pixel is
   // ignored and is overwritten by a specified value.
-  L_ATTACHMENT_ACCESS_CLEAR = 0b0001,
+  L_ATTACHMENT_ACCESS_CLEAR = (1 << 0),
   // When the attachment is read-accessed, the previous value of the pixel is
   // loaded from memory.
-  L_ATTACHMENT_ACCESS_LOAD = 0b0010,
+  L_ATTACHMENT_ACCESS_LOAD = (1 << 1),
   // When the attachment is write-accessed, the shader output is written to
   // memory.
-  L_ATTACHMENT_ACCESS_STORE = 0b0100,
+  L_ATTACHMENT_ACCESS_STORE = (1 << 2),
   // When the attachment is read-accessed, the previous value of the pixel is
   // loaded as subpass data.
   // TOOD: (penguinliong) Implement framebuffer fetch.
-  L_ATTACHMENT_ACCESS_FETCH = 0b1000,
+  L_ATTACHMENT_ACCESS_FETCH = (1 << 3),
 };
+typedef uint32_t AttachmentAccessFlags;
 
 // - [Create Configs] ----------------------------------------------------------
 
+struct InstanceConfigBuilder;
 struct InstanceConfig {
   // Human-readable label of the instance.
   std::string label;
@@ -188,14 +190,20 @@ struct InstanceConfig {
   std::string app_name;
   // True to enable debug mode. More validation and logs.
   bool debug;
+
+  static InstanceConfigBuilder build();
 };
 
+struct ContextConfigBuilder;
 struct ContextConfig {
   // Human-readable label of the context.
   std::string label;
   // Index of the device.
   uint32_t device_index;
+
+  static ContextConfigBuilder build();
 };
+struct ContextWindowsConfigBuilder;
 struct ContextWindowsConfig {
   std::string label;
   // Index of the device.
@@ -204,20 +212,29 @@ struct ContextWindowsConfig {
   const void* hinst;
   // Window handle, aka `HWND`.
   const void* hwnd;
+
+  static ContextWindowsConfigBuilder build();
 };
+struct ContextAndroidConfigBuilder;
 struct ContextAndroidConfig {
   std::string label;
   // Index of the device.
   uint32_t device_index;
   // Android native window, `ANativeWindow`.
   const void* native_window;
+
+  static ContextAndroidConfigBuilder build();
 };
+struct ContextMetalConfigBuilder;
 struct ContextMetalConfig {
   std::string label;
   uint32_t device_index;
   const void* metal_layer;
+
+  static ContextMetalConfigBuilder build();
 };
 
+struct BufferConfigBuilder;
 // Describes a buffer.
 struct BufferConfig {
   // Human-readable label of the buffer.
@@ -229,8 +246,11 @@ struct BufferConfig {
   MemoryAccess host_access;
   // Usage of the buffer.
   BufferUsage usage;
+
+  static BufferConfigBuilder build();
 };
 
+struct ImageConfigBuilder;
 // Describe a row-major 2D image.
 struct ImageConfig {
   // Human-readable label of the image.
@@ -248,8 +268,11 @@ struct ImageConfig {
   fmt::ColorSpace color_space;
   // Usage of the image.
   ImageUsage usage;
+
+  static ImageConfigBuilder build();
 };
 
+struct DepthImageConfigBuilder;
 struct DepthImageConfig {
   std::string label;
   // Width of the depth image. When used, the image size should match color
@@ -262,8 +285,11 @@ struct DepthImageConfig {
   fmt::DepthFormat depth_format;
   // Usage of the depth image.
   DepthImageUsage usage;
+
+  static DepthImageConfigBuilder build();
 };
 
+struct SwapchainConfigBuilder;
 struct SwapchainConfig {
   std::string label;
   // Number of image for multibuffering, can be 1, 2 or 3.
@@ -274,8 +300,11 @@ struct SwapchainConfig {
   // Render output color space. Note that the color space is specified for
   // presentation. The rendering output should always be linear colors.
   fmt::ColorSpace color_space;
+
+  static SwapchainConfigBuilder build();
 };
 
+struct ComputeTaskConfigBuilder;
 // A device program to be feeded in a `Transaction`.
 struct ComputeTaskConfig {
   // Human-readable label of the task.
@@ -292,8 +321,11 @@ struct ComputeTaskConfig {
   std::vector<ResourceType> rsc_tys;
   // Local group size; number of threads in a workgroup.
   DispatchSize workgrp_size;
+
+  static ComputeTaskConfigBuilder build();
 };
 
+struct GraphicsTaskConfigBuilder;
 struct GraphicsTaskConfig {
   // Human-readable label of the task.
   std::string label;
@@ -317,11 +349,14 @@ struct GraphicsTaskConfig {
   Topology topo;
   // Resources to be allocated.
   std::vector<ResourceType> rsc_tys;
+
+  static GraphicsTaskConfigBuilder build();
 };
 
+struct AttachmentConfigBuilder;
 struct AttachmentConfig {
   // Attachment access pattern.
-  AttachmentAccess attm_access;
+  AttachmentAccessFlags attm_access;
   // Attachment type.
   AttachmentType attm_ty;
   union {
@@ -334,7 +369,10 @@ struct AttachmentConfig {
     // Depth attachment format.
     fmt::DepthFormat depth_fmt;
   };
+
+  static AttachmentConfigBuilder build();
 };
+struct RenderPassConfigBuilder;
 // TODO: (penguinliong) Multi-subpass rendering.
 struct RenderPassConfig {
   std::string label;
@@ -344,8 +382,11 @@ struct RenderPassConfig {
   uint32_t height;
   // Configurations of attachments that will be used in the render pass.
   std::vector<AttachmentConfig> attm_cfgs;
+
+  static RenderPassConfigBuilder build();
 };
 
+struct TransferInvocationConfigBuilder;
 struct TransferInvocationConfig {
   std::string label;
   // Data transfer source.
@@ -354,7 +395,10 @@ struct TransferInvocationConfig {
   ResourceView dst_rsc_view;
   // Set `true` if the device-side execution time is wanted.
   bool is_timed;
+
+  static TransferInvocationConfigBuilder build();
 };
+struct ComputeInvocationConfigBuilder;
 // Instanced invocation of a compute task, a.k.a. a dispatch.
 struct ComputeInvocationConfig {
   std::string label;
@@ -364,11 +408,14 @@ struct ComputeInvocationConfig {
   DispatchSize workgrp_count;
   // Set `true` if the device-side execution time is wanted.
   bool is_timed;
+
+  static ComputeInvocationConfigBuilder build();
 };
 enum IndexType {
   L_INDEX_TYPE_UINT16,
   L_INDEX_TYPE_UINT32,
 };
+struct GraphicsInvocationConfigBuilder;
 // Instanced invocation of a graphics task, a.k.a. a draw call.
 struct GraphicsInvocationConfig {
   std::string label;
@@ -390,7 +437,10 @@ struct GraphicsInvocationConfig {
   uint32_t nidx;
   // Set `true` if the device-side execution time is wanted.
   bool is_timed;
+
+  static GraphicsInvocationConfigBuilder build();
 };
+struct RenderPassInvocationConfigBuilder;
 struct RenderPassInvocationConfig {
   std::string label;
   // Attachment feed in order, can be `Image` or `DepthImage` only.
@@ -399,7 +449,10 @@ struct RenderPassInvocationConfig {
   std::vector<InvocationRef> invokes; // Lifetime bound.
   // Set `true` if the device-side execution time is wanted.
   bool is_timed;
+
+  static RenderPassInvocationConfigBuilder build();
 };
+struct CompositeInvocationConfigBuilder;
 struct CompositeInvocationConfig {
   std::string label;
   // Compute or render pass invocations within this composite invocation. Note
@@ -407,12 +460,22 @@ struct CompositeInvocationConfig {
   std::vector<InvocationRef> invokes; // Lifetime bound.
   // Set `true` if the device-side execution time is wanted.
   bool is_timed;
-};
-struct PresentInvocationConfig {};
 
+  static CompositeInvocationConfigBuilder build();
+};
+struct PresentInvocationConfigBuilder;
+struct PresentInvocationConfig {
+  std::string label;
+
+  static PresentInvocationConfigBuilder build();
+};
+
+struct TransactionConfigBuilder;
 struct TransactionConfig {
   // Human-readable label of the transaction.
   std::string label;
+
+  static TransactionConfigBuilder build();
 };
 
 } // namespace hal

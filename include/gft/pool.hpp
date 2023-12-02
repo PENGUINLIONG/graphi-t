@@ -11,7 +11,7 @@ namespace pool {
 
 template<typename TKey, typename TValue>
 struct PoolInner {
-    std::map<TKey, std::vector<TValue>> items;
+  std::map<TKey, std::vector<TValue>> items;
 };
 
 template<typename TKey, typename TValue>
@@ -34,7 +34,10 @@ struct PoolItem {
   PoolItem() = default;
   PoolItem(PoolInner<TKey, TValue>* pool, TKey&& key, TValue&& value) :
     inner(std::make_shared<PoolItemInner<TKey, TValue>>(
-      pool, std::move(key), std::move(value))) {}
+      pool,
+      std::move(key),
+      std::move(value)
+    )) {}
 
   inline bool is_valid() const {
     return inner != nullptr;
@@ -64,10 +67,7 @@ struct Pool {
     return false;
   }
   inline PoolItem<TKey, TValue> create(TKey&& key, TValue&& value) {
-    return PoolItem<TKey, TValue>(
-      &inner,
-      std::move(key),
-      std::move(value));
+    return PoolItem<TKey, TValue>(&inner, std::move(key), std::move(value));
   }
   inline PoolItem<TKey, TValue> acquire(TKey&& key) {
     std::vector<TValue>& pool = inner.items.at(key);

@@ -2,5 +2,5 @@ out
 bin
 .vs
 .vscode
-build*
+build*/
 CMakeSettings.json

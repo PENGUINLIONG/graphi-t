@@ -10,37 +10,65 @@ namespace vk {
 
 class VkException : public std::exception {
   std::string msg;
-public:
+
+ public:
   inline VkException(VkResult code) {
     switch (code) {
-    case VK_ERROR_OUT_OF_HOST_MEMORY: msg = "out of host memory"; break;
-    case VK_ERROR_OUT_OF_DEVICE_MEMORY: msg = "out of device memory"; break;
-    case VK_ERROR_INITIALIZATION_FAILED: msg = "initialization failed"; break;
-    case VK_ERROR_DEVICE_LOST: msg = "device lost"; break;
-    case VK_ERROR_MEMORY_MAP_FAILED: msg = "memory map failed"; break;
-    case VK_ERROR_LAYER_NOT_PRESENT: msg = "layer not supported"; break;
-    case VK_ERROR_EXTENSION_NOT_PRESENT: msg = "extension may present"; break;
-    case VK_ERROR_INCOMPATIBLE_DRIVER: msg = "incompatible driver"; break;
-    case VK_ERROR_TOO_MANY_OBJECTS: msg = "too many objects"; break;
-    case VK_ERROR_FORMAT_NOT_SUPPORTED: msg = "format not supported"; break;
-    case VK_ERROR_FRAGMENTED_POOL: msg = "fragmented pool"; break;
-    case VK_ERROR_OUT_OF_POOL_MEMORY: msg = "out of pool memory"; break;
-    default: msg = std::string("unknown vulkan error: ") + std::to_string(code); break;
+    case VK_ERROR_OUT_OF_HOST_MEMORY:
+      msg = "out of host memory";
+      break;
+    case VK_ERROR_OUT_OF_DEVICE_MEMORY:
+      msg = "out of device memory";
+      break;
+    case VK_ERROR_INITIALIZATION_FAILED:
+      msg = "initialization failed";
+      break;
+    case VK_ERROR_DEVICE_LOST:
+      msg = "device lost";
+      break;
+    case VK_ERROR_MEMORY_MAP_FAILED:
+      msg = "memory map failed";
+      break;
+    case VK_ERROR_LAYER_NOT_PRESENT:
+      msg = "layer not supported";
+      break;
+    case VK_ERROR_EXTENSION_NOT_PRESENT:
+      msg = "extension may present";
+      break;
+    case VK_ERROR_INCOMPATIBLE_DRIVER:
+      msg = "incompatible driver";
+      break;
+    case VK_ERROR_TOO_MANY_OBJECTS:
+      msg = "too many objects";
+      break;
+    case VK_ERROR_FORMAT_NOT_SUPPORTED:
+      msg = "format not supported";
+      break;
+    case VK_ERROR_FRAGMENTED_POOL:
+      msg = "fragmented pool";
+      break;
+    case VK_ERROR_OUT_OF_POOL_MEMORY:
+      msg = "out of pool memory";
+      break;
+    default:
+      msg = std::string("unknown vulkan error: ") + std::to_string(code);
+      break;
     }
   }
 
   inline const char* what() const noexcept override {
-    return msg.c_str(); 
+    return msg.c_str();
   }
 };
 struct VkAssert {
   inline const VkAssert& operator<<(VkResult code) const {
-    if (code != VK_SUCCESS) { throw VkException(code); }
+    if (code != VK_SUCCESS) {
+      throw VkException(code);
+    }
     return *this;
   }
 };
-#define VK_ASSERT (::liong::vk::VkAssert{})
-
+#define VK_ASSERT (::liong::vk::VkAssert {})
 
 namespace sys {
 
@@ -51,7 +79,9 @@ struct Instance {
 
   Instance(VkInstance inst, bool should_destroy) :
     inst(inst), should_destroy(should_destroy) {}
-  ~Instance() { destroy(); }
+  ~Instance() {
+    destroy();
+  }
 
   operator VkInstance() const {
     return inst;
@@ -76,13 +106,18 @@ struct Device {
 
   Device(VkPhysicalDevice physdev, VkDevice dev, bool should_destroy) :
     physdev(physdev), dev(dev), should_destroy(should_destroy) {}
-  ~Device() { destroy(); }
+  ~Device() {
+    destroy();
+  }
 
   operator VkDevice() const {
     return dev;
   }
 
-  static std::shared_ptr<Device> create(VkPhysicalDevice physdev, const VkDeviceCreateInfo* dci) {
+  static std::shared_ptr<Device> create(
+    VkPhysicalDevice physdev,
+    const VkDeviceCreateInfo* dci
+  ) {
     VkDevice dev = VK_NULL_HANDLE;
     VK_ASSERT << vkCreateDevice(physdev, dci, nullptr, &dev);
     return std::make_shared<Device>(physdev, dev, true);
@@ -100,7 +135,9 @@ struct Allocator {
 
   Allocator(VmaAllocator allocator, bool should_destroy) :
     allocator(allocator), should_destroy(should_destroy) {}
-  ~Allocator() { destroy(); }
+  ~Allocator() {
+    destroy();
+  }
 
   operator VmaAllocator() const {
     return allocator;
@@ -117,7 +154,6 @@ struct Allocator {
 };
 typedef std::shared_ptr<Allocator> AllocatorRef;
 
-
 struct Buffer {
   typedef Device Self;
   VmaAllocator allocator;
@@ -125,15 +161,29 @@ struct Buffer {
   VmaAllocation alloc;
   bool should_destroy;
 
-  Buffer(VmaAllocator allocator, VkBuffer buf, VmaAllocation alloc, bool should_destroy) :
-    allocator(allocator), buf(buf), alloc(alloc), should_destroy(should_destroy) {}
-  ~Buffer() { destroy(); }
+  Buffer(
+    VmaAllocator allocator,
+    VkBuffer buf,
+    VmaAllocation alloc,
+    bool should_destroy
+  ) :
+    allocator(allocator),
+    buf(buf),
+    alloc(alloc),
+    should_destroy(should_destroy) {}
+  ~Buffer() {
+    destroy();
+  }
 
   operator VkBuffer() const {
     return buf;
   }
 
-  static std::shared_ptr<Buffer> create(VmaAllocator allocator, const VkBufferCreateInfo* bci, const VmaAllocationCreateInfo* aci) {
+  static std::shared_ptr<Buffer> create(
+    VmaAllocator allocator,
+    const VkBufferCreateInfo* bci,
+    const VmaAllocationCreateInfo* aci
+  ) {
     VkBuffer buf = VK_NULL_HANDLE;
     VmaAllocation alloc = VK_NULL_HANDLE;
     VK_ASSERT << vmaCreateBuffer(allocator, bci, aci, &buf, &alloc, nullptr);
@@ -152,15 +202,29 @@ struct Image {
   VmaAllocation alloc;
   bool should_destroy;
 
-  Image(VmaAllocator allocator, VkImage img, VmaAllocation alloc, bool should_destroy) :
-    allocator(allocator), img(img), alloc(alloc), should_destroy(should_destroy) {}
-  ~Image() { destroy(); }
+  Image(
+    VmaAllocator allocator,
+    VkImage img,
+    VmaAllocation alloc,
+    bool should_destroy
+  ) :
+    allocator(allocator),
+    img(img),
+    alloc(alloc),
+    should_destroy(should_destroy) {}
+  ~Image() {
+    destroy();
+  }
 
   operator VkImage() const {
     return img;
   }
 
-  static std::shared_ptr<Image> create(VmaAllocator allocator, const VkImageCreateInfo* ici, const VmaAllocationCreateInfo* aci) {
+  static std::shared_ptr<Image> create(
+    VmaAllocator allocator,
+    const VkImageCreateInfo* ici,
+    const VmaAllocationCreateInfo* aci
+  ) {
     VkImage img = VK_NULL_HANDLE;
     VmaAllocation alloc = VK_NULL_HANDLE;
     VK_ASSERT << vmaCreateImage(allocator, ici, aci, &img, &alloc, nullptr);
@@ -180,13 +244,18 @@ struct ImageView {
 
   ImageView(VkDevice dev, VkImageView img_view, bool should_destroy) :
     dev(dev), img_view(img_view), should_destroy(should_destroy) {}
-  ~ImageView() { destroy(); }
+  ~ImageView() {
+    destroy();
+  }
 
   operator VkImageView() const {
     return img_view;
   }
 
-  static std::shared_ptr<ImageView> create(VkDevice dev, const VkImageViewCreateInfo* ivci) {
+  static std::shared_ptr<ImageView> create(
+    VkDevice dev,
+    const VkImageViewCreateInfo* ivci
+  ) {
     VkImageView img_view = VK_NULL_HANDLE;
     VK_ASSERT << vkCreateImageView(dev, ivci, nullptr, &img_view);
     return std::make_shared<ImageView>(dev, img_view, true);
@@ -205,13 +274,18 @@ struct Sampler {
 
   Sampler(VkDevice dev, VkSampler sampler, bool should_destroy) :
     dev(dev), sampler(sampler), should_destroy(should_destroy) {}
-  ~Sampler() { destroy(); }
+  ~Sampler() {
+    destroy();
+  }
 
   operator VkSampler() const {
     return sampler;
   }
 
-  static std::shared_ptr<Sampler> create(VkDevice dev, const VkSamplerCreateInfo* sci) {
+  static std::shared_ptr<Sampler> create(
+    VkDevice dev,
+    const VkSamplerCreateInfo* sci
+  ) {
     VkSampler sampler = VK_NULL_HANDLE;
     VK_ASSERT << vkCreateSampler(dev, sci, nullptr, &sampler);
     return std::make_shared<Sampler>(dev, sampler, true);
@@ -230,28 +304,39 @@ struct Surface {
 
   Surface(VkInstance inst, VkSurfaceKHR surf, bool should_destroy) :
     inst(inst), surf(surf), should_destroy(should_destroy) {}
-  ~Surface() { destroy(); }
+  ~Surface() {
+    destroy();
+  }
 
   operator VkSurfaceKHR() const {
     return surf;
   }
 
 #if VK_KHR_win32_surface
-  static std::shared_ptr<Surface> create(VkInstance inst, const VkWin32SurfaceCreateInfoKHR* wsci) {
+  static std::shared_ptr<Surface> create(
+    VkInstance inst,
+    const VkWin32SurfaceCreateInfoKHR* wsci
+  ) {
     VkSurfaceKHR surf = VK_NULL_HANDLE;
     VK_ASSERT << vkCreateWin32SurfaceKHR(inst, wsci, nullptr, &surf);
     return std::make_shared<Surface>(inst, surf, true);
   }
 #endif // VK_KHR_win32_surface
 #if VK_KHR_android_surface
-  static std::shared_ptr<Surface> create(VkInstance inst, const VkAndroidSurfaceCreateInfoKHR* asci) {
+  static std::shared_ptr<Surface> create(
+    VkInstance inst,
+    const VkAndroidSurfaceCreateInfoKHR* asci
+  ) {
     VkSurfaceKHR surf = VK_NULL_HANDLE;
     VK_ASSERT << vkCreateAndroidSurfaceKHR(inst, asci, nullptr, &surf);
     return std::make_shared<Surface>(inst, surf, true);
   }
 #endif // VK_KHR_android_surface
 #if VK_EXT_metal_surface
-  static std::shared_ptr<Surface> create(VkInstance inst, const VkMetalSurfaceCreateInfoEXT* msci) {
+  static std::shared_ptr<Surface> create(
+    VkInstance inst,
+    const VkMetalSurfaceCreateInfoEXT* msci
+  ) {
     VkSurfaceKHR surf;
     VK_ASSERT << vkCreateMetalSurfaceEXT(inst, msci, nullptr, &surf);
     return std::make_shared<Surface>(inst, surf, true);
@@ -271,13 +356,18 @@ struct Swapchain {
 
   Swapchain(VkDevice dev, VkSwapchainKHR swapchain, bool should_destroy) :
     dev(dev), swapchain(swapchain), should_destroy(should_destroy) {}
-  ~Swapchain() { destroy(); }
+  ~Swapchain() {
+    destroy();
+  }
 
   operator VkSwapchainKHR() const {
     return swapchain;
   }
 
-  static std::shared_ptr<Swapchain> create(VkDevice dev, const VkSwapchainCreateInfoKHR* sci) {
+  static std::shared_ptr<Swapchain> create(
+    VkDevice dev,
+    const VkSwapchainCreateInfoKHR* sci
+  ) {
     VkSwapchainKHR swapchain = VK_NULL_HANDLE;
     VK_ASSERT << vkCreateSwapchainKHR(dev, sci, nullptr, &swapchain);
     return std::make_shared<Swapchain>(dev, swapchain, true);
@@ -294,17 +384,30 @@ struct DescriptorSetLayout {
   VkDescriptorSetLayout desc_set_layout;
   bool should_destroy;
 
-  DescriptorSetLayout(VkDevice dev, VkDescriptorSetLayout desc_set_layout, bool should_destroy) :
-    dev(dev), desc_set_layout(desc_set_layout), should_destroy(should_destroy) {}
-  ~DescriptorSetLayout() { destroy(); }
+  DescriptorSetLayout(
+    VkDevice dev,
+    VkDescriptorSetLayout desc_set_layout,
+    bool should_destroy
+  ) :
+    dev(dev),
+    desc_set_layout(desc_set_layout),
+    should_destroy(should_destroy) {}
+  ~DescriptorSetLayout() {
+    destroy();
+  }
 
   operator VkDescriptorSetLayout() {
     return desc_set_layout;
   }
 
-  static std::shared_ptr<DescriptorSetLayout> create(VkDevice dev, const VkDescriptorSetLayoutCreateInfo* dslci) {
+  static std::shared_ptr<DescriptorSetLayout> create(
+    VkDevice dev,
+    const VkDescriptorSetLayoutCreateInfo* dslci
+  ) {
     VkDescriptorSetLayout desc_set_layout = VK_NULL_HANDLE;
-    VK_ASSERT << vkCreateDescriptorSetLayout(dev, dslci, nullptr, &desc_set_layout);
+    VK_ASSERT << vkCreateDescriptorSetLayout(
+      dev, dslci, nullptr, &desc_set_layout
+    );
     return std::make_shared<DescriptorSetLayout>(dev, desc_set_layout, true);
   }
   void destroy() {
@@ -319,15 +422,24 @@ struct PipelineLayout {
   VkPipelineLayout pipe_layout;
   bool should_destroy;
 
-  PipelineLayout(VkDevice dev, VkPipelineLayout pipe_layout, bool should_destroy) :
+  PipelineLayout(
+    VkDevice dev,
+    VkPipelineLayout pipe_layout,
+    bool should_destroy
+  ) :
     dev(dev), pipe_layout(pipe_layout), should_destroy(should_destroy) {}
-  ~PipelineLayout() { destroy(); }
+  ~PipelineLayout() {
+    destroy();
+  }
 
   operator VkPipelineLayout() {
     return pipe_layout;
   }
 
-  static std::shared_ptr<PipelineLayout> create(VkDevice dev, const VkPipelineLayoutCreateInfo* plci) {
+  static std::shared_ptr<PipelineLayout> create(
+    VkDevice dev,
+    const VkPipelineLayoutCreateInfo* plci
+  ) {
     VkPipelineLayout pipe_layout = VK_NULL_HANDLE;
     VK_ASSERT << vkCreatePipelineLayout(dev, plci, nullptr, &pipe_layout);
     return std::make_shared<PipelineLayout>(dev, pipe_layout, true);
@@ -346,20 +458,32 @@ struct Pipeline {
 
   Pipeline(VkDevice dev, VkPipeline pipe, bool should_destroy) :
     dev(dev), pipe(pipe), should_destroy(should_destroy) {}
-  ~Pipeline() { destroy(); }
+  ~Pipeline() {
+    destroy();
+  }
 
   operator VkPipeline() {
     return pipe;
   }
 
-  static std::shared_ptr<Pipeline> create(VkDevice dev, const VkComputePipelineCreateInfo* cpci) {
+  static std::shared_ptr<Pipeline> create(
+    VkDevice dev,
+    const VkComputePipelineCreateInfo* cpci
+  ) {
     VkPipeline pipe = VK_NULL_HANDLE;
-    VK_ASSERT << vkCreateComputePipelines(dev, VK_NULL_HANDLE, 1, cpci, nullptr, &pipe);
+    VK_ASSERT << vkCreateComputePipelines(
+      dev, VK_NULL_HANDLE, 1, cpci, nullptr, &pipe
+    );
     return std::make_shared<Pipeline>(dev, pipe, true);
   }
-  static std::shared_ptr<Pipeline> create(VkDevice dev, const VkGraphicsPipelineCreateInfo* gpci) {
+  static std::shared_ptr<Pipeline> create(
+    VkDevice dev,
+    const VkGraphicsPipelineCreateInfo* gpci
+  ) {
     VkPipeline pipe = VK_NULL_HANDLE;
-    VK_ASSERT << vkCreateGraphicsPipelines(dev, VK_NULL_HANDLE, 1, gpci, nullptr, &pipe);
+    VK_ASSERT << vkCreateGraphicsPipelines(
+      dev, VK_NULL_HANDLE, 1, gpci, nullptr, &pipe
+    );
     return std::make_shared<Pipeline>(dev, pipe, true);
   }
   void destroy() {
@@ -376,13 +500,18 @@ struct RenderPass {
 
   RenderPass(VkDevice dev, VkRenderPass pass, bool should_destroy) :
     dev(dev), pass(pass), should_destroy(should_destroy) {}
-  ~RenderPass() { destroy(); }
+  ~RenderPass() {
+    destroy();
+  }
 
   operator VkRenderPass() {
     return pass;
   }
 
-  static std::shared_ptr<RenderPass> create(VkDevice dev, const VkRenderPassCreateInfo* rpci) {
+  static std::shared_ptr<RenderPass> create(
+    VkDevice dev,
+    const VkRenderPassCreateInfo* rpci
+  ) {
     VkRenderPass pass = VK_NULL_HANDLE;
     VK_ASSERT << vkCreateRenderPass(dev, rpci, nullptr, &pass);
     return std::make_shared<RenderPass>(dev, pass, true);
@@ -401,13 +530,18 @@ struct Framebuffer {
 
   Framebuffer(VkDevice dev, VkFramebuffer framebuf, bool should_destroy) :
     dev(dev), framebuf(framebuf), should_destroy(should_destroy) {}
-  ~Framebuffer() { destroy(); }
+  ~Framebuffer() {
+    destroy();
+  }
 
   operator VkFramebuffer() {
     return framebuf;
   }
 
-  static std::shared_ptr<Framebuffer> create(VkDevice dev, const VkFramebufferCreateInfo* fci) {
+  static std::shared_ptr<Framebuffer> create(
+    VkDevice dev,
+    const VkFramebufferCreateInfo* fci
+  ) {
     VkFramebuffer framebuf = VK_NULL_HANDLE;
     VK_ASSERT << vkCreateFramebuffer(dev, fci, nullptr, &framebuf);
     return std::make_shared<Framebuffer>(dev, framebuf, true);
@@ -424,11 +558,20 @@ struct DescriptorPool {
   VkDescriptorPool desc_pool;
   bool should_destroy;
 
-  DescriptorPool(VkDevice dev, VkDescriptorPool desc_pool, bool should_destroy) :
+  DescriptorPool(
+    VkDevice dev,
+    VkDescriptorPool desc_pool,
+    bool should_destroy
+  ) :
     dev(dev), desc_pool(desc_pool), should_destroy(should_destroy) {}
-  ~DescriptorPool() { destroy(); }
+  ~DescriptorPool() {
+    destroy();
+  }
 
-  static std::shared_ptr<DescriptorPool> create(VkDevice dev, const VkDescriptorPoolCreateInfo* dpci) {
+  static std::shared_ptr<DescriptorPool> create(
+    VkDevice dev,
+    const VkDescriptorPoolCreateInfo* dpci
+  ) {
     VkDescriptorPool desc_pool = VK_NULL_HANDLE;
     VK_ASSERT << vkCreateDescriptorPool(dev, dpci, nullptr, &desc_pool);
     return std::make_shared<DescriptorPool>(dev, desc_pool, true);
@@ -446,9 +589,14 @@ struct DescriptorSet {
 
   DescriptorSet(VkDescriptorSet desc_set, bool should_destroy) :
     desc_set(desc_set), should_destroy(should_destroy) {}
-  ~DescriptorSet() { destroy(); }
+  ~DescriptorSet() {
+    destroy();
+  }
 
-  static std::shared_ptr<DescriptorSet> create(VkDevice dev, const VkDescriptorSetAllocateInfo* dsai) {
+  static std::shared_ptr<DescriptorSet> create(
+    VkDevice dev,
+    const VkDescriptorSetAllocateInfo* dsai
+  ) {
     VkDescriptorSet desc_set = VK_NULL_HANDLE;
     VK_ASSERT << vkAllocateDescriptorSets(dev, dsai, &desc_set);
     return std::make_shared<DescriptorSet>(desc_set, true);
@@ -465,13 +613,18 @@ struct CommandPool {
 
   CommandPool(VkDevice dev, VkCommandPool cmd_pool, bool should_destroy) :
     dev(dev), cmd_pool(cmd_pool), should_destroy(should_destroy) {}
-  ~CommandPool() { destroy(); }
+  ~CommandPool() {
+    destroy();
+  }
 
   operator VkCommandPool() {
     return cmd_pool;
   }
 
-  static std::shared_ptr<CommandPool> create(VkDevice dev, const VkCommandPoolCreateInfo* cpci) {
+  static std::shared_ptr<CommandPool> create(
+    VkDevice dev,
+    const VkCommandPoolCreateInfo* cpci
+  ) {
     VkCommandPool cmd_pool = VK_NULL_HANDLE;
     VK_ASSERT << vkCreateCommandPool(dev, cpci, nullptr, &cmd_pool);
     return std::make_shared<CommandPool>(dev, cmd_pool, true);
@@ -489,13 +642,18 @@ struct CommandBuffer {
 
   CommandBuffer(VkCommandBuffer cmdbuf, bool should_destroy) :
     cmdbuf(cmdbuf), should_destroy(should_destroy) {}
-  ~CommandBuffer() { destroy(); }
+  ~CommandBuffer() {
+    destroy();
+  }
 
   operator VkCommandBuffer() {
     return cmdbuf;
   }
 
-  static std::shared_ptr<CommandBuffer> create(VkDevice dev, const VkCommandBufferAllocateInfo* cbai) {
+  static std::shared_ptr<CommandBuffer> create(
+    VkDevice dev,
+    const VkCommandBufferAllocateInfo* cbai
+  ) {
     VkCommandBuffer cmdbuf = VK_NULL_HANDLE;
     VK_ASSERT << vkAllocateCommandBuffers(dev, cbai, &cmdbuf);
     return std::make_shared<CommandBuffer>(cmdbuf, true);
@@ -512,7 +670,9 @@ struct Fence {
 
   Fence(VkDevice dev, VkFence fence, bool should_destroy) :
     dev(dev), fence(fence), should_destroy(should_destroy) {}
-  ~Fence() { destroy(); }
+  ~Fence() {
+    destroy();
+  }
 
   operator VkFence() const {
     return fence;
@@ -523,7 +683,10 @@ struct Fence {
     fci.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     return create(dev, &fci);
   }
-  static std::shared_ptr<Fence> create(VkDevice dev, const VkFenceCreateInfo* fci) {
+  static std::shared_ptr<Fence> create(
+    VkDevice dev,
+    const VkFenceCreateInfo* fci
+  ) {
     VkFence fence = VK_NULL_HANDLE;
     VK_ASSERT << vkCreateFence(dev, fci, nullptr, &fence);
     return std::make_shared<Fence>(dev, fence, true);
@@ -542,7 +705,9 @@ struct Semaphore {
 
   Semaphore(VkDevice dev, VkSemaphore sema, bool should_destroy) :
     dev(dev), sema(sema), should_destroy(should_destroy) {}
-  ~Semaphore() { destroy(); }
+  ~Semaphore() {
+    destroy();
+  }
 
   operator VkSemaphore() const {
     return sema;
@@ -553,7 +718,10 @@ struct Semaphore {
     sci.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     return Self::create(dev, &sci);
   }
-  static std::shared_ptr<Semaphore> create(VkDevice dev, const VkSemaphoreCreateInfo* sci) {
+  static std::shared_ptr<Semaphore> create(
+    VkDevice dev,
+    const VkSemaphoreCreateInfo* sci
+  ) {
     VkSemaphore sema = VK_NULL_HANDLE;
     VK_ASSERT << vkCreateSemaphore(dev, sci, nullptr, &sema);
     return std::make_shared<Semaphore>(dev, sema, true);
@@ -572,13 +740,18 @@ struct QueryPool {
 
   QueryPool(VkDevice dev, VkQueryPool query_pool, bool should_destroy) :
     dev(dev), query_pool(query_pool), should_destroy(should_destroy) {}
-  ~QueryPool() { destroy(); }
+  ~QueryPool() {
+    destroy();
+  }
 
   operator VkQueryPool() const {
     return query_pool;
   }
 
-  static std::shared_ptr<QueryPool> create(VkDevice dev, const VkQueryPoolCreateInfo* qpci) {
+  static std::shared_ptr<QueryPool> create(
+    VkDevice dev,
+    const VkQueryPoolCreateInfo* qpci
+  ) {
     VkQueryPool query_pool;
     VK_ASSERT << vkCreateQueryPool(dev, qpci, nullptr, &query_pool);
     return std::make_shared<QueryPool>(dev, query_pool, true);
@@ -591,4 +764,4 @@ typedef std::shared_ptr<QueryPool> QueryPoolRef;
 
 } // namespace sys
 } // namespace vk
-} // namespace liong::vk::sys
+} // namespace liong

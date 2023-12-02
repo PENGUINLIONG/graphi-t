@@ -16,34 +16,24 @@
 typedef void* RENDERDOC_IgnoredApi;
 typedef void* RENDERDOC_IgnoredHandle;
 typedef enum RENDERDOC_Version {
-  eRENDERDOC_API_Version_1_0_0 = 10000,    // RENDERDOC_API_1_0_0 = 1 00 00
+  eRENDERDOC_API_Version_1_0_0 = 10000, // RENDERDOC_API_1_0_0 = 1 00 00
 } RENDERDOC_Version;
 
-typedef int(RENDERDOC_CC *pRENDERDOC_GetAPI)(RENDERDOC_Version version, void **outAPIPointers);
+typedef int(RENDERDOC_CC* pRENDERDOC_GetAPI
+)(RENDERDOC_Version version, void** outAPIPointers);
 
-typedef uint32_t(RENDERDOC_CC *pRENDERDOC_GetNumCaptures)();
-typedef uint32_t(RENDERDOC_CC *pRENDERDOC_GetCapture)(
-  uint32_t idx,
-  char *filename,
-  uint32_t *pathlength,
-  uint64_t *timestamp
-);
-typedef uint32_t(RENDERDOC_CC *pRENDERDOC_LaunchReplayUI)(
-  uint32_t connectTargetControl,
-  const char *cmdline
-);
+typedef uint32_t(RENDERDOC_CC* pRENDERDOC_GetNumCaptures)();
+typedef uint32_t(RENDERDOC_CC* pRENDERDOC_GetCapture
+)(uint32_t idx, char* filename, uint32_t* pathlength, uint64_t* timestamp);
+typedef uint32_t(RENDERDOC_CC* pRENDERDOC_LaunchReplayUI
+)(uint32_t connectTargetControl, const char* cmdline);
 
-typedef void(RENDERDOC_CC *pRENDERDOC_StartFrameCapture)(
-  RENDERDOC_IgnoredHandle device,
-  RENDERDOC_IgnoredHandle wndHandle
-);
-typedef uint32_t(RENDERDOC_CC *pRENDERDOC_EndFrameCapture)(
-  RENDERDOC_IgnoredHandle device,
-  RENDERDOC_IgnoredHandle wndHandle
-);
+typedef void(RENDERDOC_CC* pRENDERDOC_StartFrameCapture
+)(RENDERDOC_IgnoredHandle device, RENDERDOC_IgnoredHandle wndHandle);
+typedef uint32_t(RENDERDOC_CC* pRENDERDOC_EndFrameCapture
+)(RENDERDOC_IgnoredHandle device, RENDERDOC_IgnoredHandle wndHandle);
 
-typedef struct RENDERDOC_API_1_0_0
-{
+typedef struct RENDERDOC_API_1_0_0 {
   RENDERDOC_IgnoredApi GetAPIVersion;
 
   RENDERDOC_IgnoredApi SetCaptureOptionU32;
@@ -80,20 +70,16 @@ typedef struct RENDERDOC_API_1_0_0
 } RENDERDOC_API_1_0_0;
 
 
-
 namespace liong {
 
 namespace renderdoc {
 
 struct Context {
   RENDERDOC_API_1_0_0* api;
-  Context(RENDERDOC_API_1_0_0* api) :
-    api(api) {}
+  Context(RENDERDOC_API_1_0_0* api) : api(api) {}
   virtual ~Context() {};
 
-  virtual void begin_capture() {
-    api->StartFrameCapture(nullptr, nullptr);
-  };
+  virtual void begin_capture() { api->StartFrameCapture(nullptr, nullptr); };
   virtual void end_capture() {
     if (api->EndFrameCapture(nullptr, nullptr) != 1) {
       L_WARN("renderdoc failed to capture this scoped frame");
@@ -106,8 +92,10 @@ struct Context {
     path.resize(size);
     uint32_t icapture = api->GetNumCaptures() - 1;
     if (api->GetCapture(icapture, (char*)path.data(), &size, nullptr) != 1) {
-      L_WARN("cannot get renderdoc capture path, will not launch replay ui "
-        "for this one");
+      L_WARN(
+        "cannot get renderdoc capture path, will not launch replay ui for this "
+        "one"
+      );
     } else {
       api->LaunchReplayUI(1, path.c_str());
       L_INFO("launched renderdoc replay ui for captured frame #", icapture);
@@ -132,12 +120,15 @@ struct WindowsContext : public Context {
 #endif // _WIN32
 
 
-
 static bool is_first_call = true;
 void initialize() {
-  if (ctxt != nullptr) { return; }
+  if (ctxt != nullptr) {
+    return;
+  }
 
-  if (!is_first_call) { return; }
+  if (!is_first_call) {
+    return;
+  }
   is_first_call = false;
 
 #ifdef _WIN32
@@ -153,17 +144,26 @@ void initialize() {
       while (err == ERROR_MORE_DATA && path.size() < 2048) {
         path.resize(path.size() + 256);
         DWORD cap = path.size();
-        //HKEY reg_key;
-        //RegOpenKeyA(HKEY_LOCAL_MACHINE,
-        //  "SOFTWARE\\Classes\\RenderDoc.RDCCapture.1\\DefaultIcon", &reg_key);
-        err = RegGetValueA(HKEY_LOCAL_MACHINE,
-          "SOFTWARE\\Classes\\RenderDoc.RDCCapture.1\\DefaultIcon\\", "",
-          RRF_RT_REG_EXPAND_SZ | RRF_NOEXPAND, NULL,
-          (void*)path.data(), &cap);
+        // HKEY reg_key;
+        // RegOpenKeyA(HKEY_LOCAL_MACHINE,
+        //   "SOFTWARE\\Classes\\RenderDoc.RDCCapture.1\\DefaultIcon",
+        //   &reg_key);
+        err = RegGetValueA(
+          HKEY_LOCAL_MACHINE,
+          "SOFTWARE\\Classes\\RenderDoc.RDCCapture."
+          "1\\DefaultIcon\\",
+          "",
+          RRF_RT_REG_EXPAND_SZ | RRF_NOEXPAND,
+          NULL,
+          (void*)path.data(),
+          &cap
+        );
       }
       if (err != ERROR_SUCCESS || path.empty()) {
-        L_WARN("failed to find renderdoc on local installtion, renderdoc "
-          "utils become nops");
+        L_WARN(
+          "failed to find renderdoc on local installtion, renderdoc "
+          "utils become nops"
+        );
         return;
       } else {
         // Rewrite the path to renderdoc.
@@ -178,8 +178,10 @@ void initialize() {
 
       mod = LoadLibraryA(path.c_str());
       if (mod == NULL) {
-        L_WARN("failed to load renderdoc library from installtion, "
-          "renderdoc utils become nops");
+        L_WARN(
+          "failed to load renderdoc library from installtion, "
+          "renderdoc utils become nops"
+        );
         return;
       }
       should_release = true;
@@ -187,23 +189,24 @@ void initialize() {
 
     auto get_api = (pRENDERDOC_GetAPI)GetProcAddress(mod, "RENDERDOC_GetAPI");
     RENDERDOC_API_1_0_0* api;
-    if (
-      get_api == nullptr ||
-      get_api(eRENDERDOC_API_Version_1_0_0, (void**)&api) != 1 ||
-      api == nullptr
-    ) {
-      L_WARN("failed to get renderdoc api from running instance, renderdoc "
-        "apis become nops");
+    if (get_api == nullptr || get_api(eRENDERDOC_API_Version_1_0_0, (void**)&api) != 1 || api == nullptr) {
+      L_WARN(
+        "failed to get renderdoc api from running instance, renderdoc "
+        "apis become nops"
+      );
       return;
     } else {
       ctxt = std::shared_ptr<Context>(
-        (Context*)new WindowsContext(api, mod, should_release));
+        (Context*)new WindowsContext(api, mod, should_release)
+      );
     }
   }
-#else // _WIN32
+#else  // _WIN32
   {
-    L_WARN("renderdoc is not supported on current platform, renderdoc utils "
-      "become nops");
+    L_WARN(
+      "renderdoc is not supported on current platform, renderdoc utils become "
+      "nops"
+    );
   }
 #endif // _WIN32
 
@@ -220,8 +223,10 @@ void begin_capture() {
     if (is_first_call) {
       panic("renderdoc must be initialized before any capture");
     } else {
-      L_WARN("frame capture is attempted but it will be ignored because "
-        "renderdoc failed to initialize");
+      L_WARN(
+        "frame capture is attempted but it will be ignored because renderdoc "
+        "failed to initialize"
+      );
     }
   } else {
     ctxt->begin_capture();

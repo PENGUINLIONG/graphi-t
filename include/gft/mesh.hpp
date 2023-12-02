@@ -33,16 +33,16 @@ extern bool try_parse_obj(const std::string& obj, Mesh& mesh);
 extern Mesh load_obj(const char* path);
 
 
-
 struct IndexedMesh {
   Mesh mesh;
   std::vector<glm::uvec3> idxs;
 
   static IndexedMesh from_mesh(const Mesh& mesh);
 
-  inline geom::Aabb aabb() const { return mesh.aabb(); }
+  inline geom::Aabb aabb() const {
+    return mesh.aabb();
+  }
 };
-
 
 
 struct PointCloud {
@@ -81,7 +81,7 @@ struct BinGrid {
     L_ASSERT(x < grid.grid_lines_x.size());
     L_ASSERT(y < grid.grid_lines_y.size());
     L_ASSERT(z < grid.grid_lines_z.size());
-    const Bin& bin = 
+    const Bin& bin =
       bins[(z * grid.grid_lines_y.size() + y) * grid.grid_lines_x.size() + x];
     return bin;
   }
@@ -106,10 +106,7 @@ extern BinGrid bin_mesh(
   const glm::uvec3& grid_res,
   const Mesh& mesh
 );
-extern BinGrid bin_mesh(
-  const glm::vec3& grid_interval,
-  const Mesh& mesh
-);
+extern BinGrid bin_mesh(const glm::vec3& grid_interval, const Mesh& mesh);
 
 extern BinGrid bin_idxmesh(
   const geom::Aabb& aabb,
@@ -120,7 +117,6 @@ extern BinGrid bin_idxmesh(
   const glm::vec3& grid_interval,
   const IndexedMesh& idxmesh
 );
-
 
 
 struct TetrahedralVertex {
@@ -148,7 +144,10 @@ struct TetrahedralMesh {
   // Per triangle mesh vertex.
   std::vector<TetrahedralInterpolant> interps;
 
-  static TetrahedralMesh from_points(const glm::vec3& grid_interval, const std::vector<glm::vec3>& points);
+  static TetrahedralMesh from_points(
+    const glm::vec3& grid_interval,
+    const std::vector<glm::vec3>& points
+  );
   std::vector<glm::vec3> to_points() const;
 
   void apply_trans(const glm::mat4& trans);
@@ -158,10 +157,9 @@ struct TetrahedralMesh {
 };
 
 
-
 struct Bone {
   std::string name;
-  // Parent bone index; -1 if it's a root bone. 
+  // Parent bone index; -1 if it's a root bone.
   int32_t parent;
   // Parent bone space to current bone space transform.
   glm::mat4 parent_trans;
@@ -184,7 +182,11 @@ struct BoneKeyFrame {
 
   glm::mat4 to_transform() const;
 
-  static BoneKeyFrame lerp(const BoneKeyFrame& a, const BoneKeyFrame& b, float alpha);
+  static BoneKeyFrame lerp(
+    const BoneKeyFrame& a,
+    const BoneKeyFrame& b,
+    float alpha
+  );
 };
 struct BoneAnimation {
   std::vector<BoneKeyFrame> key_frames;
@@ -197,8 +199,16 @@ struct SkeletalAnimation {
   // For each bone.
   std::vector<BoneAnimation> bone_anims;
 
-  glm::mat4 get_bone_transform(const Skinning& skinning, uint32_t ibone, float tick) const;
-  void get_bone_transforms(const Skinning& skinning, float tick, std::vector<glm::mat4>& out) const;
+  glm::mat4 get_bone_transform(
+    const Skinning& skinning,
+    uint32_t ibone,
+    float tick
+  ) const;
+  void get_bone_transforms(
+    const Skinning& skinning,
+    float tick,
+    std::vector<glm::mat4>& out
+  ) const;
 };
 struct SkeletalAnimationCollection {
   std::vector<SkeletalAnimation> skel_anims;

@@ -30,7 +30,10 @@ struct TransactionLike {
   // presentation.
   bool is_frozen;
 
-  inline TransactionLike(const VulkanContextRef& ctxt, VkCommandBufferLevel level) :
+  inline TransactionLike(
+    const VulkanContextRef& ctxt,
+    VkCommandBufferLevel level
+  ) :
     ctxt(ctxt), submit_details(), level(level), is_frozen(false) {}
 };
 
@@ -40,19 +43,21 @@ struct InvocationTransitionDetail {
   std::vector<std::pair<DepthImageView, DepthImageUsage>> depth_img_transit;
 
   inline void reg(BufferView buf_view, BufferUsage usage) {
-    buf_transit.emplace_back(
-      std::make_pair<BufferView, BufferUsage>(
-        std::move(buf_view), std::move(usage)));
+    buf_transit.emplace_back(std::make_pair<BufferView, BufferUsage>(
+      std::move(buf_view), std::move(usage)
+    ));
   }
   inline void reg(ImageView img_view, ImageUsage usage) {
-    img_transit.emplace_back(
-      std::make_pair<ImageView, ImageUsage>(
-        std::move(img_view), std::move(usage)));
+    img_transit.emplace_back(std::make_pair<ImageView, ImageUsage>(
+      std::move(img_view), std::move(usage)
+    ));
   }
   inline void reg(DepthImageView depth_img_view, DepthImageUsage usage) {
     depth_img_transit.emplace_back(
       std::make_pair<DepthImageView, DepthImageUsage>(
-        std::move(depth_img_view), std::move(usage)));
+        std::move(depth_img_view), std::move(usage)
+      )
+    );
   }
 };
 struct InvocationCopyBufferToBufferDetail {
@@ -132,18 +137,37 @@ struct VulkanInvocation : public Invocation {
   // and those with switching submit types.
   std::unique_ptr<InvocationBakingDetail> bake_detail;
 
-  static InvocationRef create(const ContextRef& ctxt, const TransferInvocationConfig& cfg);
-  static InvocationRef create(const TaskRef& task, const ComputeInvocationConfig& cfg);
-  static InvocationRef create(const TaskRef& task, const GraphicsInvocationConfig& cfg);
-  static InvocationRef create(const RenderPassRef& pass, const RenderPassInvocationConfig& cfg);
-  static InvocationRef create(const ContextRef& ctxt, const CompositeInvocationConfig& cfg);
-  static InvocationRef create(const SwapchainRef& swapchain, const PresentInvocationConfig& cfg);
-  VulkanInvocation(const VulkanContextRef& ctxt, InvocationInfo &&info);
+  static InvocationRef create(
+    const ContextRef& ctxt,
+    const TransferInvocationConfig& cfg
+  );
+  static InvocationRef create(
+    const TaskRef& task,
+    const ComputeInvocationConfig& cfg
+  );
+  static InvocationRef create(
+    const TaskRef& task,
+    const GraphicsInvocationConfig& cfg
+  );
+  static InvocationRef create(
+    const RenderPassRef& pass,
+    const RenderPassInvocationConfig& cfg
+  );
+  static InvocationRef create(
+    const ContextRef& ctxt,
+    const CompositeInvocationConfig& cfg
+  );
+  static InvocationRef create(
+    const SwapchainRef& swapchain,
+    const PresentInvocationConfig& cfg
+  );
+  VulkanInvocation(const VulkanContextRef& ctxt, InvocationInfo&& info);
   ~VulkanInvocation();
 
-  void record(TransactionLike &transact) const;
+  void record(TransactionLike& transact) const;
 
-  virtual TransactionRef create_transact(const TransactionConfig& cfg) override final;
+  virtual TransactionRef create_transact(const TransactionConfig& cfg
+  ) override final;
 
   virtual double get_time_us() override final;
   virtual void bake() override final;

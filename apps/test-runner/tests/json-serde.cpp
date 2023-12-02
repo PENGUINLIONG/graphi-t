@@ -1,7 +1,8 @@
+#include "gft/json-serde.hpp"
+
 #include "gft/assert.hpp"
 #include "gft/log.hpp"
 #include "gft/test.hpp"
-#include "gft/json-serde.hpp"
 
 enum class TestEnum {
   _123 = 123,
@@ -28,7 +29,7 @@ struct TestStructure {
 L_TEST(TestJsonSerde) {
   using namespace liong;
   using namespace liong::json;
-  TestStructure ts1 {};
+  TestStructure ts1{};
   ts1.a = 123;
   ts1.b = true;
   ts1.c = "123";
@@ -49,8 +50,8 @@ L_TEST(TestJsonSerde) {
   std::string json_lit = json::print(j1);
   L_INFO(json_lit);
   JsonValue j2 = json::parse(json_lit);
-  TestStructure ts2 {};
+  TestStructure ts2{};
   json::deserialize(j2, ts2);
   L_ASSERT(json_lit == json::print(json::serialize(ts2)));
-  L_ASSERT(ts1.m == ts2.m); // Large integers should not be cast to double.
+  L_ASSERT(ts1.m == ts2.m);  // Large integers should not be cast to double.
 }

@@ -14,8 +14,13 @@ struct RenderPassInfo {
 struct RenderPass : public std::enable_shared_from_this<RenderPass> {
   const RenderPassInfo info;
 
-  RenderPass(RenderPassInfo &&info) : info(std::move(info)) {}
+  RenderPass(RenderPassInfo&& info) : info(std::move(info)) {}
   virtual ~RenderPass() {}
+
+  virtual TaskRef create_graphics_task(const GraphicsTaskConfig& cfg) = 0;
+  virtual InvocationRef create_render_pass_invocation(
+    const RenderPassInvocationConfig& cfg
+  ) = 0;
 };
 
 } // namespace hal

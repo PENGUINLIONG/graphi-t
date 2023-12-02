@@ -18,17 +18,17 @@ struct VulkanBuffer : public Buffer {
   sys::BufferRef buf;
   BufferDynamicDetail dyn_detail;
 
-  static BufferRef create(const ContextRef &ctxt, const BufferConfig &cfg);
-  VulkanBuffer(VulkanContextRef ctxt, BufferInfo &&info);
+  static BufferRef create(const ContextRef& ctxt, const BufferConfig& cfg);
+  VulkanBuffer(VulkanContextRef ctxt, BufferInfo&& info);
   ~VulkanBuffer();
 
   void* map(MemoryAccess map_access);
   void unmap();
 
-  inline static VulkanBufferRef from_hal(const BufferRef &ref) {
+  inline static VulkanBufferRef from_hal(const BufferRef& ref) {
     return std::static_pointer_cast<VulkanBuffer>(ref);
   }
 };
 
-} // namespace liong
 } // namespace vk
+} // namespace liong

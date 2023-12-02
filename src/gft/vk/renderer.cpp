@@ -1,21 +1,19 @@
 /*
 #include "gft/hal/renderer.hpp"
+
 #include "gft/glslang.hpp"
-#include "glm/glm.hpp"
 #include "glm/ext.hpp"
+#include "glm/glm.hpp"
 
 
 namespace liong {
 namespace vk {
 namespace scoped {
 
-MeshGpu::MeshGpu(const scoped::Context& ctxt, uint32_t nvert, bool streaming, bool gc) : nvert(nvert) {
-  poses = ctxt.build_buf()
-    .size(nvert * sizeof(glm::vec4))
-    .vertex()
-    .storage()
-    .host_access(streaming ? L_MEMORY_ACCESS_WRITE_BIT : 0)
-    .build(gc);
+MeshGpu::MeshGpu(const scoped::Context& ctxt, uint32_t nvert, bool streaming,
+bool gc) : nvert(nvert) { poses = ctxt.build_buf() .size(nvert *
+sizeof(glm::vec4)) .vertex() .storage() .host_access(streaming ?
+L_MEMORY_ACCESS_WRITE_BIT : 0) .build(gc);
 
   uvs = ctxt.build_buf()
     .size(nvert * sizeof(glm::vec2))
@@ -59,8 +57,9 @@ IndexedMeshGpu::IndexedMeshGpu(
     .host_access(streaming ? L_MEMORY_ACCESS_WRITE_BIT : 0)
     .build(gc);
 }
-IndexedMeshGpu::IndexedMeshGpu(const scoped::Context& ctxt, const mesh::IndexedMesh& idxmesh, bool gc) :
-  IndexedMeshGpu(ctxt, idxmesh.mesh.poses.size(), idxmesh.idxs.size(), gc)
+IndexedMeshGpu::IndexedMeshGpu(const scoped::Context& ctxt, const
+mesh::IndexedMesh& idxmesh, bool gc) : IndexedMeshGpu(ctxt,
+idxmesh.mesh.poses.size(), idxmesh.idxs.size(), gc)
 {
   write(idxmesh);
 }
@@ -79,12 +78,10 @@ SkinnedMeshGpu::SkinnedMeshGpu(
   uint32_t nbone,
   bool streaming,
   bool gc
-) : ctxt(scoped::Context::borrow(ctxt)), idxmesh(ctxt, nvert, ntri, streaming, gc), nbone(nbone) {
-  rest_poses = ctxt.build_buf()
-    .size(nvert * sizeof(glm::vec4))
-    .storage()
-    .host_access(streaming ? L_MEMORY_ACCESS_WRITE_BIT : 0)
-    .build();
+) : ctxt(scoped::Context::borrow(ctxt)), idxmesh(ctxt, nvert, ntri, streaming,
+gc), nbone(nbone) { rest_poses = ctxt.build_buf() .size(nvert *
+sizeof(glm::vec4)) .storage() .host_access(streaming ? L_MEMORY_ACCESS_WRITE_BIT
+: 0) .build();
 
   ibones = ctxt.build_buf()
     .size(nvert * sizeof(glm::uvec4))
@@ -104,8 +101,10 @@ SkinnedMeshGpu::SkinnedMeshGpu(
     .host_access(streaming ? L_MEMORY_ACCESS_WRITE_BIT : 0)
     .build();
 }
-SkinnedMeshGpu::SkinnedMeshGpu(const scoped::Context& ctxt, const mesh::SkinnedMesh& skinmesh, bool gc) :
-  SkinnedMeshGpu(ctxt, skinmesh.idxmesh.mesh.poses.size(), skinmesh.idxmesh.idxs.size(), skinmesh.skinning.bones.size(), gc)
+SkinnedMeshGpu::SkinnedMeshGpu(const scoped::Context& ctxt, const
+mesh::SkinnedMesh& skinmesh, bool gc) : SkinnedMeshGpu(ctxt,
+skinmesh.idxmesh.mesh.poses.size(), skinmesh.idxmesh.idxs.size(),
+skinmesh.skinning.bones.size(), gc)
 {
   write(skinmesh);
 }
@@ -157,19 +156,19 @@ scoped::Task create_animate_task(const scoped::Context& ctxt, uint32_t nvert) {
 void SkinnedMeshGpu::write(const mesh::SkinnedMesh& skinmesh) {
   L_ASSERT(nbone == skinmesh.skinning.bones.size());
   idxmesh.write(skinmesh.idxmesh);
-  rest_poses.map_write().write_aligned(skinmesh.idxmesh.mesh.poses, sizeof(glm::vec4));
-  ibones.map_write().write(skinmesh.skinning.ibones);
+  rest_poses.map_write().write_aligned(skinmesh.idxmesh.mesh.poses,
+sizeof(glm::vec4)); ibones.map_write().write(skinmesh.skinning.ibones);
   bone_weights.map_write().write(skinmesh.skinning.bone_weights);
-  std::vector<glm::mat4> bone_mats_data(skinmesh.skinning.bones.size(), glm::identity<glm::mat4>());
-  bone_mats.map_write().write(bone_mats_data);
+  std::vector<glm::mat4> bone_mats_data(skinmesh.skinning.bones.size(),
+glm::identity<glm::mat4>()); bone_mats.map_write().write(bone_mats_data);
 
   skinning = skinmesh.skinning;
   skel_anims = skinmesh.skel_anims;
 }
-scoped::Invocation SkinnedMeshGpu::animate(const std::string& anim_name, float tick) {
-  std::vector<glm::mat4> bone_mats_data;
-  skel_anims.get_skel_anim(anim_name).get_bone_transforms(skinning, tick, bone_mats_data);
-  bone_mats.map_write().write(bone_mats_data);
+scoped::Invocation SkinnedMeshGpu::animate(const std::string& anim_name, float
+tick) { std::vector<glm::mat4> bone_mats_data;
+  skel_anims.get_skel_anim(anim_name).get_bone_transforms(skinning, tick,
+bone_mats_data); bone_mats.map_write().write(bone_mats_data);
 
   uint32_t nvert = idxmesh.mesh.nvert;
   std::string task_name = "__skinmesh_bone_animate" + std::to_string(nvert);
@@ -428,13 +427,14 @@ Renderer::Renderer(
   rpib(nullptr) {}
 
 glm::mat4 Renderer::get_model2world() const {
-  glm::mat4 model2world = glm::scale(glm::mat4x4(1.0f), glm::vec3(1.0f, -1.0f, -1.0f));
-  return model2world;
+  glm::mat4 model2world = glm::scale(glm::mat4x4(1.0f), glm::vec3(1.0f, -1.0f,
+-1.0f)); return model2world;
 }
 glm::mat4 Renderer::get_world2view() const {
-  glm::mat4 camera2view = glm::perspective(glm::radians(45.0f), (float)width / (float)height, 1e-2f, 65534.0f);
-  glm::mat4 world2camera = glm::lookAt(camera_pos, model_pos, glm::vec3(0.0f, 1.0f, 0.0f));
-  return camera2view * world2camera;
+  glm::mat4 camera2view = glm::perspective(glm::radians(45.0f), (float)width /
+(float)height, 1e-2f, 65534.0f); glm::mat4 world2camera =
+glm::lookAt(camera_pos, model_pos, glm::vec3(0.0f, 1.0f, 0.0f)); return
+camera2view * world2camera;
 }
 
 void Renderer::set_camera_pos(const glm::vec3& x) {
@@ -445,7 +445,8 @@ void Renderer::set_model_pos(const glm::vec3& x) {
 }
 
 Renderer& Renderer::begin_frame(const scoped::Image& render_target_img) {
-  rpib = std::make_unique<RenderPassInvocationBuilder>(pass.build_pass_invoke());
+  rpib =
+std::make_unique<RenderPassInvocationBuilder>(pass.build_pass_invoke());
   rpib->attm(render_target_img.view()).attm(zbuf_img.view());
   return *this;
 }
@@ -508,13 +509,9 @@ Renderer& Renderer::draw_mesh(const mesh::Mesh& mesh) {
   return *this;
 }
 
-Renderer& Renderer::draw_idxmesh(const scoped::IndexedMeshGpu& idxmesh, const scoped::TextureGpu& tex) {
-  struct Uniform {
-    glm::mat4 model2world;
-    glm::mat4 world2view;
-    glm::vec4 camera_pos;
-    glm::vec4 light_dir;
-    glm::vec4 ambient;
+Renderer& Renderer::draw_idxmesh(const scoped::IndexedMeshGpu& idxmesh, const
+scoped::TextureGpu& tex) { struct Uniform { glm::mat4 model2world; glm::mat4
+world2view; glm::vec4 camera_pos; glm::vec4 light_dir; glm::vec4 ambient;
     glm::vec4 albedo;
   };
   Uniform u;
@@ -547,17 +544,16 @@ Renderer& Renderer::draw_idxmesh(const scoped::IndexedMeshGpu& idxmesh, const sc
 Renderer& Renderer::draw_idxmesh(const scoped::IndexedMeshGpu& idxmesh) {
   return draw_idxmesh(idxmesh, default_tex);
 }
-Renderer& Renderer::draw_idxmesh(const mesh::IndexedMesh& idxmesh, const scoped::TextureGpu& tex) {
-  scoped::IndexedMeshGpu idxmesh2(ctxt, idxmesh);
+Renderer& Renderer::draw_idxmesh(const mesh::IndexedMesh& idxmesh, const
+scoped::TextureGpu& tex) { scoped::IndexedMeshGpu idxmesh2(ctxt, idxmesh);
   return draw_idxmesh(idxmesh2, tex);
 }
 Renderer& Renderer::draw_idxmesh(const mesh::IndexedMesh& idxmesh) {
   return draw_idxmesh(idxmesh, default_tex);
 }
 
-Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh, const std::vector<glm::vec3>& colors) {
-  struct Uniform {
-    glm::mat4 model2world;
+Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh, const
+std::vector<glm::vec3>& colors) { struct Uniform { glm::mat4 model2world;
     glm::mat4 world2view;
   };
   Uniform u;
@@ -589,16 +585,15 @@ Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh, const std::vecto
   rpib->invoke(lit_invoke);
   return *this;
 }
-Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh, const glm::vec3& color) {
-  std::vector<glm::vec3> colors(mesh.poses.size(), color);
-  return draw_mesh_wireframe(mesh, colors);
+Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh, const glm::vec3&
+color) { std::vector<glm::vec3> colors(mesh.poses.size(), color); return
+draw_mesh_wireframe(mesh, colors);
 }
 Renderer& Renderer::draw_mesh_wireframe(const mesh::Mesh& mesh) {
   return draw_mesh_wireframe(mesh, glm::vec3(1.0f, 1.0f, 0.0f));
 }
-Renderer& Renderer::draw_idxmesh_wireframe(const mesh::IndexedMesh& idxmesh, const std::vector<glm::vec3>& colors) {
-  struct Uniform {
-    glm::mat4 model2world;
+Renderer& Renderer::draw_idxmesh_wireframe(const mesh::IndexedMesh& idxmesh,
+const std::vector<glm::vec3>& colors) { struct Uniform { glm::mat4 model2world;
     glm::mat4 world2view;
   };
   Uniform u;
@@ -637,16 +632,16 @@ Renderer& Renderer::draw_idxmesh_wireframe(const mesh::IndexedMesh& idxmesh, con
   rpib->invoke(lit_invoke);
   return *this;
 }
-Renderer& Renderer::draw_idxmesh_wireframe(const mesh::IndexedMesh& idxmesh, const glm::vec3& color) {
-  std::vector<glm::vec3> colors(idxmesh.mesh.poses.size(), color);
-  return draw_idxmesh_wireframe(idxmesh, colors);
+Renderer& Renderer::draw_idxmesh_wireframe(const mesh::IndexedMesh& idxmesh,
+const glm::vec3& color) { std::vector<glm::vec3>
+colors(idxmesh.mesh.poses.size(), color); return draw_idxmesh_wireframe(idxmesh,
+colors);
 }
 Renderer& Renderer::draw_idxmesh_wireframe(const mesh::IndexedMesh& idxmesh) {
   return draw_idxmesh_wireframe(idxmesh, glm::vec3(1.0f, 1.0f, 0.0f));
 }
-Renderer& Renderer::draw_point_cloud(const mesh::PointCloud& point_cloud, const std::vector<glm::vec3>& colors) {
-  struct Uniform {
-    glm::mat4 model2world;
+Renderer& Renderer::draw_point_cloud(const mesh::PointCloud& point_cloud, const
+std::vector<glm::vec3>& colors) { struct Uniform { glm::mat4 model2world;
     glm::mat4 world2view;
   };
   Uniform u;
@@ -678,9 +673,9 @@ Renderer& Renderer::draw_point_cloud(const mesh::PointCloud& point_cloud, const 
   rpib->invoke(invoke);
   return *this;
 }
-Renderer& Renderer::draw_point_cloud(const mesh::PointCloud& point_cloud, const glm::vec3& color) {
-  std::vector<glm::vec3> colors(point_cloud.poses.size(), color);
-  return draw_point_cloud(point_cloud, colors);
+Renderer& Renderer::draw_point_cloud(const mesh::PointCloud& point_cloud, const
+glm::vec3& color) { std::vector<glm::vec3> colors(point_cloud.poses.size(),
+color); return draw_point_cloud(point_cloud, colors);
 }
 Renderer& Renderer::draw_point_cloud(const mesh::PointCloud& point_cloud) {
   return draw_point_cloud(point_cloud, glm::vec3(1.0f, 1.0f, 0.0f));

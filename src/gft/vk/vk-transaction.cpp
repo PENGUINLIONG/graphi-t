@@ -4,13 +4,21 @@
 namespace liong {
 namespace vk {
 
-TransactionRef VulkanTransaction::create(const InvocationRef &invoke,
-                                         const TransactionConfig &cfg) {
+VulkanTransaction::VulkanTransaction(
+  VulkanContextRef ctxt,
+  TransactionInfo&& info
+) :
+  Transaction(std::move(info)), ctxt(ctxt) {}
+
+TransactionRef VulkanTransaction::create(
+  const InvocationRef& invoke,
+  const TransactionConfig& cfg
+) {
   const VulkanInvocationRef& invoke_ = VulkanInvocation::from_hal(invoke);
   const VulkanContextRef& ctxt = VulkanContext::from_hal(invoke_->ctxt);
 
   TransactionLike transact(ctxt, VK_COMMAND_BUFFER_LEVEL_PRIMARY);
-  util::Timer timer {};
+  util::Timer timer{};
   timer.tic();
   invoke_->record(transact);
   timer.toc();
@@ -18,11 +26,16 @@ TransactionRef VulkanTransaction::create(const InvocationRef &invoke,
   TransactionInfo info{};
   info.label = cfg.label;
 
-  VulkanTransactionRef out = std::make_shared<VulkanTransaction>(ctxt, std::move(info));
+  VulkanTransactionRef out =
+    std::make_shared<VulkanTransaction>(ctxt, std::move(info));
   out->submit_details = std::move(transact.submit_details);
   out->fences = std::move(transact.fences);
-  L_DEBUG("created and submitted transaction for execution, command "
-    "recording took ", timer.us(), "us");
+  L_DEBUG(
+    "created and submitted transaction for execution, command "
+    "recording took ",
+    timer.us(),
+    "us"
+  );
   return out;
 }
 VulkanTransaction::~VulkanTransaction() {
@@ -47,11 +60,12 @@ void VulkanTransaction::wait() {
     fences2.at(i) = fences.at(i)->fence;
   }
 
-  util::Timer wait_timer {};
+  util::Timer wait_timer{};
   wait_timer.tic();
   for (VkResult err;;) {
-    err = vkWaitForFences(*ctxt->dev, fences2.size(), fences2.data(),
-      VK_TRUE, SPIN_INTERVAL);
+    err = vkWaitForFences(
+      *ctxt->dev, fences2.size(), fences2.data(), VK_TRUE, SPIN_INTERVAL
+    );
     if (err == VK_TIMEOUT) {
       // L_WARN("timeout after 3000ns");
     } else {
@@ -61,9 +75,15 @@ void VulkanTransaction::wait() {
   }
   wait_timer.toc();
 
-  L_DEBUG("command drain returned after ", wait_timer.us(), "us since the "
-    "wait started (spin interval = ", SPIN_INTERVAL / 1000.0, "us");
+  L_DEBUG(
+    "command drain returned after ",
+    wait_timer.us(),
+    "us since the "
+    "wait started (spin interval = ",
+    SPIN_INTERVAL / 1000.0,
+    "us"
+  );
 }
 
-} // namespace vk
-} // namespace liong
+}  // namespace vk
+}  // namespace liong

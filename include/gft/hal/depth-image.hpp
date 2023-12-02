@@ -17,10 +17,14 @@ struct DepthImage : public std::enable_shared_from_this<DepthImage> {
   DepthImage(DepthImageInfo&& info) : info(std::move(info)) {}
   virtual ~DepthImage() {}
 
-  virtual DepthImageView view(uint32_t x_offset, uint32_t y_offset,
-                              uint32_t width, uint32_t height,
-                              DepthImageSampler sampler) {
-    DepthImageView out{};
+  virtual DepthImageView view(
+    uint32_t x_offset,
+    uint32_t y_offset,
+    uint32_t width,
+    uint32_t height,
+    DepthImageSampler sampler
+  ) {
+    DepthImageView out {};
     out.depth_img = shared_from_this();
     out.x_offset = x_offset;
     out.y_offset = y_offset;
@@ -35,8 +39,9 @@ struct DepthImage : public std::enable_shared_from_this<DepthImage> {
     uint32_t width,
     uint32_t height
   ) {
-    return view(x_offset, y_offset, width, height,
-      L_DEPTH_IMAGE_SAMPLER_LINEAR);
+    return view(
+      x_offset, y_offset, width, height, L_DEPTH_IMAGE_SAMPLER_LINEAR
+    );
   }
   inline DepthImageView view(DepthImageSampler sampler) {
     return view(0, 0, info.width, info.height, sampler);

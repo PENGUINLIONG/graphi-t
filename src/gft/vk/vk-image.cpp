@@ -7,8 +7,13 @@
 namespace liong {
 namespace vk {
 
-ImageRef VulkanImage::create(const ContextRef &ctxt,
-                             const ImageConfig &img_cfg) {
+VulkanImage::VulkanImage(VulkanContextRef ctxt, ImageInfo&& info) :
+  Image(std::move(info)), ctxt(ctxt) {}
+
+ImageRef VulkanImage::create(
+  const ContextRef& ctxt,
+  const ImageConfig& img_cfg
+) {
   VulkanContextRef ctxt_ = VulkanContext::from_hal(ctxt);
 
   VkFormat fmt = format2vk(img_cfg.format, img_cfg.color_space);
@@ -24,29 +29,23 @@ ImageRef VulkanImage::create(const ContextRef &ctxt,
     init_submit_ty = L_SUBMIT_TYPE_ANY;
   }
   if (img_cfg.usage & L_IMAGE_USAGE_SAMPLED_BIT) {
-    usage |=
-      VK_IMAGE_USAGE_SAMPLED_BIT |
-      VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    usage |= VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     init_submit_ty = L_SUBMIT_TYPE_ANY;
   }
   if (img_cfg.usage & L_IMAGE_USAGE_STORAGE_BIT) {
-    usage |=
-      VK_IMAGE_USAGE_STORAGE_BIT |
-      VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-      VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    usage |= VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
+             VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     init_submit_ty = L_SUBMIT_TYPE_ANY;
   }
   // KEEP THIS AFTER ANY SUBMIT TYPES.
   if (img_cfg.usage & L_IMAGE_USAGE_ATTACHMENT_BIT) {
     usage |=
-      VK_IMAGE_USAGE_TRANSFER_SRC_BIT |
-      VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
+      VK_IMAGE_USAGE_TRANSFER_SRC_BIT | VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT;
     init_submit_ty = L_SUBMIT_TYPE_GRAPHICS;
   }
   if (img_cfg.usage & L_IMAGE_USAGE_SUBPASS_DATA_BIT) {
-    usage |=
-      VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
-      VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
+    usage |= VK_IMAGE_USAGE_INPUT_ATTACHMENT_BIT |
+             VK_IMAGE_USAGE_TRANSIENT_ATTACHMENT_BIT;
     init_submit_ty = L_SUBMIT_TYPE_GRAPHICS;
   }
 
@@ -65,12 +64,13 @@ ImageRef VulkanImage::create(const ContextRef &ctxt,
 
   // Check whether the device support our use case.
   VkImageFormatProperties ifp;
-  VK_ASSERT << vkGetPhysicalDeviceImageFormatProperties(ctxt_->physdev(),
-    fmt, img_ty, VK_IMAGE_TILING_OPTIMAL, usage, 0, &ifp);
+  VK_ASSERT << vkGetPhysicalDeviceImageFormatProperties(
+    ctxt_->physdev(), fmt, img_ty, VK_IMAGE_TILING_OPTIMAL, usage, 0, &ifp
+  );
 
   VkImageLayout layout = VK_IMAGE_LAYOUT_UNDEFINED;
 
-  VkImageCreateInfo ici {};
+  VkImageCreateInfo ici{};
   ici.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
   ici.imageType = img_ty;
   ici.format = fmt;
@@ -87,7 +87,7 @@ ImageRef VulkanImage::create(const ContextRef &ctxt,
 
   bool is_tile_mem = img_cfg.usage & L_IMAGE_USAGE_TILE_MEMORY_BIT;
   sys::ImageRef img = nullptr;
-  VmaAllocationCreateInfo aci {};
+  VmaAllocationCreateInfo aci{};
   VkResult res = VK_ERROR_OUT_OF_DEVICE_MEMORY;
   if (is_tile_mem) {
     aci.usage = VMA_MEMORY_USAGE_GPU_LAZILY_ALLOCATED;
@@ -101,7 +101,7 @@ ImageRef VulkanImage::create(const ContextRef &ctxt,
     img = sys::Image::create(*ctxt_->allocator, &ici, &aci);
   }
 
-  VkImageViewCreateInfo ivci {};
+  VkImageViewCreateInfo ivci{};
   ivci.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
   ivci.image = img->img;
   ivci.viewType = img_view_ty;
@@ -112,7 +112,7 @@ ImageRef VulkanImage::create(const ContextRef &ctxt,
 
   sys::ImageViewRef img_view = sys::ImageView::create(ctxt_->dev->dev, &ivci);
 
-  ImageDynamicDetail dyn_detail {};
+  ImageDynamicDetail dyn_detail{};
   dyn_detail.layout = layout;
   dyn_detail.access = 0;
   dyn_detail.stage = VK_PIPELINE_STAGE_HOST_BIT;
@@ -141,5 +141,5 @@ VulkanImage::~VulkanImage() {
   }
 }
 
-} // namespace vk
-} // namespace liong
+}  // namespace vk
+}  // namespace liong
