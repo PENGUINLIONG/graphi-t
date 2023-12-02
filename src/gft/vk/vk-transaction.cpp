@@ -37,7 +37,7 @@ TransactionRef VulkanTransaction::create(
   return out;
 }
 VulkanTransaction::~VulkanTransaction() {
-  if (!is_done()) {
+  if (!is_waited) {
     L_WARN(
       "destroying transaction '", info.label, "' before it is done, waiting "
       "for it to finish (it's better you wait it explicit on your own)"
@@ -49,17 +49,11 @@ VulkanTransaction::~VulkanTransaction() {
   }
 }
 bool VulkanTransaction::is_done() {
-  for (const auto& fence : fences) {
-    VkResult err = vkGetFenceStatus(*ctxt->dev, fence->fence);
-    if (err == VK_NOT_READY) {
-      return false;
-    } else {
-      VK_ASSERT << err;
-    }
-  }
-  return true;
+  return is_waited;
 }
 void VulkanTransaction::wait() {
+  if (is_waited) { return; }
+
   std::vector<VkFence> fences2(fences.size());
   for (size_t i = 0; i < fences.size(); ++i) {
     fences2.at(i) = fences.at(i)->fence;
@@ -80,8 +74,20 @@ void VulkanTransaction::wait() {
   }
   wait_timer.toc();
 
+  for (auto& submit_detail : submit_details) {
+    L_ASSERT(submit_detail.is_submitted);
+    submit_detail.cmdbuf.reset();
+
+    VK_ASSERT << vkResetCommandPool(
+      *ctxt->dev, submit_detail.cmd_pool.inner->value->cmd_pool, 0
+    );
+
+    submit_detail.cmd_pool.release();
+  }
+
   L_DEBUG("command drain returned after ", wait_timer.us(), "us since the wait "
     "started (spin interval = ", SPIN_INTERVAL / 1000.0, "us)");
+  is_waited = true;
 }
 
 }  // namespace vk

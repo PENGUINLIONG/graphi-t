@@ -12,6 +12,7 @@ struct VulkanTransaction : public Transaction {
   VulkanContextRef ctxt;
   std::vector<TransactionSubmitDetail> submit_details;
   std::vector<sys::FenceRef> fences;
+  bool is_waited;
 
   static TransactionRef create(
     const InvocationRef& invoke,
