@@ -136,6 +136,16 @@ struct ResourceView {
   BufferView buf_view;
   ImageView img_view;
   DepthImageView depth_img_view;
+
+  static ResourceView buffer(BufferView buf_view) {
+    return ResourceView{L_RESOURCE_VIEW_TYPE_BUFFER, buf_view, {}, {}};
+  }
+  static ResourceView image(ImageView img_view) {
+    return ResourceView{L_RESOURCE_VIEW_TYPE_IMAGE, {}, img_view, {}};
+  }
+  static ResourceView depth_image(DepthImageView depth_img_view) {
+    return ResourceView{L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE, {}, {}, depth_img_view};
+  }
 };
 
 enum SubmitType {
@@ -161,24 +171,24 @@ enum AttachmentType {
   L_ATTACHMENT_TYPE_COLOR,
   L_ATTACHMENT_TYPE_DEPTH,
 };
-enum AttachmentAccess {
+enum AttachmentAccessBits {
   // Don't care about the access pattern
-  L_ATTACHMENT_ACCESS_DONT_CARE = 1,
+  L_ATTACHMENT_ACCESS_DONT_CARE_BIT = 1,
   // When the attachment is read-accessed, the previous value of the pixel is
   // ignored and is overwritten by a specified value.
-  L_ATTACHMENT_ACCESS_CLEAR = (1 << 0),
+  L_ATTACHMENT_ACCESS_CLEAR_BIT = (1 << 0),
   // When the attachment is read-accessed, the previous value of the pixel is
   // loaded from memory.
-  L_ATTACHMENT_ACCESS_LOAD = (1 << 1),
+  L_ATTACHMENT_ACCESS_LOAD_BIT = (1 << 1),
   // When the attachment is write-accessed, the shader output is written to
   // memory.
-  L_ATTACHMENT_ACCESS_STORE = (1 << 2),
+  L_ATTACHMENT_ACCESS_STORE_BIT = (1 << 2),
   // When the attachment is read-accessed, the previous value of the pixel is
   // loaded as subpass data.
   // TOOD: (penguinliong) Implement framebuffer fetch.
-  L_ATTACHMENT_ACCESS_FETCH = (1 << 3),
+  L_ATTACHMENT_ACCESS_FETCH_BIT = (1 << 3),
 };
-typedef uint32_t AttachmentAccessFlags;
+typedef uint32_t AttachmentAccess;
 
 // - [Create Configs] ----------------------------------------------------------
 
@@ -356,7 +366,7 @@ struct GraphicsTaskConfig {
 struct AttachmentConfigBuilder;
 struct AttachmentConfig {
   // Attachment access pattern.
-  AttachmentAccessFlags attm_access;
+  AttachmentAccess attm_access;
   // Attachment type.
   AttachmentType attm_ty;
   union {

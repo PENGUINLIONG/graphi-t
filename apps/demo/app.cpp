@@ -4,6 +4,7 @@
 #include "gft/platform/windows.hpp"
 #include "gft/renderdoc.hpp"
 #include "gft/vk/vk.hpp"
+#include "gft/glslang.hpp"
 
 using namespace liong;
 using namespace liong::vk;
@@ -144,13 +145,16 @@ void guarded_main() {
       .label("pass")
       .width(swapchain->get_width())
       .height(swapchain->get_height())
-      .clear_store_color_attachment(L_FORMAT_B8G8R8A8_UNORM)
+      .clear_store_color_attachment(L_FORMAT_B8G8R8A8_UNORM, L_COLOR_SPACE_SRGB)
   );
+
+  auto art = glslang::compile_graph_hlsl(hlsl, "vert", hlsl, "frag");
 
   TaskRef task = pass->create_graphics_task( //
     GraphicsTaskConfig::build()
       .label("graph_task")
-      .hlsl(hlsl, "vert", "frag")
+      .vertex_shader(art.vert_spv, "vert")
+      .fragment_shader(art.frag_spv, "frag")
       .uniform_buffer()
   );
 
@@ -161,8 +165,7 @@ void guarded_main() {
       GraphicsInvocationConfig::build()
         .label("draw_call")
         .vertex_buffer(verts->view())
-        .index_buffer(idxs->view())
-        .index_count(3)
+        .per_u32_index(idxs->view(), 3)
         .resource(ubo->view())
     );
 

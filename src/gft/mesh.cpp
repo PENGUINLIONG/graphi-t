@@ -30,13 +30,13 @@ struct ObjToken {
 };
 
 struct ObjTokenizer {
-  const char* pos;
-  const char* end;
+  const uint8_t* pos;
+  const uint8_t* end;
   bool success;
   ObjToken token;
 
   ObjTokenizer(const char* beg, const char* end) :
-    pos(beg), end(end), success(true), token() {
+    pos((const uint8_t*)beg), end((const uint8_t*)end), success(true), token() {
     next();
   }
 
@@ -80,7 +80,7 @@ struct ObjTokenizer {
           return true;
         }
 
-        const char c = *pos;
+        const uint8_t c = *pos;
 
         switch (token_ty) {
           case L_OBJ_TOKEN_TYPE_INTEGER:
@@ -133,7 +133,7 @@ struct ObjTokenizer {
           return true;
         }
 
-        char c = *pos;
+        uint8_t c = *pos;
 
         if (c == '\r' || c == '\n') {
           // Newlines.

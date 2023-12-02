@@ -1,4 +1,3 @@
-#pragma once
 #include "gft/hal/buffer.hpp"
 
 namespace liong {

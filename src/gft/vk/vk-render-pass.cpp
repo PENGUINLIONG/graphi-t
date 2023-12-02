@@ -14,17 +14,17 @@ VulkanRenderPass::VulkanRenderPass(
 ) :
   RenderPass(std::move(info)), ctxt(ctxt) {}
 
-VkAttachmentLoadOp _get_load_op(AttachmentAccessFlags attm_access) {
-  if (attm_access & L_ATTACHMENT_ACCESS_CLEAR) {
+VkAttachmentLoadOp _get_load_op(AttachmentAccess attm_access) {
+  if (attm_access & L_ATTACHMENT_ACCESS_CLEAR_BIT) {
     return VK_ATTACHMENT_LOAD_OP_CLEAR;
   }
-  if (attm_access & L_ATTACHMENT_ACCESS_LOAD) {
+  if (attm_access & L_ATTACHMENT_ACCESS_LOAD_BIT) {
     return VK_ATTACHMENT_LOAD_OP_LOAD;
   }
   return VK_ATTACHMENT_LOAD_OP_DONT_CARE;
 }
-VkAttachmentStoreOp _get_store_op(AttachmentAccessFlags attm_access) {
-  if (attm_access & L_ATTACHMENT_ACCESS_STORE) {
+VkAttachmentStoreOp _get_store_op(AttachmentAccess attm_access) {
+  if (attm_access & L_ATTACHMENT_ACCESS_STORE_BIT) {
     return VK_ATTACHMENT_STORE_OP_STORE;
   }
   return VK_ATTACHMENT_STORE_OP_DONT_CARE;
