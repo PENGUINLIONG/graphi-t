@@ -138,13 +138,15 @@ struct ResourceView {
   DepthImageView depth_img_view;
 
   static ResourceView buffer(BufferView buf_view) {
-    return ResourceView{L_RESOURCE_VIEW_TYPE_BUFFER, buf_view, {}, {}};
+    return ResourceView { L_RESOURCE_VIEW_TYPE_BUFFER, buf_view, {}, {} };
   }
   static ResourceView image(ImageView img_view) {
-    return ResourceView{L_RESOURCE_VIEW_TYPE_IMAGE, {}, img_view, {}};
+    return ResourceView { L_RESOURCE_VIEW_TYPE_IMAGE, {}, img_view, {} };
   }
   static ResourceView depth_image(DepthImageView depth_img_view) {
-    return ResourceView{L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE, {}, {}, depth_img_view};
+    return ResourceView {
+      L_RESOURCE_VIEW_TYPE_DEPTH_IMAGE, {}, {}, depth_img_view
+    };
   }
 };
 

@@ -1,44 +1,10 @@
 #include <array>
 #include "gft/assert.hpp"
-#include "gft/log.hpp"
 #include "sys.hpp"
 
 namespace liong {
 namespace vk {
 namespace sys {
-
-inline void request_name(
-  const char* category,
-  const char* expect,
-  const char* actual,
-  std::vector<const char*>& out
-) {
-  if (std::strcmp(expect, actual) == 0) {
-    out.push_back(expect);
-    L_DEBUG("enabled ", category, " ", expect);
-  }
-}
-inline void request_instance_extension(
-  const char* expect,
-  const char* actual,
-  std::vector<const char*>& out
-) {
-  request_name("instance extension", expect, actual, out);
-}
-inline void request_instance_layer(
-  const char* expect,
-  const char* actual,
-  std::vector<const char*>& out
-) {
-  request_name("instance layer", expect, actual, out);
-}
-inline void request_device_extension(
-  const char* expect,
-  const char* actual,
-  std::vector<const char*>& out
-) {
-  request_name("device extension", expect, actual, out);
-}
 
 // VkInstance
 sys::InstanceRef create_inst(uint32_t api_ver) {
@@ -91,10 +57,15 @@ sys::InstanceRef create_inst(uint32_t api_ver) {
       inst_ext.extensionName,
       inst_ext_names
     );
+    request_instance_extension(
+      VK_EXT_METAL_SURFACE_EXTENSION_NAME, inst_ext.extensionName, inst_ext_names
+    );
 #if !defined(NDEBUG)
     request_instance_extension(
       VK_EXT_DEBUG_UTILS_EXTENSION_NAME, inst_ext.extensionName, inst_ext_names
     );
+    request_instance_extension(VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
+      inst_ext.extensionName, inst_ext_names);
 #endif  // !defined(NDEBUG)
   }
 
@@ -110,6 +81,9 @@ sys::InstanceRef create_inst(uint32_t api_ver) {
 
   VkInstanceCreateInfo ici{};
   ici.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+#ifdef __APPLE__
+  ici.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif  // __APPLE__
   ici.pApplicationInfo = &app_info;
   ici.enabledExtensionCount = (uint32_t)inst_ext_names.size();
   ici.ppEnabledExtensionNames = inst_ext_names.data();
@@ -257,7 +231,7 @@ sys::PipelineLayoutRef create_pipe_layout(
 }
 
 // VkShaderModule
-VkShaderModule create_shader_mod(
+sys::ShaderModuleRef create_shader_mod(
   VkDevice dev,
   const uint32_t* spv,
   size_t spv_size
@@ -267,12 +241,7 @@ VkShaderModule create_shader_mod(
   smci.pCode = spv;
   smci.codeSize = spv_size;
 
-  VkShaderModule shader_mod;
-  VK_ASSERT << vkCreateShaderModule(dev, &smci, nullptr, &shader_mod);
-  return shader_mod;
-}
-void destroy_shader_mod(VkDevice dev, VkShaderModule shader_mod) {
-  vkDestroyShaderModule(dev, shader_mod, nullptr);
+  return sys::ShaderModule::create(dev, &smci);
 }
 
 // VkPipeline

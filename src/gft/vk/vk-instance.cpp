@@ -65,7 +65,7 @@ void desc_physdev_mem_prop(
       }
     }
     std::string all_flags = flags.empty() ? "0" : util::join(" | ", flags);
-    ss << "  memory heap #" << i << ": " << all_flags << std::endl;
+    ss << std::endl << "  memory heap #" << i << ": " << all_flags;
   }
   for (size_t i = 0; i < mem_prop.memoryTypeCount; ++i) {
     const VkMemoryType& ty = mem_prop.memoryTypes[i];
@@ -89,7 +89,7 @@ void desc_physdev_mem_prop(
       }
     }
     std::string all_flags = flags.empty() ? "0" : util::join(" | ", flags);
-    ss << "  memory type #" << i << " on heap #" << ty.heapIndex << ": "
+    ss << std::endl << "  memory type #" << i << " on heap #" << ty.heapIndex << ": "
        << all_flags;
   }
 }
@@ -140,12 +140,14 @@ VulkanInstanceRef VulkanInstance::create(
   return out;
 }
 VulkanInstanceRef VulkanInstance::create() {
-  sys::InstanceRef inst = sys::create_inst(VK_API_VERSION_1_0);
+  const uint32_t api_ver = VK_API_VERSION_1_1;
+
+  sys::InstanceRef inst = sys::create_inst(api_ver);
   std::vector<InstancePhysicalDeviceDetail> physdev_details =
     collect_physdev_details(inst->inst);
 
   VulkanInstanceRef out = std::make_shared<VulkanInstance>();
-  out->api_ver = VK_API_VERSION_1_0;
+  out->api_ver = api_ver;
   out->inst = std::move(inst);
   out->physdev_details = std::move(physdev_details);
   out->is_imported = true;

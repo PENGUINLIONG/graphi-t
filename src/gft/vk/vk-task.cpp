@@ -29,7 +29,7 @@ TaskRef VulkanTask::create(
     ctxt_->get_desc_set_layout(cfg.rsc_tys);
   sys::PipelineLayoutRef pipe_layout =
     sys::create_pipe_layout(*ctxt_->dev, desc_set_layout->desc_set_layout);
-  VkShaderModule shader_mod = sys::create_shader_mod(
+  sys::ShaderModuleRef shader_mod = sys::create_shader_mod(
     *ctxt_->dev, (const uint32_t*)cfg.code, cfg.code_size
   );
 
@@ -49,13 +49,11 @@ TaskRef VulkanTask::create(
   pssci.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
   pssci.pName = cfg.entry_name.c_str();
   pssci.stage = VK_SHADER_STAGE_COMPUTE_BIT;
-  pssci.module = shader_mod;
+  pssci.module = *shader_mod;
   pssci.pSpecializationInfo = &spec_info;
 
   sys::PipelineRef pipe =
     sys::create_comp_pipe(*ctxt_->dev, pipe_layout->pipe_layout, pssci);
-
-  sys::destroy_shader_mod(*ctxt_->dev, shader_mod);
 
   TaskResourceDetail rsc_detail{};
   rsc_detail.pipe_layout = std::move(pipe_layout);
@@ -90,10 +88,10 @@ TaskRef VulkanTask::create(
 
   sys::PipelineLayoutRef pipe_layout =
     sys::create_pipe_layout(*ctxt->dev, desc_set_layout->desc_set_layout);
-  VkShaderModule vert_shader_mod = sys::create_shader_mod(
+  sys::ShaderModuleRef vert_shader_mod = sys::create_shader_mod(
     *ctxt->dev, (const uint32_t*)cfg.vert_code, cfg.vert_code_size
   );
-  VkShaderModule frag_shader_mod = sys::create_shader_mod(
+  sys::ShaderModuleRef frag_shader_mod = sys::create_shader_mod(
     *ctxt->dev, (const uint32_t*)cfg.frag_code, cfg.frag_code_size
   );
 
@@ -135,14 +133,14 @@ TaskRef VulkanTask::create(
     pssci.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     pssci.pName = cfg.vert_entry_name.c_str();
     pssci.stage = VK_SHADER_STAGE_VERTEX_BIT;
-    pssci.module = vert_shader_mod;
+    pssci.module = *vert_shader_mod;
   }
   {
     VkPipelineShaderStageCreateInfo& pssci = psscis[1];
     pssci.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
     pssci.pName = cfg.frag_entry_name.c_str();
     pssci.stage = VK_SHADER_STAGE_FRAGMENT_BIT;
-    pssci.module = frag_shader_mod;
+    pssci.module = *frag_shader_mod;
   }
 
   sys::PipelineRef pipe = sys::create_graph_pipe(
@@ -155,9 +153,6 @@ TaskRef VulkanTask::create(
     prsci,
     psscis
   );
-
-  sys::destroy_shader_mod(*ctxt->dev, vert_shader_mod);
-  sys::destroy_shader_mod(*ctxt->dev, frag_shader_mod);
 
   TaskResourceDetail rsc_detail{};
   rsc_detail.pipe_layout = std::move(pipe_layout);

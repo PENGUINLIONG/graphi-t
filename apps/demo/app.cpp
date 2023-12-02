@@ -104,7 +104,7 @@ void guarded_main() {
 
   {
     float data[4] { 0, 1, 0, 1 };
-    ubo->copy_from(data);
+    ubo->copy_from(data, 1);
   }
 
   BufferRef verts = ctxt->create_buffer( //
@@ -116,7 +116,7 @@ void guarded_main() {
   );
   {
     float data[9] { 1, -1, 0, -1, -1, 0, -1, 1, 0 };
-    verts->copy_from(data);
+    verts->copy_from(data, 1);
   }
 
   BufferRef idxs = ctxt->create_buffer( //
@@ -128,7 +128,7 @@ void guarded_main() {
   );
   {
     uint16_t data[3] { 0, 1, 2 };
-    idxs->copy_from(data);
+    idxs->copy_from(data, 1);
   }
 
   SwapchainRef swapchain = ctxt->create_swapchain( //
@@ -153,8 +153,9 @@ void guarded_main() {
   TaskRef task = pass->create_graphics_task( //
     GraphicsTaskConfig::build()
       .label("graph_task")
-      .vertex_shader(art.vert_spv, "vert")
-      .fragment_shader(art.frag_spv, "frag")
+      .vertex_shader(art.vert_spv, "main")
+      .fragment_shader(art.frag_spv, "main")
+      .topology(liong::hal::L_TOPOLOGY_TRIANGLE)
       .uniform_buffer()
   );
 

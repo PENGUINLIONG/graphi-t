@@ -18,11 +18,7 @@ struct MappedBuffer {
   }
   template<typename T>
   inline void copy_to(T* dst, size_t count) const {
-    copy_to(dst, sizeof(T) * count);
-  }
-  template<typename T>
-  inline void copy_to(T* dst, size_t count) {
-    copy_to(dst, count);
+    copy_to((void*)dst, sizeof(T) * count);
   }
   template<typename T>
   inline void copy_to(std::vector<T>& dst) const {
@@ -40,7 +36,7 @@ struct MappedBuffer {
   }
   template<typename T>
   inline void copy_from(const T* src, size_t count) const {
-    copy_from(src, sizeof(T) * count);
+    copy_from((const void*)src, sizeof(T) * count);
   }
   template<typename T>
   inline void copy_from(const std::vector<T>& src) const {
@@ -99,10 +95,6 @@ struct Buffer : public std::enable_shared_from_this<Buffer> {
     this->map_read().copy_to(dst);
   }
   template<typename T>
-  inline void copy_to(T& dst) {
-    this->map_read().copy_to(&dst, sizeof(T));
-  }
-  template<typename T>
   inline void copy_to_aligned(T* dst, size_t count, size_t dev_align) {
     this->map_read().copy_to_aligned(dst, count, dev_align);
   }
@@ -122,10 +114,6 @@ struct Buffer : public std::enable_shared_from_this<Buffer> {
   template<typename T>
   inline void copy_from(const std::vector<T>& src) {
     this->map_write().copy_from(src);
-  }
-  template<typename T>
-  inline void copy_from(const T& src) {
-    this->map_write().copy_from(&src, sizeof(T));
   }
   template<typename T>
   inline void copy_from_aligned(const T* src, size_t count, size_t dev_align) {

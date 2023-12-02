@@ -13,9 +13,9 @@ namespace liong {
 namespace glslang {
 
 ::glslang::EshTargetClientVersion TARGET_CLIENT_VER =
-  ::glslang::EshTargetClientVersion::EShTargetVulkan_1_0;
+  ::glslang::EshTargetClientVersion::EShTargetVulkan_1_1;
 ::glslang::EShTargetLanguageVersion TARGET_LANG_VER =
-  ::glslang::EShTargetLanguageVersion::EShTargetSpv_1_0;
+  ::glslang::EShTargetLanguageVersion::EShTargetSpv_1_3;
 
 void _initialize(bool silent) {
   static bool is_initialized = false;

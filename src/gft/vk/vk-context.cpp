@@ -1,20 +1,4 @@
 #include <set>
-#include <vulkan/vulkan.h>
-
-#ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#include <Windows.h>
-#include "vulkan/vulkan_win32.h"
-#endif  // _WIN32
-
-#if defined(ANDROID) || defined(__ANDROID__)
-#include "vulkan/vulkan_android.h"
-#endif  // defined(ANDROID) || defined(__ANDROID__)
-
-#if defined(__MACH__) && defined(__APPLE__)
-#include "vulkan/vulkan_metal.h"
-#endif  // defined(__MACH__) && defined(__APPLE__)
-
 #include "sys.hpp"
 #include "gft/assert.hpp"
 #include "gft/util.hpp"
@@ -106,7 +90,7 @@ sys::SurfaceRef _create_surf_metal(
   msci.pLayer = (const CAMetalLayer*)cfg.metal_layer;
   sys::SurfaceRef surf = sys::Surface::create(inst.inst->inst, &msci);
 
-  L_DEBUG("created windows surface '", cfg.label, "'");
+  L_DEBUG("created metal surface '", cfg.label, "'");
   return surf;
 #else
   panic("metal surface cannot be created on current platform");
@@ -300,9 +284,11 @@ ContextRef _create_ctxt(
   std::vector<const char*> dev_exts;
   dev_exts.reserve(physdev_detail.ext_props.size());
   for (const auto& dev_ext : physdev_detail.ext_props) {
-    dev_exts.emplace_back(dev_ext.first.c_str());
+    L_DEBUG("found device extension: ", dev_ext.first);
+    request_device_extension("VK_KHR_portability_subset", dev_ext.first.c_str(), dev_exts);
+    request_device_extension("VK_EXT_debug_marker", dev_ext.first.c_str(), dev_exts);
+    request_device_extension("VK_KHR_swapchain", dev_ext.first.c_str(), dev_exts);
   }
-  L_DEBUG("enabled device extensions: ", util::join(", ", dev_exts));
 
   sys::DeviceRef dev =
     sys::create_dev(physdev_detail.physdev, dqcis, dev_exts, feat);

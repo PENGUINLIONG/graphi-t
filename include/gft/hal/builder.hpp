@@ -3,8 +3,8 @@
 namespace liong {
 namespace hal {
 
-// Please write me the config builders. Refers to the xxxConfig class definitions in src/gft/hal/hal.hpp
-// for the config builder interfaces.
+// Please write me the config builders. Refers to the xxxConfig class
+// definitions in src/gft/hal/hal.hpp for the config builder interfaces.
 
 struct InstanceConfigBuilder {
   InstanceConfig inner {};
@@ -128,10 +128,12 @@ struct BufferConfigBuilder {
   }
 
   BufferConfigBuilder& streaming() {
-    return host_access(L_MEMORY_ACCESS_WRITE_BIT).usage(L_BUFFER_USAGE_TRANSFER_SRC_BIT);
+    return host_access(L_MEMORY_ACCESS_WRITE_BIT)
+      .usage(L_BUFFER_USAGE_TRANSFER_SRC_BIT);
   }
   BufferConfigBuilder& read_back() {
-    return host_access(L_MEMORY_ACCESS_READ_BIT).usage(L_BUFFER_USAGE_TRANSFER_DST_BIT);
+    return host_access(L_MEMORY_ACCESS_READ_BIT)
+      .usage(L_BUFFER_USAGE_TRANSFER_DST_BIT);
   }
 
   BufferConfigBuilder& usage(BufferUsage usage) {
@@ -139,7 +141,9 @@ struct BufferConfigBuilder {
     return *this;
   }
   BufferConfigBuilder& transfer() {
-    return usage(L_BUFFER_USAGE_TRANSFER_SRC_BIT | L_BUFFER_USAGE_TRANSFER_DST_BIT);
+    return usage(
+      L_BUFFER_USAGE_TRANSFER_SRC_BIT | L_BUFFER_USAGE_TRANSFER_DST_BIT
+    );
   }
   BufferConfigBuilder& uniform() {
     return usage(L_BUFFER_USAGE_UNIFORM_BIT);
@@ -191,7 +195,9 @@ struct ImageConfigBuilder {
     return *this;
   }
   ImageConfigBuilder& transfer() {
-    return usage(L_IMAGE_USAGE_TRANSFER_SRC_BIT | L_IMAGE_USAGE_TRANSFER_DST_BIT);
+    return usage(
+      L_IMAGE_USAGE_TRANSFER_SRC_BIT | L_IMAGE_USAGE_TRANSFER_DST_BIT
+    );
   }
   ImageConfigBuilder& sampled() {
     return usage(L_IMAGE_USAGE_SAMPLED_BIT);
@@ -294,36 +300,51 @@ struct ComputeTaskConfigBuilder {
     inner.entry_name = entry_name;
     return *this;
   }
-  ComputeTaskConfigBuilder& compute_shader(const void* code, size_t size, const std::string& entry_point) {
+  ComputeTaskConfigBuilder& compute_shader(
+    const void* code,
+    size_t size,
+    const std::string& entry_point
+  ) {
     inner.code = code;
     inner.code_size = size;
     inner.entry_name = entry_point;
     return *this;
   }
-  ComputeTaskConfigBuilder& compute_shader(const std::string& code, const std::string& entry_point) {
+  ComputeTaskConfigBuilder& compute_shader(
+    const std::string& code,
+    const std::string& entry_point
+  ) {
     return compute_shader(code.c_str(), code.size(), entry_point);
   }
-  ComputeTaskConfigBuilder& compute_shader(const std::vector<uint8_t>& code, const std::string& entry_point) {
+  ComputeTaskConfigBuilder& compute_shader(
+    const std::vector<uint8_t>& code,
+    const std::string& entry_point
+  ) {
     return compute_shader(code.data(), code.size(), entry_point);
   }
-  ComputeTaskConfigBuilder& compute_shader(const std::vector<uint32_t>& code, const std::string& entry_point) {
-    return compute_shader(code.data(), code.size() * sizeof(uint32_t), entry_point);
+  ComputeTaskConfigBuilder& compute_shader(
+    const std::vector<uint32_t>& code,
+    const std::string& entry_point
+  ) {
+    return compute_shader(
+      code.data(), code.size() * sizeof(uint32_t), entry_point
+    );
   }
   ComputeTaskConfigBuilder& resource(ResourceType resource_type) {
     inner.rsc_tys.push_back(resource_type);
     return *this;
   }
   ComputeTaskConfigBuilder& uniform_buffer() {
-    return  resource(L_RESOURCE_TYPE_UNIFORM_BUFFER);
+    return resource(L_RESOURCE_TYPE_UNIFORM_BUFFER);
   }
   ComputeTaskConfigBuilder& storage_buffer() {
-    return  resource(L_RESOURCE_TYPE_STORAGE_BUFFER);
+    return resource(L_RESOURCE_TYPE_STORAGE_BUFFER);
   }
   ComputeTaskConfigBuilder& sampled_image() {
-    return  resource(L_RESOURCE_TYPE_SAMPLED_IMAGE);
+    return resource(L_RESOURCE_TYPE_SAMPLED_IMAGE);
   }
   ComputeTaskConfigBuilder& storage_image() {
-    return  resource(L_RESOURCE_TYPE_STORAGE_IMAGE);
+    return resource(L_RESOURCE_TYPE_STORAGE_IMAGE);
   }
   ComputeTaskConfigBuilder& workgrp_size(uint32_t x, uint32_t y, uint32_t z) {
     inner.workgrp_size.x = x;
@@ -362,35 +383,65 @@ struct GraphicsTaskConfigBuilder {
     inner.label = label;
     return *this;
   }
-  GraphicsTaskConfigBuilder& vertex_shader(const void* code, size_t size, const std::string& entry_point) {
+  GraphicsTaskConfigBuilder& vertex_shader(
+    const void* code,
+    size_t size,
+    const std::string& entry_point
+  ) {
     inner.vert_code = code;
     inner.vert_code_size = size;
     inner.vert_entry_name = entry_point;
     return *this;
   }
-  GraphicsTaskConfigBuilder& vertex_shader(const std::string& code, const std::string& entry_point) {
+  GraphicsTaskConfigBuilder& vertex_shader(
+    const std::string& code,
+    const std::string& entry_point
+  ) {
     return vertex_shader(code.c_str(), code.size(), entry_point);
   }
-  GraphicsTaskConfigBuilder& vertex_shader(const std::vector<uint8_t>& code, const std::string& entry_point) {
+  GraphicsTaskConfigBuilder& vertex_shader(
+    const std::vector<uint8_t>& code,
+    const std::string& entry_point
+  ) {
     return vertex_shader(code.data(), code.size(), entry_point);
   }
-  GraphicsTaskConfigBuilder& vertex_shader(const std::vector<uint32_t>& code, const std::string& entry_point) {
-    return vertex_shader(code.data(), code.size() * sizeof(uint32_t), entry_point);
+  GraphicsTaskConfigBuilder& vertex_shader(
+    const std::vector<uint32_t>& code,
+    const std::string& entry_point
+  ) {
+    return vertex_shader(
+      code.data(), code.size() * sizeof(uint32_t), entry_point
+    );
   }
-  GraphicsTaskConfigBuilder& fragment_shader(const void* code, size_t size, const std::string& entry_point) {
+  GraphicsTaskConfigBuilder& fragment_shader(
+    const void* code,
+    size_t size,
+    const std::string& entry_point
+  ) {
     inner.frag_code = code;
     inner.frag_code_size = size;
     inner.frag_entry_name = entry_point;
     return *this;
   }
-  GraphicsTaskConfigBuilder& fragment_shader(const std::string& code, const std::string& entry_point) {
+  GraphicsTaskConfigBuilder& fragment_shader(
+    const std::string& code,
+    const std::string& entry_point
+  ) {
     return fragment_shader(code.c_str(), code.size(), entry_point);
   }
-  GraphicsTaskConfigBuilder& fragment_shader(const std::vector<uint8_t>& code, const std::string& entry_point) {
+  GraphicsTaskConfigBuilder& fragment_shader(
+    const std::vector<uint8_t>& code,
+    const std::string& entry_point
+  ) {
     return fragment_shader(code.data(), code.size(), entry_point);
   }
-  GraphicsTaskConfigBuilder& fragment_shader(const std::vector<uint32_t>& code, const std::string& entry_point) {
-    return fragment_shader(code.data(), code.size() * sizeof(uint32_t), entry_point);
+  GraphicsTaskConfigBuilder& fragment_shader(
+    const std::vector<uint32_t>& code,
+    const std::string& entry_point
+  ) {
+    return fragment_shader(
+      code.data(), code.size() * sizeof(uint32_t), entry_point
+    );
   }
   GraphicsTaskConfigBuilder& topology(Topology topology) {
     inner.topo = topology;
@@ -401,16 +452,16 @@ struct GraphicsTaskConfigBuilder {
     return *this;
   }
   GraphicsTaskConfigBuilder& uniform_buffer() {
-    return  resource(L_RESOURCE_TYPE_UNIFORM_BUFFER);
+    return resource(L_RESOURCE_TYPE_UNIFORM_BUFFER);
   }
   GraphicsTaskConfigBuilder& storage_buffer() {
-    return  resource(L_RESOURCE_TYPE_STORAGE_BUFFER);
+    return resource(L_RESOURCE_TYPE_STORAGE_BUFFER);
   }
   GraphicsTaskConfigBuilder& sampled_image() {
-    return  resource(L_RESOURCE_TYPE_SAMPLED_IMAGE);
+    return resource(L_RESOURCE_TYPE_SAMPLED_IMAGE);
   }
   GraphicsTaskConfigBuilder& storage_image() {
-    return  resource(L_RESOURCE_TYPE_STORAGE_IMAGE);
+    return resource(L_RESOURCE_TYPE_STORAGE_IMAGE);
   }
 
   operator GraphicsTaskConfig() const {
@@ -425,7 +476,10 @@ struct AttachmentConfigBuilder {
     inner.attm_access = attm_access;
     return *this;
   }
-  AttachmentConfigBuilder& color(fmt::Format format, fmt::ColorSpace color_space) {
+  AttachmentConfigBuilder& color(
+    fmt::Format format,
+    fmt::ColorSpace color_space
+  ) {
     inner.color_fmt = format;
     inner.cspace = color_space;
     return *this;
@@ -455,27 +509,60 @@ struct RenderPassConfigBuilder {
     inner.height = height;
     return *this;
   }
-  RenderPassConfigBuilder& color_attachment(AttachmentAccess attm_access, fmt::Format format, fmt::ColorSpace color_space) {
-    auto attachment = AttachmentConfigBuilder().attm_access(attm_access).color(format, color_space);
+  RenderPassConfigBuilder& color_attachment(
+    AttachmentAccess attm_access,
+    fmt::Format format,
+    fmt::ColorSpace color_space
+  ) {
+    auto attachment = AttachmentConfigBuilder()
+                        .attm_access(attm_access)
+                        .color(format, color_space);
     inner.attm_cfgs.push_back(attachment);
     return *this;
   }
-  RenderPassConfigBuilder& clear_store_color_attachment(fmt::Format format, fmt::ColorSpace color_space) {
-    return color_attachment(L_ATTACHMENT_ACCESS_CLEAR_BIT | L_ATTACHMENT_ACCESS_STORE_BIT, format, color_space);
+  RenderPassConfigBuilder& clear_store_color_attachment(
+    fmt::Format format,
+    fmt::ColorSpace color_space
+  ) {
+    return color_attachment(
+      L_ATTACHMENT_ACCESS_CLEAR_BIT | L_ATTACHMENT_ACCESS_STORE_BIT,
+      format,
+      color_space
+    );
   }
-  RenderPassConfigBuilder& load_store_color_attachment(fmt::Format format, fmt::ColorSpace color_space) {
-    return color_attachment(L_ATTACHMENT_ACCESS_LOAD_BIT | L_ATTACHMENT_ACCESS_STORE_BIT, format, color_space);
+  RenderPassConfigBuilder& load_store_color_attachment(
+    fmt::Format format,
+    fmt::ColorSpace color_space
+  ) {
+    return color_attachment(
+      L_ATTACHMENT_ACCESS_LOAD_BIT | L_ATTACHMENT_ACCESS_STORE_BIT,
+      format,
+      color_space
+    );
   }
-  RenderPassConfigBuilder& depth_attachment(AttachmentAccess attm_access, fmt::DepthFormat depth_format) {
-    auto attachment = AttachmentConfigBuilder().attm_access(attm_access).depth(depth_format);
+  RenderPassConfigBuilder& depth_attachment(
+    AttachmentAccess attm_access,
+    fmt::DepthFormat depth_format
+  ) {
+    auto attachment =
+      AttachmentConfigBuilder().attm_access(attm_access).depth(depth_format);
     inner.attm_cfgs.push_back(attachment);
     return *this;
   }
-  RenderPassConfigBuilder& clear_store_depth_attachment(fmt::DepthFormat depth_format) {
-    return depth_attachment(L_ATTACHMENT_ACCESS_CLEAR_BIT | L_ATTACHMENT_ACCESS_STORE_BIT, depth_format);
+  RenderPassConfigBuilder& clear_store_depth_attachment(
+    fmt::DepthFormat depth_format
+  ) {
+    return depth_attachment(
+      L_ATTACHMENT_ACCESS_CLEAR_BIT | L_ATTACHMENT_ACCESS_STORE_BIT,
+      depth_format
+    );
   }
-  RenderPassConfigBuilder& load_store_depth_attachment(fmt::DepthFormat depth_format) {
-    return depth_attachment(L_ATTACHMENT_ACCESS_LOAD_BIT | L_ATTACHMENT_ACCESS_STORE_BIT, depth_format);
+  RenderPassConfigBuilder& load_store_depth_attachment(
+    fmt::DepthFormat depth_format
+  ) {
+    return depth_attachment(
+      L_ATTACHMENT_ACCESS_LOAD_BIT | L_ATTACHMENT_ACCESS_STORE_BIT, depth_format
+    );
   }
 
   operator RenderPassConfig() const {
@@ -540,7 +627,11 @@ struct ComputeInvocationConfigBuilder {
     inner.rsc_views.push_back(ResourceView::depth_image(resource));
     return *this;
   }
-  ComputeInvocationConfigBuilder& workgroup_count(uint32_t x, uint32_t y, uint32_t z) {
+  ComputeInvocationConfigBuilder& workgroup_count(
+    uint32_t x,
+    uint32_t y,
+    uint32_t z
+  ) {
     inner.workgrp_count.x = x;
     inner.workgrp_count.y = y;
     inner.workgrp_count.z = z;
@@ -558,7 +649,9 @@ struct ComputeInvocationConfigBuilder {
     inner.workgrp_count.z = 1;
     return *this;
   }
-  ComputeInvocationConfigBuilder& workgroup_count(const glm::uvec3& workgroup_count) {
+  ComputeInvocationConfigBuilder& workgroup_count(
+    const glm::uvec3& workgroup_count
+  ) {
     inner.workgrp_count.x = workgroup_count.x;
     inner.workgrp_count.y = workgroup_count.y;
     inner.workgrp_count.z = workgroup_count.z;
@@ -594,37 +687,64 @@ struct GraphicsInvocationConfigBuilder {
     inner.rsc_views.push_back(ResourceView::depth_image(resource));
     return *this;
   }
-  GraphicsInvocationConfigBuilder& vertex_buffer(const BufferView& vertex_buffer) {
+  GraphicsInvocationConfigBuilder& vertex_buffer(const BufferView& vertex_buffer
+  ) {
     inner.vert_bufs.push_back(vertex_buffer);
     return *this;
   }
-  GraphicsInvocationConfigBuilder& per_index(const BufferView& index_buffer, uint32_t index_count, IndexType index_type, uint32_t instance_count) {
+  GraphicsInvocationConfigBuilder& per_index(
+    const BufferView& index_buffer,
+    uint32_t index_count,
+    IndexType index_type,
+    uint32_t instance_count
+  ) {
     inner.idx_buf = index_buffer;
     inner.nvert = index_count;
     inner.idx_ty = index_type;
     inner.ninst = instance_count;
     return *this;
   }
-  GraphicsInvocationConfigBuilder& per_index(const BufferView& index_buffer, uint32_t index_count, IndexType index_type) {
+  GraphicsInvocationConfigBuilder& per_index(
+    const BufferView& index_buffer,
+    uint32_t index_count,
+    IndexType index_type
+  ) {
     return per_index(index_buffer, index_count, index_type, 1);
   }
   GraphicsInvocationConfigBuilder& per_u32_index(
-    const BufferView& index_buffer, uint32_t index_count, uint32_t instance_count) {
-    return per_index(index_buffer, index_count, L_INDEX_TYPE_UINT32, instance_count);
+    const BufferView& index_buffer,
+    uint32_t index_count,
+    uint32_t instance_count
+  ) {
+    return per_index(
+      index_buffer, index_count, L_INDEX_TYPE_UINT32, instance_count
+    );
   }
   GraphicsInvocationConfigBuilder& per_u32_index(
-    const BufferView& index_buffer, uint32_t index_count) {
+    const BufferView& index_buffer,
+    uint32_t index_count
+  ) {
     return per_index(index_buffer, index_count, L_INDEX_TYPE_UINT32, 1);
   }
   GraphicsInvocationConfigBuilder& per_u16_index(
-    const BufferView& index_buffer, uint32_t index_count, uint32_t instance_count) {
-    return per_index(index_buffer, index_count, L_INDEX_TYPE_UINT16, instance_count);
+    const BufferView& index_buffer,
+    uint32_t index_count,
+    uint32_t instance_count
+  ) {
+    return per_index(
+      index_buffer, index_count, L_INDEX_TYPE_UINT16, instance_count
+    );
   }
   GraphicsInvocationConfigBuilder& per_u16_index(
-    const BufferView& index_buffer, uint32_t index_count) {
+    const BufferView& index_buffer,
+    uint32_t index_count
+  ) {
     return per_index(index_buffer, index_count, L_INDEX_TYPE_UINT16, 1);
   }
-  GraphicsInvocationConfigBuilder& per_vertex(uint32_t vertex_count, uint32_t instance_count) {
+  GraphicsInvocationConfigBuilder& per_vertex(
+    uint32_t vertex_count,
+    uint32_t instance_count
+  ) {
     inner.nvert = vertex_count;
     inner.ninst = instance_count;
     return *this;
@@ -650,14 +770,15 @@ struct RenderPassInvocationConfigBuilder {
     return *this;
   }
   RenderPassInvocationConfigBuilder& attachment(ImageView attachment) {
-    inner.attms.push_back( ResourceView::image(attachment));
+    inner.attms.push_back(ResourceView::image(attachment));
     return *this;
   }
   RenderPassInvocationConfigBuilder& attachment(DepthImageView attachment) {
     inner.attms.push_back(ResourceView::depth_image(attachment));
     return *this;
   }
-  RenderPassInvocationConfigBuilder& invocation(const InvocationRef& invocation) {
+  RenderPassInvocationConfigBuilder& invocation(const InvocationRef& invocation
+  ) {
     inner.invokes.push_back(invocation);
     return *this;
   }
@@ -678,7 +799,8 @@ struct CompositeInvocationConfigBuilder {
     inner.label = label;
     return *this;
   }
-  CompositeInvocationConfigBuilder& invocation(const InvocationRef& invocation) {
+  CompositeInvocationConfigBuilder& invocation(const InvocationRef& invocation
+  ) {
     inner.invokes.push_back(invocation);
     return *this;
   }

@@ -31,14 +31,19 @@ TransactionRef VulkanTransaction::create(
   out->submit_details = std::move(transact.submit_details);
   out->fences = std::move(transact.fences);
   L_DEBUG(
-    "created and submitted transaction for execution, command "
-    "recording took ",
-    timer.us(),
-    "us"
+    "created and submitted transaction for execution, command recording took ",
+    timer.us(), "us"
   );
   return out;
 }
 VulkanTransaction::~VulkanTransaction() {
+  if (!is_done()) {
+    L_WARN(
+      "destroying transaction '", info.label, "' before it is done, waiting "
+      "for it to finish (it's better you wait it explicit on your own)"
+    );
+    wait();
+  }
   if (fences.size() > 0) {
     L_DEBUG("destroyed transaction");
   }
@@ -75,14 +80,8 @@ void VulkanTransaction::wait() {
   }
   wait_timer.toc();
 
-  L_DEBUG(
-    "command drain returned after ",
-    wait_timer.us(),
-    "us since the "
-    "wait started (spin interval = ",
-    SPIN_INTERVAL / 1000.0,
-    "us"
-  );
+  L_DEBUG("command drain returned after ", wait_timer.us(), "us since the wait "
+    "started (spin interval = ", SPIN_INTERVAL / 1000.0, "us)");
 }
 
 }  // namespace vk

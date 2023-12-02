@@ -101,7 +101,10 @@ std::unique_ptr<SwapchainDynamicDetail> _create_swapchain_dyn_detail(
 sys::SwapchainRef _create_swapchain(const VulkanSwapchain& swapchain) {
   L_ASSERT(swapchain.ctxt->surf != nullptr);
 
-  VkSwapchainKHR old_swapchain = *swapchain.swapchain;
+  VkSwapchainKHR old_swapchain = VK_NULL_HANDLE;
+  if (swapchain.swapchain != nullptr) {
+    old_swapchain = *swapchain.swapchain;
+  }
 
   VkSwapchainCreateInfoKHR sci{};
   sci.sType = VK_STRUCTURE_TYPE_SWAPCHAIN_CREATE_INFO_KHR;
@@ -125,6 +128,12 @@ sys::SwapchainRef _create_swapchain(const VulkanSwapchain& swapchain) {
 
   sys::SwapchainRef out = sys::Swapchain::create(*swapchain.ctxt->dev, &sci);
 
+  if (old_swapchain != VK_NULL_HANDLE) {
+    vkDestroySwapchainKHR(
+      swapchain.ctxt->dev->dev, *swapchain.swapchain, nullptr
+    );
+  }
+
   return out;
 }
 
@@ -136,8 +145,10 @@ void _collect_swapchain_images(
   const sys::DeviceRef& dev = swapchain.ctxt->dev;
 
   // Collect swapchain images.
-  uint32_t image_count = info.image_count;
+  uint32_t image_count = 0;
+  VK_ASSERT << vkGetSwapchainImagesKHR(dev->dev, *swapchain.swapchain, &image_count, nullptr);
   std::vector<VkImage> imgs(image_count);
+  VK_ASSERT << vkGetSwapchainImagesKHR(dev->dev, *swapchain.swapchain, &image_count, imgs.data());
 
   std::vector<VulkanImageRef> swapchain_imgs{};
   for (uint32_t i = 0; i < image_count; ++i) {

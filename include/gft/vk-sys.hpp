@@ -93,7 +93,9 @@ struct Instance {
     return std::make_shared<Instance>(inst, true);
   }
   void destroy() {
-    vkDestroyInstance(inst, nullptr);
+    if (should_destroy) {
+      vkDestroyInstance(inst, nullptr);
+    }
   }
 };
 typedef std::shared_ptr<Instance> InstanceRef;
@@ -123,7 +125,9 @@ struct Device {
     return std::make_shared<Device>(physdev, dev, true);
   }
   void destroy() {
-    vkDestroyDevice(dev, nullptr);
+    if (should_destroy) {
+      vkDestroyDevice(dev, nullptr);
+    }
   }
 };
 typedef std::shared_ptr<Device> DeviceRef;
@@ -149,7 +153,9 @@ struct Allocator {
     return std::make_shared<Allocator>(allocator, true);
   }
   void destroy() {
-    vmaDestroyAllocator(allocator);
+    if (should_destroy) {
+      vmaDestroyAllocator(allocator);
+    }
   }
 };
 typedef std::shared_ptr<Allocator> AllocatorRef;
@@ -190,7 +196,9 @@ struct Buffer {
     return std::make_shared<Buffer>(allocator, buf, alloc, true);
   }
   void destroy() {
-    vmaDestroyBuffer(allocator, buf, alloc);
+    if (should_destroy) {
+      vmaDestroyBuffer(allocator, buf, alloc);
+    }
   }
 };
 typedef std::shared_ptr<Buffer> BufferRef;
@@ -231,7 +239,9 @@ struct Image {
     return std::make_shared<Image>(allocator, img, alloc, true);
   }
   void destroy() {
-    vmaDestroyImage(allocator, img, alloc);
+    if (should_destroy) {
+      vmaDestroyImage(allocator, img, alloc);
+    }
   }
 };
 typedef std::shared_ptr<Image> ImageRef;
@@ -261,7 +271,9 @@ struct ImageView {
     return std::make_shared<ImageView>(dev, img_view, true);
   }
   void destroy() {
-    vkDestroyImageView(dev, img_view, nullptr);
+    if (should_destroy) {
+      vkDestroyImageView(dev, img_view, nullptr);
+    }
   }
 };
 typedef std::shared_ptr<ImageView> ImageViewRef;
@@ -291,7 +303,9 @@ struct Sampler {
     return std::make_shared<Sampler>(dev, sampler, true);
   }
   void destroy() {
-    vkDestroySampler(dev, sampler, nullptr);
+    if (should_destroy) {
+      vkDestroySampler(dev, sampler, nullptr);
+    }
   }
 };
 typedef std::shared_ptr<Sampler> SamplerRef;
@@ -343,7 +357,9 @@ struct Surface {
   }
 #endif // VK_EXT_metal_surface
   void destroy() {
-    vkDestroySurfaceKHR(inst, surf, nullptr);
+    if (should_destroy) {
+      vkDestroySurfaceKHR(inst, surf, nullptr);
+    }
   }
 };
 typedef std::shared_ptr<Surface> SurfaceRef;
@@ -373,10 +389,48 @@ struct Swapchain {
     return std::make_shared<Swapchain>(dev, swapchain, true);
   }
   void destroy() {
-    vkDestroySwapchainKHR(dev, swapchain, nullptr);
+    if (should_destroy) {
+      vkDestroySwapchainKHR(dev, swapchain, nullptr);
+    }
   }
 };
 typedef std::shared_ptr<Swapchain> SwapchainRef;
+
+struct ShaderModule {
+  typedef ShaderModule Self;
+  VkDevice dev;
+  VkShaderModule shader_module;
+  bool should_destroy;
+
+  ShaderModule(
+    VkDevice dev,
+    VkShaderModule shader_module,
+    bool should_destroy
+  ) :
+    dev(dev), shader_module(shader_module), should_destroy(should_destroy) {}
+  ~ShaderModule() {
+    destroy();
+  }
+
+  operator VkShaderModule() const {
+    return shader_module;
+  }
+
+  static std::shared_ptr<ShaderModule> create(
+    VkDevice dev,
+    const VkShaderModuleCreateInfo* smci
+  ) {
+    VkShaderModule shader_module = VK_NULL_HANDLE;
+    VK_ASSERT << vkCreateShaderModule(dev, smci, nullptr, &shader_module);
+    return std::make_shared<ShaderModule>(dev, shader_module, true);
+  }
+  void destroy() {
+    if (should_destroy) {
+      vkDestroyShaderModule(dev, shader_module, nullptr);
+    }
+  }
+};
+typedef std::shared_ptr<ShaderModule> ShaderModuleRef;
 
 struct DescriptorSetLayout {
   typedef DescriptorSetLayout Self;
@@ -411,7 +465,9 @@ struct DescriptorSetLayout {
     return std::make_shared<DescriptorSetLayout>(dev, desc_set_layout, true);
   }
   void destroy() {
-    vkDestroyDescriptorSetLayout(dev, desc_set_layout, nullptr);
+    if (should_destroy) {
+      vkDestroyDescriptorSetLayout(dev, desc_set_layout, nullptr);
+    }
   }
 };
 typedef std::shared_ptr<DescriptorSetLayout> DescriptorSetLayoutRef;
@@ -445,7 +501,9 @@ struct PipelineLayout {
     return std::make_shared<PipelineLayout>(dev, pipe_layout, true);
   }
   void destroy() {
-    vkDestroyPipelineLayout(dev, pipe_layout, nullptr);
+    if (should_destroy) {
+      vkDestroyPipelineLayout(dev, pipe_layout, nullptr);
+    }
   }
 };
 typedef std::shared_ptr<PipelineLayout> PipelineLayoutRef;
@@ -487,7 +545,9 @@ struct Pipeline {
     return std::make_shared<Pipeline>(dev, pipe, true);
   }
   void destroy() {
-    vkDestroyPipeline(dev, pipe, nullptr);
+    if (should_destroy) {
+      vkDestroyPipeline(dev, pipe, nullptr);
+    }
   }
 };
 typedef std::shared_ptr<Pipeline> PipelineRef;
@@ -517,7 +577,9 @@ struct RenderPass {
     return std::make_shared<RenderPass>(dev, pass, true);
   }
   void destroy() {
-    vkDestroyRenderPass(dev, pass, nullptr);
+    if (should_destroy) {
+      vkDestroyRenderPass(dev, pass, nullptr);
+    }
   }
 };
 typedef std::shared_ptr<RenderPass> RenderPassRef;
@@ -547,7 +609,9 @@ struct Framebuffer {
     return std::make_shared<Framebuffer>(dev, framebuf, true);
   }
   void destroy() {
-    vkDestroyFramebuffer(dev, framebuf, nullptr);
+    if (should_destroy) {
+      vkDestroyFramebuffer(dev, framebuf, nullptr);
+    }
   }
 };
 typedef std::shared_ptr<Framebuffer> FramebufferRef;
@@ -577,7 +641,9 @@ struct DescriptorPool {
     return std::make_shared<DescriptorPool>(dev, desc_pool, true);
   }
   void destroy() {
-    vkDestroyDescriptorPool(dev, desc_pool, nullptr);
+    if (should_destroy) {
+      vkDestroyDescriptorPool(dev, desc_pool, nullptr);
+    }
   }
 };
 typedef std::shared_ptr<DescriptorPool> DescriptorPoolRef;
@@ -630,7 +696,9 @@ struct CommandPool {
     return std::make_shared<CommandPool>(dev, cmd_pool, true);
   }
   void destroy() {
-    vkDestroyCommandPool(dev, cmd_pool, nullptr);
+    if (should_destroy) {
+      vkDestroyCommandPool(dev, cmd_pool, nullptr);
+    }
   }
 };
 typedef std::shared_ptr<CommandPool> CommandPoolRef;
@@ -692,7 +760,9 @@ struct Fence {
     return std::make_shared<Fence>(dev, fence, true);
   }
   void destroy() {
-    vkDestroyFence(dev, fence, nullptr);
+    if (should_destroy) {
+      vkDestroyFence(dev, fence, nullptr);
+    }
   }
 };
 typedef std::shared_ptr<Fence> FenceRef;
@@ -727,7 +797,9 @@ struct Semaphore {
     return std::make_shared<Semaphore>(dev, sema, true);
   }
   void destroy() {
-    vkDestroySemaphore(dev, sema, nullptr);
+    if (should_destroy) {
+      vkDestroySemaphore(dev, sema, nullptr);
+    }
   }
 };
 typedef std::shared_ptr<Semaphore> SemaphoreRef;
@@ -757,7 +829,9 @@ struct QueryPool {
     return std::make_shared<QueryPool>(dev, query_pool, true);
   }
   void destroy() {
-    vkDestroyQueryPool(dev, query_pool, nullptr);
+    if (should_destroy) {
+      vkDestroyQueryPool(dev, query_pool, nullptr);
+    }
   }
 };
 typedef std::shared_ptr<QueryPool> QueryPoolRef;
