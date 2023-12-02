@@ -1,7 +1,26 @@
 // # Wrapper for common Vulkan procedures.
 // @PENGUINLIONG
 #pragma once
+#include <map>
+
 #include <vulkan/vulkan.h>
+
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#include <Windows.h>
+#include "vulkan/vulkan_win32.h"
+#endif // _WIN32
+
+#if defined(ANDROID) || defined(__ANDROID__)
+#include "vulkan/vulkan_android.h"
+#endif // defined(ANDROID) || defined(__ANDROID__)
+
+#if defined(__MACH__) && defined(__APPLE__)
+#include "vulkan/vulkan_metal.h"
+#endif // defined(__MACH__) && defined(__APPLE__)
+
+#include "gft/vk-sys.hpp"
+#include "gft/log.hpp"
 
 namespace liong {
 namespace vk {
@@ -16,7 +35,9 @@ extern std::map<std::string, uint32_t> collect_physdev_ext_props(
   VkPhysicalDevice physdev
 );
 extern VkPhysicalDeviceProperties get_physdev_prop(VkPhysicalDevice physdev);
-extern VkPhysicalDeviceMemoryProperties get_physdev_mem_prop(VkPhysicalDevice physdev);
+extern VkPhysicalDeviceMemoryProperties get_physdev_mem_prop(
+  VkPhysicalDevice physdev
+);
 extern VkPhysicalDeviceFeatures get_physdev_feat(VkPhysicalDevice physdev);
 extern std::vector<VkQueueFamilyProperties> collect_qfam_props(
   VkPhysicalDevice physdev
@@ -53,12 +74,11 @@ extern sys::PipelineLayoutRef create_pipe_layout(
 );
 
 // VkShaderModule
-extern VkShaderModule create_shader_mod(
+extern ShaderModuleRef create_shader_mod(
   VkDevice dev,
   const uint32_t* spv,
   size_t spv_size
 );
-extern void destroy_shader_mod(VkDevice dev, VkShaderModule shader_mod);
 
 // VkPipeline
 extern sys::PipelineRef create_comp_pipe(
@@ -79,5 +99,39 @@ extern sys::PipelineRef create_graph_pipe(
 
 
 } // namespace sys
+
+inline void request_name(
+  const char* category,
+  const char* expect,
+  const char* actual,
+  std::vector<const char*>& out
+) {
+  if (std::strcmp(expect, actual) == 0) {
+    out.push_back(expect);
+    L_INFO("enabled ", category, " ", expect);
+  }
+}
+inline void request_instance_extension(
+  const char* expect,
+  const char* actual,
+  std::vector<const char*>& out
+) {
+  request_name("instance extension", expect, actual, out);
+}
+inline void request_instance_layer(
+  const char* expect,
+  const char* actual,
+  std::vector<const char*>& out
+) {
+  request_name("instance layer", expect, actual, out);
+}
+inline void request_device_extension(
+  const char* expect,
+  const char* actual,
+  std::vector<const char*>& out
+) {
+  request_name("device extension", expect, actual, out);
+}
+
 } // namespace vk
 } // namespace liong

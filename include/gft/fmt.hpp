@@ -26,24 +26,20 @@ enum DepthFormat {
   L_DEPTH_FORMAT_D32_SFLOAT,
 };
 
-
-
 constexpr size_t get_fmt_size(Format fmt) {
-  return
-    fmt == L_FORMAT_R8G8B8A8_UNORM ? 4 :
-    fmt == L_FORMAT_B8G8R8A8_UNORM ? 4 :
-    fmt == L_FORMAT_B10G11R11_UFLOAT_PACK32 ? 4 :
-    fmt == L_FORMAT_R16G16B16A16_SFLOAT ? 8 :
-    fmt == L_FORMAT_R32_SFLOAT ? 4 :
-    fmt == L_FORMAT_R32G32_SFLOAT ? 8 :
-    fmt == L_FORMAT_R32G32B32A32_SFLOAT ? 16 :
-    0; // In which case it shouldn't happen.
+  return fmt == L_FORMAT_R8G8B8A8_UNORM            ? 4
+         : fmt == L_FORMAT_B8G8R8A8_UNORM          ? 4
+         : fmt == L_FORMAT_B10G11R11_UFLOAT_PACK32 ? 4
+         : fmt == L_FORMAT_R16G16B16A16_SFLOAT     ? 8
+         : fmt == L_FORMAT_R32_SFLOAT              ? 4
+         : fmt == L_FORMAT_R32G32_SFLOAT           ? 8
+         : fmt == L_FORMAT_R32G32B32A32_SFLOAT     ? 16
+                                                   : 0;
 }
 constexpr size_t get_fmt_depth_nbit(DepthFormat fmt) {
-  return
-    fmt == L_DEPTH_FORMAT_D16_UNORM ? 16 :
-    fmt == L_DEPTH_FORMAT_D32_SFLOAT ? 32 :
-    0;
+  return fmt == L_DEPTH_FORMAT_D16_UNORM    ? 16
+         : fmt == L_DEPTH_FORMAT_D32_SFLOAT ? 32
+                                            : 0;
 }
 constexpr size_t get_fmt_stencil_nbit(DepthFormat fmt) {
   return 0;
@@ -58,8 +54,8 @@ struct FormatCodec<L_FORMAT_R8G8B8A8_UNORM> {
     for (uint32_t i = 0; i < npx; ++i) {
       glm::vec4 vec = src[i];
       ((uint32_t*)dst)[i] =
-        (((uint32_t)(std::min(std::max(vec.x, 0.0f), 1.0f) * 255.0f)) <<  0) |
-        (((uint32_t)(std::min(std::max(vec.y, 0.0f), 1.0f) * 255.0f)) <<  8) |
+        (((uint32_t)(std::min(std::max(vec.x, 0.0f), 1.0f) * 255.0f)) << 0) |
+        (((uint32_t)(std::min(std::max(vec.y, 0.0f), 1.0f) * 255.0f)) << 8) |
         (((uint32_t)(std::min(std::max(vec.z, 0.0f), 1.0f) * 255.0f)) << 16) |
         (((uint32_t)(std::min(std::max(vec.w, 0.0f), 1.0f) * 255.0f)) << 24);
     }
@@ -68,8 +64,8 @@ struct FormatCodec<L_FORMAT_R8G8B8A8_UNORM> {
     for (uint32_t i = 0; i < npx; ++i) {
       uint32_t pack = ((const uint32_t*)src)[i];
       dst[i] = glm::vec4 {
-        (float)((pack >>  0) & 0xFF) / 255.0f,
-        (float)((pack >>  8) & 0xFF) / 255.0f,
+        (float)((pack >> 0) & 0xFF) / 255.0f,
+        (float)((pack >> 8) & 0xFF) / 255.0f,
         (float)((pack >> 16) & 0xFF) / 255.0f,
         (float)((pack >> 24) & 0xFF) / 255.0f,
       };
@@ -84,7 +80,9 @@ struct FormatCodec<L_FORMAT_R16G16B16A16_SFLOAT> {
     auto float2half = [](uint32_t x) {
       uint32_t sign_bit = x >> 31;
       uint32_t exponent = (x >> 23) & 255;
-      if (exponent == 255 || exponent < (127 - 15) || exponent >= 127 + 15) { return 0; }
+      if (exponent == 255 || exponent < (127 - 15) || exponent >= 127 + 15) {
+        return 0;
+      }
       uint32_t fraction = x & 8388607;
       unimplemented();
     };
@@ -104,7 +102,9 @@ struct FormatCodec<L_FORMAT_R16G16B16A16_SFLOAT> {
       uint32_t sign_bit = x >> 15;
       uint32_t exponent = (x >> 10) & 31;
       uint32_t mantissa = x & 1023;
-      if (exponent == 31) { return (uint32_t)0; } // NaN or infinity.
+      if (exponent == 31) {
+        return (uint32_t)0;
+      } // NaN or infinity.
       exponent = exponent - 15 + 127;
       mantissa <<= 23 - 10;
       uint32_t out = (sign_bit << 31) | (exponent << 23) | mantissa;
@@ -188,14 +188,10 @@ struct FormatCodec<L_FORMAT_R32G32B32A32_SFLOAT> {
   }
 };
 
-
-
 enum ColorSpace {
   L_COLOR_SPACE_LINEAR,
   L_COLOR_SPACE_SRGB,
 };
-
-
 
 } // namespace fmt
 

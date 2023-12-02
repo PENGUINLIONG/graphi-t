@@ -25,8 +25,12 @@ extern void end_capture();
 // An RAII capture guard. Follow the same rule of `begin/end_capture` when using
 // this.
 struct CaptureGuard {
-  inline CaptureGuard() { begin_capture(); }
-  inline ~CaptureGuard() { end_capture(); }
+  inline CaptureGuard() {
+    begin_capture();
+  }
+  inline ~CaptureGuard() {
+    end_capture();
+  }
 };
 
 } // namespace renderdoc

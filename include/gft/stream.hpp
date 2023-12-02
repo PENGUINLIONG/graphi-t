@@ -9,16 +9,14 @@ namespace liong {
 namespace stream {
 
 struct ReadStream {
-private:
+ private:
   const void* data_;
   size_t size_;
   size_t offset_;
 
-public:
+ public:
   inline ReadStream(const void* data, size_t size) :
-    data_(data),
-    size_(size),
-    offset_(0) {}
+    data_(data), size_(size), offset_(0) {}
 
   inline const void* data() const {
     return data_;
@@ -49,7 +47,6 @@ public:
   inline ReadStream& skip() {
     return skip(sizeof(T));
   }
-
 
   template<typename T>
   inline T peek() {
@@ -105,10 +102,10 @@ public:
 };
 
 struct WriteStream {
-private:
+ private:
   std::vector<uint8_t> data_;
 
-public:
+ public:
   inline size_t size() const {
     return data_.size();
   }

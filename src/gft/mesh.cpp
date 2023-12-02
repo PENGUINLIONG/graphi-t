@@ -30,14 +30,13 @@ struct ObjToken {
 };
 
 struct ObjTokenizer {
-  const char* pos;
-  const char* end;
+  const uint8_t* pos;
+  const uint8_t* end;
   bool success;
   ObjToken token;
 
   ObjTokenizer(const char* beg, const char* end) :
-    pos(beg), end(end), success(true), token()
-  {
+    pos((const uint8_t*)beg), end((const uint8_t*)end), success(true), token() {
     next();
   }
 
@@ -56,7 +55,7 @@ struct ObjTokenizer {
         if (!should_break_token) {
           const char c = *pos;
           should_break_token |= c == ' ' || c == '\t' || c == '\r' ||
-            c == '\n' || c == '/' || c == '#';
+                                c == '\n' || c == '/' || c == '#';
         }
 
         if (should_break_token) {
@@ -74,58 +73,58 @@ struct ObjTokenizer {
             case L_OBJ_TOKEN_TYPE_NUMBER:
               token.token_number = std::atof(buf.c_str());
               break;
-            default: unreachable();
+            default:
+              unreachable();
           }
           is_in_token = false;
           return true;
-
         }
 
-        const char c = *pos;
+        const uint8_t c = *pos;
 
         switch (token_ty) {
-        case L_OBJ_TOKEN_TYPE_INTEGER:
-          if (c == '.') {
-            // Found a fraction point so promote the integer into a floating-
-            // point number.
-            token_ty = L_OBJ_TOKEN_TYPE_NUMBER;
+          case L_OBJ_TOKEN_TYPE_INTEGER:
+            if (c == '.') {
+              // Found a fraction point so promote the integer into a floating-
+              // point number.
+              token_ty = L_OBJ_TOKEN_TYPE_NUMBER;
+              break;
+            } else if (c >= '0' && c <= '9') {
+              break;
+            } else if (c != '\0' && c < 128) {
+              token_ty = L_OBJ_TOKEN_TYPE_TEXT;
+              break;
+            } else {
+              return false;
+            }
+          case L_OBJ_TOKEN_TYPE_NUMBER:
+            if (c >= '0' && c <= '9') {
+            } else if (c != '\0' && c < 128) {
+              token_ty = L_OBJ_TOKEN_TYPE_TEXT;
+              break;
+            } else {
+              return false;
+            }
             break;
-          } else if (c >= '0' && c <= '9') {
-            break;
-          } else if (c != '\0' && c < 128) {
-            token_ty = L_OBJ_TOKEN_TYPE_TEXT;
-            break;
-          } else {
-            return false;
-          }
-        case L_OBJ_TOKEN_TYPE_NUMBER:
-          if (c >= '0' && c <= '9') {
-          } else if (c != '\0' && c < 128) {
-            token_ty = L_OBJ_TOKEN_TYPE_TEXT;
-            break;
-          } else {
-            return false;
-          }
-          break;
-        case L_OBJ_TOKEN_TYPE_VERB:
-          if (c >= 'a' && c <= 'z') {
-            break;
-          } else if (c != '\0' && c < 128) {
-            token_ty = L_OBJ_TOKEN_TYPE_TEXT;
-            break;
-          } else {
-            return false;
-          }
-        case L_OBJ_TOKEN_TYPE_TEXT:
-          if (c != '\0' && c < 128) {
-            break;
-          } else {
-            return false;
-          }
-        default: unreachable();
+          case L_OBJ_TOKEN_TYPE_VERB:
+            if (c >= 'a' && c <= 'z') {
+              break;
+            } else if (c != '\0' && c < 128) {
+              token_ty = L_OBJ_TOKEN_TYPE_TEXT;
+              break;
+            } else {
+              return false;
+            }
+          case L_OBJ_TOKEN_TYPE_TEXT:
+            if (c != '\0' && c < 128) {
+              break;
+            } else {
+              return false;
+            }
+          default:
+            unreachable();
         }
         buf.push_back(c);
-
       } else {
         // It's not parsing a token.
         if (pos == end) {
@@ -134,7 +133,7 @@ struct ObjTokenizer {
           return true;
         }
 
-        char c = *pos;
+        uint8_t c = *pos;
 
         if (c == '\r' || c == '\n') {
           // Newlines.
@@ -144,7 +143,8 @@ struct ObjTokenizer {
         }
         if (c == '#') {
           // Skip comments.
-          while (pos != end && *(++pos) != '\n');
+          while (pos != end && *(++pos) != '\n')
+            ;
           token.token_ty = L_OBJ_TOKEN_TYPE_NEWLINE;
           return true;
         }
@@ -156,7 +156,8 @@ struct ObjTokenizer {
 
         // Ignore white spaces.
         while (c == ' ' || c == '\t') {
-          ++pos; c = *pos;
+          ++pos;
+          c = *pos;
         }
 
         if (c == '-' || (c >= '0' && c <= '9')) {
@@ -177,16 +178,11 @@ struct ObjTokenizer {
         }
       }
       ++pos;
-
     }
   }
 
-  bool try_next() {
-    return try_tokenize(token);
-  }
-  void next() {
-    success &= try_next();
-  }
+  bool try_next() { return try_tokenize(token); }
+  void next() { success &= try_next(); }
 
   bool try_verb(std::string& out) {
     if (token.token_ty == L_OBJ_TOKEN_TYPE_VERB) {
@@ -196,9 +192,7 @@ struct ObjTokenizer {
     }
     return false;
   }
-  void verb(std::string& out) {
-    success &= try_verb(out);
-  }
+  void verb(std::string& out) { success &= try_verb(out); }
   bool try_integer(uint32_t& out) {
     if (token.token_ty == L_OBJ_TOKEN_TYPE_INTEGER) {
       out = token.token_integer;
@@ -207,13 +201,11 @@ struct ObjTokenizer {
     }
     return false;
   }
-  void integer(uint32_t& out) {
-    success &= try_integer(out);
-  }
+  void integer(uint32_t& out) { success &= try_integer(out); }
   bool try_number(float& out) {
     if (token.token_ty == L_OBJ_TOKEN_TYPE_INTEGER) {
       out = token.token_integer;
-      next(); 
+      next();
       return true;
     } else if (token.token_ty == L_OBJ_TOKEN_TYPE_NUMBER) {
       out = token.token_number;
@@ -222,9 +214,7 @@ struct ObjTokenizer {
     }
     return false;
   }
-  void number(float& out) {
-    success &= try_number(out);
-  }
+  void number(float& out) { success &= try_number(out); }
   bool try_slash() {
     if (token.token_ty == L_OBJ_TOKEN_TYPE_SLASH) {
       next();
@@ -268,7 +258,7 @@ struct ObjParser {
     while (tokenizer.success) {
       if (tokenizer.try_verb(verb)) {
         if (tokenizer.token.token_word == "v") {
-          glm::vec3 pos{};
+          glm::vec3 pos {};
           float w;
           tokenizer.number(pos.x);
           tokenizer.number(pos.y);
@@ -278,7 +268,7 @@ struct ObjParser {
           poses.emplace_back(std::move(pos));
           continue;
         } else if (tokenizer.token.token_word == "vt") {
-          glm::vec2 uv{};
+          glm::vec2 uv {};
           float w;
           tokenizer.number(uv.x);
           tokenizer.try_number(uv.y);
@@ -287,7 +277,7 @@ struct ObjParser {
           uvs.emplace_back(std::move(uv));
           continue;
         } else if (tokenizer.token.token_word == "vn") {
-          glm::vec3 norm{};
+          glm::vec3 norm {};
           tokenizer.number(norm.x);
           tokenizer.number(norm.y);
           tokenizer.number(norm.z);
@@ -358,20 +348,16 @@ struct ObjParser {
   }
 };
 
-
-
 bool try_parse_obj(const std::string& obj, Mesh& mesh) {
   ObjParser parser(obj.data(), obj.data() + obj.size());
   return parser.try_parse(mesh);
 }
 Mesh load_obj(const char* path) {
   auto txt = util::load_text(path);
-  Mesh mesh{};
+  Mesh mesh {};
   L_ASSERT(try_parse_obj(txt, mesh));
   return mesh;
 }
-
-
 
 Mesh Mesh::from_tris(const Triangle* tris, size_t ntri) {
   Mesh out {};
@@ -403,12 +389,9 @@ std::vector<Triangle> Mesh::to_tris() const {
   return out;
 }
 
-
 Aabb Mesh::aabb() const {
   return Aabb::from_points(poses.data(), poses.size());
 }
-
-
 
 struct UniqueVertex {
   glm::vec3 pos;
@@ -420,13 +403,15 @@ struct UniqueVertex {
   }
 };
 IndexedMesh IndexedMesh::from_mesh(const Mesh& mesh) {
-  IndexedMesh out{};
+  IndexedMesh out {};
   std::map<UniqueVertex, uint32_t> vert2idx;
 
   uint32_t ntri = mesh.poses.size() / 3;
   if (ntri * 3 != mesh.poses.size()) {
-    L_WARN("mesh vertex number is not aligned to 3; trailing vertices are "
-      "ignored because they don't form an actual triangle");
+    L_WARN(
+      "mesh vertex number is not aligned to 3; trailing vertices are "
+      "ignored because they don't form an actual triangle"
+    );
   }
 
   for (uint32_t i = 0; i < ntri; ++i) {
@@ -457,12 +442,9 @@ IndexedMesh IndexedMesh::from_mesh(const Mesh& mesh) {
   return out;
 }
 
-
-
 Aabb PointCloud::aabb() const {
   return geom::Aabb::from_points(poses);
 }
-
 
 std::vector<float> make_grid_lines(float min, float max, uint32_t n) {
   float range = max - min;
@@ -483,13 +465,10 @@ Grid build_grid(const geom::Aabb& aabb, const glm::uvec3& grid_res) {
 }
 Grid build_grid(const geom::Aabb& aabb, const glm::vec3& grid_interval) {
   glm::uvec3 grid_res = glm::ceil(aabb.size() / grid_interval);
-  geom::Aabb aabb2 = Aabb::from_center_size(
-    aabb.center(),
-    glm::vec3(grid_res) * grid_interval);
+  geom::Aabb aabb2 =
+    Aabb::from_center_size(aabb.center(), glm::vec3(grid_res) * grid_interval);
   return build_grid(aabb, grid_res);
 }
-
-
 
 std::vector<bool> scan(
   std::vector<Bin> bins,
@@ -534,12 +513,18 @@ std::vector<Bin> BinGrid::get_solid() const {
   size_t ny = grid.grid_lines_y.size();
   size_t nz = grid.grid_lines_z.size();
 
-  std::vector<bool> solid_mask_x = scan(bins, ny, nz, nx,
-    [&](size_t y, size_t z, size_t x) { return ((z * ny + y) * nx) + x; });
-  std::vector<bool> solid_mask_y = scan(bins, nx, nz, ny,
-    [&](size_t x, size_t z, size_t y) { return ((z * ny + y) * nx) + x; });
-  std::vector<bool> solid_mask_z = scan(bins, nx, ny, nz,
-    [&](size_t x, size_t y, size_t z) { return ((z * ny + y) * nx) + x; });
+  std::vector<bool> solid_mask_x =
+    scan(bins, ny, nz, nx, [&](size_t y, size_t z, size_t x) {
+      return ((z * ny + y) * nx) + x;
+    });
+  std::vector<bool> solid_mask_y =
+    scan(bins, nx, nz, ny, [&](size_t x, size_t z, size_t y) {
+      return ((z * ny + y) * nx) + x;
+    });
+  std::vector<bool> solid_mask_z =
+    scan(bins, nx, ny, nz, [&](size_t x, size_t y, size_t z) {
+      return ((z * ny + y) * nx) + x;
+    });
 
   std::vector<Bin> out;
   for (size_t x = 0; x < nx; ++x) {
@@ -547,9 +532,7 @@ std::vector<Bin> BinGrid::get_solid() const {
       for (size_t z = 0; z < nz; ++z) {
         size_t idx = ((z * ny + y) * nx) + x;
         bool is_solid =
-          solid_mask_x.at(idx) |
-          solid_mask_y.at(idx) |
-          solid_mask_z.at(idx);
+          solid_mask_x.at(idx) | solid_mask_y.at(idx) | solid_mask_z.at(idx);
         if (is_solid) {
           out.emplace_back(get_bin(x, y, z));
         }
@@ -559,8 +542,6 @@ std::vector<Bin> BinGrid::get_solid() const {
 
   return out;
 }
-
-
 
 struct Binner {
   Aabb aabb;
@@ -574,8 +555,7 @@ struct Binner {
     grid_res(grid_res),
     grid(build_grid(aabb, grid_res)),
     bins(),
-    counter()
-  {
+    counter() {
     bins.reserve(grid_res.x * grid_res.y * grid_res.z);
     for (uint32_t z = 0; z < grid_res.z; ++z) {
       float z_min = z == 0 ? aabb.min.z : grid.grid_lines_z.at(z - 1);
@@ -607,7 +587,9 @@ struct Binner {
     // non-intersecting triangles are filetered in `bin` any point enclosed
     // by `aabb` can be uniquely assigned to a bin at boundaries.
     for (; i < grid_lines.size(); ++i) {
-      if (x < grid_lines.at(i)) { break; }
+      if (x < grid_lines.at(i)) {
+        break;
+      }
     }
     return i;
   }
@@ -683,9 +665,8 @@ BinGrid bin_point_cloud(
 ) {
   Aabb aabb = point_cloud.aabb();
   glm::uvec3 grid_res = glm::ceil(aabb.size() / grid_interval);
-  aabb = Aabb::from_center_size(
-    aabb.center(),
-    glm::vec3(grid_res) * grid_interval);
+  aabb =
+    Aabb::from_center_size(aabb.center(), glm::vec3(grid_res) * grid_interval);
   return bin_point_cloud(aabb, grid_res, point_cloud);
 }
 
@@ -707,15 +688,11 @@ BinGrid bin_mesh(
   }
   return binner.into_bingrid();
 }
-BinGrid bin_mesh(
-  const glm::vec3& grid_interval,
-  const Mesh& mesh
-) {
+BinGrid bin_mesh(const glm::vec3& grid_interval, const Mesh& mesh) {
   Aabb aabb = mesh.aabb();
   glm::uvec3 grid_res = glm::ceil(aabb.size() / grid_interval);
-  aabb = Aabb::from_center_size(
-    aabb.center(),
-    glm::vec3(grid_res) * grid_interval);
+  aabb =
+    Aabb::from_center_size(aabb.center(), glm::vec3(grid_res) * grid_interval);
   return bin_mesh(aabb, grid_res, mesh);
 }
 
@@ -743,12 +720,10 @@ BinGrid bin_idxmesh(
 ) {
   Aabb aabb = idxmesh.aabb();
   glm::uvec3 grid_res = glm::ceil(aabb.size() / grid_interval);
-  aabb = Aabb::from_center_size(
-    aabb.center(),
-    glm::vec3(grid_res) * grid_interval);
+  aabb =
+    Aabb::from_center_size(aabb.center(), glm::vec3(grid_res) * grid_interval);
   return bin_idxmesh(aabb, grid_res, idxmesh);
 }
-
 
 template<typename TKey, typename TValue = TKey>
 struct Dedup {
@@ -773,9 +748,7 @@ struct Dedup {
       return it->second;
     }
   }
-  TValue& get_value(size_t idx) {
-    return idx2val.at(idx);
-  }
+  TValue& get_value(size_t idx) { return idx2val.at(idx); }
 
   std::vector<TValue> take_data() {
     std::vector<TValue> out {};
@@ -786,12 +759,13 @@ struct Dedup {
     return out;
   }
 
-  size_t size() const {
-    return key2idx.size();
-  }
+  size_t size() const { return key2idx.size(); }
 };
 
-TetrahedralMesh TetrahedralMesh::from_points(const glm::vec3& grid_interval, const std::vector<glm::vec3>& points) {
+TetrahedralMesh TetrahedralMesh::from_points(
+  const glm::vec3& grid_interval,
+  const std::vector<glm::vec3>& points
+) {
   // Bin vertices into a voxel grid.
   mesh::BinGrid grid = mesh::bin_point_cloud(grid_interval, { points });
 
@@ -818,38 +792,39 @@ TetrahedralMesh TetrahedralMesh::from_points(const glm::vec3& grid_interval, con
       uint32_t itetra_vert_c = dedup_tetra_vert.get_idx(tet.c);
       uint32_t itetra_vert_d = dedup_tetra_vert.get_idx(tet.d);
 
-      glm::uvec4 tetra_cell = glm::uvec4(
-        itetra_vert_a,
-        itetra_vert_b,
-        itetra_vert_c,
-        itetra_vert_d);
+      glm::uvec4 tetra_cell =
+        glm::uvec4(itetra_vert_a, itetra_vert_b, itetra_vert_c, itetra_vert_d);
 
       uint32_t itetra_cell = dedup_tetra_cell.get_idx(tetra_cell);
       interp_templ.itetra_cell = itetra_cell;
 
       {
-        TetrahedralVertex& tetra_vert = dedup_tetra_vert.get_value(itetra_vert_a);
+        TetrahedralVertex& tetra_vert =
+          dedup_tetra_vert.get_value(itetra_vert_a);
         tetra_vert.ineighbor_cells.insert(itetra_cell);
         tetra_vert.ineighbor_verts.insert(itetra_vert_b);
         tetra_vert.ineighbor_verts.insert(itetra_vert_c);
         tetra_vert.ineighbor_verts.insert(itetra_vert_d);
       }
       {
-        TetrahedralVertex& tetra_vert = dedup_tetra_vert.get_value(itetra_vert_b);
+        TetrahedralVertex& tetra_vert =
+          dedup_tetra_vert.get_value(itetra_vert_b);
         tetra_vert.ineighbor_cells.insert(itetra_cell);
         tetra_vert.ineighbor_verts.insert(itetra_vert_a);
         tetra_vert.ineighbor_verts.insert(itetra_vert_c);
         tetra_vert.ineighbor_verts.insert(itetra_vert_d);
       }
       {
-        TetrahedralVertex& tetra_vert = dedup_tetra_vert.get_value(itetra_vert_c);
+        TetrahedralVertex& tetra_vert =
+          dedup_tetra_vert.get_value(itetra_vert_c);
         tetra_vert.ineighbor_cells.insert(itetra_cell);
         tetra_vert.ineighbor_verts.insert(itetra_vert_a);
         tetra_vert.ineighbor_verts.insert(itetra_vert_b);
         tetra_vert.ineighbor_verts.insert(itetra_vert_d);
       }
       {
-        TetrahedralVertex& tetra_vert = dedup_tetra_vert.get_value(itetra_vert_d);
+        TetrahedralVertex& tetra_vert =
+          dedup_tetra_vert.get_value(itetra_vert_d);
         tetra_vert.ineighbor_cells.insert(itetra_cell);
         tetra_vert.ineighbor_verts.insert(itetra_vert_a);
         tetra_vert.ineighbor_verts.insert(itetra_vert_b);
@@ -859,10 +834,8 @@ TetrahedralMesh TetrahedralMesh::from_points(const glm::vec3& grid_interval, con
       {
         TetrahedralCell& tetra_cell = dedup_tetra_cell.get_value(itetra_cell);
         tetra_cell.itetra_verts = glm::uvec4(
-          itetra_vert_a,
-          itetra_vert_b,
-          itetra_vert_c,
-          itetra_vert_d);
+          itetra_vert_a, itetra_vert_b, itetra_vert_c, itetra_vert_d
+        );
         tetra_cell.center = tet.center();
       }
 
@@ -901,7 +874,9 @@ TetrahedralMesh TetrahedralMesh::from_points(const glm::vec3& grid_interval, con
       }
 
       glm::vec4 bary;
-      contains_point_tetra(tets.at(itetra_cell_nearest), points.at(iprim), bary);
+      contains_point_tetra(
+        tets.at(itetra_cell_nearest), points.at(iprim), bary
+      );
       TetrahedralInterpolant interp = interp_templs.at(itetra_cell_nearest);
       interp.tetra_weights = bary;
       interps.at(iprim) = interp;
@@ -960,8 +935,6 @@ Mesh TetrahedralMesh::to_mesh() const {
   return Mesh::from_tris(out);
 }
 
-
-
 glm::mat4 BoneKeyFrame::to_transform() const {
   glm::mat4 t = glm::translate(glm::identity<glm::mat4>(), pos);
   glm::mat4 s = glm::scale(glm::identity<glm::mat4>(), scale);
@@ -969,7 +942,11 @@ glm::mat4 BoneKeyFrame::to_transform() const {
   return t * r * s;
 }
 
-BoneKeyFrame BoneKeyFrame::lerp(const BoneKeyFrame& a, const BoneKeyFrame& b, float alpha) {
+BoneKeyFrame BoneKeyFrame::lerp(
+  const BoneKeyFrame& a,
+  const BoneKeyFrame& b,
+  float alpha
+) {
   alpha = std::max(std::min(alpha, 1.0f), 0.0f);
   BoneKeyFrame out {};
   out.scale = (1.0f - alpha) * a.scale + alpha * b.scale;
@@ -979,9 +956,11 @@ BoneKeyFrame BoneKeyFrame::lerp(const BoneKeyFrame& a, const BoneKeyFrame& b, fl
 }
 
 glm::mat4 BoneAnimation::get_local_transform(float tick) const {
-  auto it = std::find_if(key_frames.begin(), key_frames.end(), [&](const BoneKeyFrame& key_frame) {
-    return tick < key_frame.tick;
-  });
+  auto it = std::find_if(
+    key_frames.begin(),
+    key_frames.end(),
+    [&](const BoneKeyFrame& key_frame) { return tick < key_frame.tick; }
+  );
 
   const BoneKeyFrame& b = it == key_frames.end() ? key_frames.back() : *it;
   const BoneKeyFrame& a = *(--it);
@@ -991,11 +970,16 @@ glm::mat4 BoneAnimation::get_local_transform(float tick) const {
   return mat;
 };
 
-glm::mat4 SkeletalAnimation::get_bone_transform(const Skinning& skinning, uint32_t ibone, float tick) const {
+glm::mat4 SkeletalAnimation::get_bone_transform(
+  const Skinning& skinning,
+  uint32_t ibone,
+  float tick
+) const {
   const auto& bone = skinning.bones.at(ibone);
   int32_t parent = bone.parent;
 
-  glm::mat4 local_trans = bone.parent_trans * bone_anims.at(ibone).get_local_transform(tick);
+  glm::mat4 local_trans =
+    bone.parent_trans * bone_anims.at(ibone).get_local_transform(tick);
 
   if (parent >= 0) {
     return get_bone_transform(skinning, parent, tick) * local_trans;
@@ -1003,7 +987,11 @@ glm::mat4 SkeletalAnimation::get_bone_transform(const Skinning& skinning, uint32
     return local_trans;
   }
 }
-void SkeletalAnimation::get_bone_transforms(const Skinning& skinning, float tick, std::vector<glm::mat4>& out) const {
+void SkeletalAnimation::get_bone_transforms(
+  const Skinning& skinning,
+  float tick,
+  std::vector<glm::mat4>& out
+) const {
   out.resize(bone_anims.size());
   for (size_t i = 0; i < bone_anims.size(); ++i) {
     const auto& bone = skinning.bones.at(i);
@@ -1015,16 +1003,25 @@ void SkeletalAnimation::get_bone_transforms(const Skinning& skinning, float tick
 const SkeletalAnimation& SkeletalAnimationCollection::get_skel_anim(
   const std::string& anim_name
 ) const {
-  auto it = std::find_if(skel_anims.begin(), skel_anims.end(), [&](const SkeletalAnimation& skel_anim) {
-    return skel_anim.name == anim_name;
-  });
+  auto it = std::find_if(
+    skel_anims.begin(),
+    skel_anims.end(),
+    [&](const SkeletalAnimation& skel_anim) {
+      return skel_anim.name == anim_name;
+    }
+  );
   L_ASSERT(it != skel_anims.end());
   return *it;
 }
 
-std::vector<glm::vec3> SkinnedMesh::animate(const std::string& anim_name, float tick) {
+std::vector<glm::vec3> SkinnedMesh::animate(
+  const std::string& anim_name,
+  float tick
+) {
   std::vector<glm::mat4> bone_mats;
-  skel_anims.get_skel_anim(anim_name).get_bone_transforms(skinning, tick, bone_mats);
+  skel_anims.get_skel_anim(anim_name).get_bone_transforms(
+    skinning, tick, bone_mats
+  );
 
   std::vector<glm::vec3> out(idxmesh.mesh.poses.size());
   for (size_t i = 0; i < idxmesh.mesh.poses.size(); ++i) {
@@ -1032,11 +1029,10 @@ std::vector<glm::vec3> SkinnedMesh::animate(const std::string& anim_name, float 
     glm::uvec4 ibone = skinning.ibones.at(i);
     glm::vec4 bone_weight = skinning.bone_weights.at(i);
 
-    glm::vec4 pos =
-      bone_mats.at(ibone.x) * rest_pos * bone_weight.x +
-      bone_mats.at(ibone.y) * rest_pos * bone_weight.y +
-      bone_mats.at(ibone.z) * rest_pos * bone_weight.z +
-      bone_mats.at(ibone.w) * rest_pos * bone_weight.w;
+    glm::vec4 pos = bone_mats.at(ibone.x) * rest_pos * bone_weight.x +
+                    bone_mats.at(ibone.y) * rest_pos * bone_weight.y +
+                    bone_mats.at(ibone.z) * rest_pos * bone_weight.z +
+                    bone_mats.at(ibone.w) * rest_pos * bone_weight.w;
     out.at(i) = pos;
   }
   return out;
@@ -1044,7 +1040,6 @@ std::vector<glm::vec3> SkinnedMesh::animate(const std::string& anim_name, float 
 std::vector<glm::vec3> SkinnedMesh::animate(float tick) {
   return animate(skel_anims.skel_anims.front().name, tick);
 }
-
 
 } // namespace mesh
 } // namespace liong

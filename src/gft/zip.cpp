@@ -279,11 +279,11 @@ struct ZipArchiver {
       stream.append<uint32_t>(record.size); // compressed size
       stream.append<uint32_t>(record.size); // uncompressed size
       stream.append<uint16_t>((uint16_t)record.file_name.size());
-      stream.append<uint16_t>(0); // extra field size
-      stream.append<uint16_t>(0); // comment size
-      stream.append<uint16_t>(0); // disk number
-      stream.append<uint16_t>(0); // internal attrs
-      stream.append<uint32_t>(0); // external attrs
+      stream.append<uint16_t>(0);                 // extra field size
+      stream.append<uint16_t>(0);                 // comment size
+      stream.append<uint16_t>(0);                 // disk number
+      stream.append<uint16_t>(0);                 // internal attrs
+      stream.append<uint32_t>(0);                 // external attrs
       stream.append<uint32_t>(rel_offsets.at(i)); // offset
       stream.append_data(record.file_name.data(), record.file_name.size());
     }
@@ -292,13 +292,13 @@ struct ZipArchiver {
     uint32_t ecdr_offset = (uint32_t)stream.size();
 
     stream.append<uint32_t>(L_ZIP_SIGNATURE_END_OF_CENTRAL_DIRECTORY_RECORD);
-    stream.append<uint16_t>(0); // current disk number
-    stream.append<uint16_t>(0); // cdr disk number
-    stream.append<uint16_t>(records.size()); // cdr count on this disk
-    stream.append<uint16_t>(records.size()); // total cdr count
+    stream.append<uint16_t>(0);                        // current disk number
+    stream.append<uint16_t>(0);                        // cdr disk number
+    stream.append<uint16_t>(records.size());           // cdr count on this disk
+    stream.append<uint16_t>(records.size());           // total cdr count
     stream.append<uint32_t>(ecdr_offset - cdr_offset); // cdr size
-    stream.append<uint32_t>(cdr_offset); // cdr offset
-    stream.append<uint16_t>(0); // comment size
+    stream.append<uint32_t>(cdr_offset);               // cdr offset
+    stream.append<uint16_t>(0);                        // comment size
   }
 
   void archive() {

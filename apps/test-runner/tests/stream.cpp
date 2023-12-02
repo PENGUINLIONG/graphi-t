@@ -1,7 +1,8 @@
+#include "gft/stream.hpp"
+
 #include "gft/assert.hpp"
 #include "gft/log.hpp"
 #include "gft/test.hpp"
-#include "gft/stream.hpp"
 
 using namespace liong;
 

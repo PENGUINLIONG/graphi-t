@@ -25,7 +25,7 @@ std::string trim(const std::string& str);
 
 namespace {
 
-template<typename ... TArgs>
+template<typename... TArgs>
 struct format_impl_t;
 template<>
 struct format_impl_t<> {
@@ -37,12 +37,12 @@ struct format_impl_t<T> {
     ss << x;
   }
 };
-template<typename T, typename ... TArgs>
-struct format_impl_t<T, TArgs ...> {
+template<typename T, typename... TArgs>
+struct format_impl_t<T, TArgs...> {
   static inline void format_impl(
     std::stringstream& ss,
     const T& x,
-    const TArgs& ... others
+    const TArgs&... others
   ) {
     format_impl_t<T>::format_impl(ss, x);
     format_impl_t<TArgs...>::format_impl(ss, others...);
@@ -51,7 +51,7 @@ struct format_impl_t<T, TArgs ...> {
     std::stringstream& ss,
     const std::string& sep,
     const T& x,
-    const TArgs& ... others
+    const TArgs&... others
   ) {
     format_impl_t<T>::format_impl(ss, x);
     ss << sep;
@@ -89,14 +89,14 @@ std::string join(const std::string& sep, const std::vector<T>& strs) {
   }
   return ss.str();
 }
-template<typename ... TArgs>
-inline std::string join(const std::string& sep, const TArgs& ... args) {
+template<typename... TArgs>
+inline std::string join(const std::string& sep, const TArgs&... args) {
   std::stringstream ss {};
   format_impl_t<TArgs...>::join_impl(ss, sep, args...);
   return ss.str();
 }
-template<typename ... TArgs>
-inline std::string format(const TArgs& ... args) {
+template<typename... TArgs>
+inline std::string format(const TArgs&... args) {
   std::stringstream ss {};
   format_impl_t<TArgs...>::format_impl(ss, args...);
   return ss.str();
@@ -170,8 +170,8 @@ std::vector<U> map(
 template<typename T>
 std::vector<T> reinterpret_data(const void* data, size_t size) {
   std::vector<T> out;
-  //L_ASSERT(size % sizeof(T) == 0,
-  //  "cannot reinterpret data with size not aligned to the given type");
+  // L_ASSERT(size % sizeof(T) == 0,
+  //   "cannot reinterpret data with size not aligned to the given type");
   out.resize(size / sizeof(T));
   std::memcpy(out.data(), data, size);
   return out;

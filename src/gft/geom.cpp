@@ -6,18 +6,18 @@ namespace geom {
 using namespace glm;
 
 bool contains_point_aabb(const Aabb& aabb, const vec3& point) {
-  return
-    aabb.min.x <= point.x &&
-    aabb.min.y <= point.y &&
-    aabb.min.z <= point.z &&
-    aabb.max.x >= point.x &&
-    aabb.max.y >= point.y &&
-    aabb.max.z >= point.z;
+  return aabb.min.x <= point.x && aabb.min.y <= point.y &&
+         aabb.min.z <= point.z && aabb.max.x >= point.x &&
+         aabb.max.y >= point.y && aabb.max.z >= point.z;
 }
 bool contains_point_sphere(const Sphere& sphere, const vec3& point) {
   return (point - sphere.p).length() <= sphere.r;
 }
-bool contains_point_tetra(const Tetrahedron& tetra, const vec3& point, vec4& bary) {
+bool contains_point_tetra(
+  const Tetrahedron& tetra,
+  const vec3& point,
+  vec4& bary
+) {
   vec4 v0(tetra.a, 1);
   vec4 v1(tetra.b, 1);
   vec4 v2(tetra.c, 1);
@@ -40,19 +40,11 @@ bool contains_point_tetra(const Tetrahedron& tetra, const vec3& point, vec4& bar
   return true;
 }
 
-
-
 bool intersect_aabb(const Aabb& aabb1, const Aabb& aabb2) {
-  return
-    aabb1.min.x <= aabb2.max.x ||
-    aabb1.min.y <= aabb2.max.y ||
-    aabb1.min.z <= aabb2.max.z ||
-    aabb1.max.x >= aabb2.min.x ||
-    aabb1.max.y >= aabb2.min.y ||
-    aabb1.max.z >= aabb2.min.z;
+  return aabb1.min.x <= aabb2.max.x || aabb1.min.y <= aabb2.max.y ||
+         aabb1.min.z <= aabb2.max.z || aabb1.max.x >= aabb2.min.x ||
+         aabb1.max.y >= aabb2.min.y || aabb1.max.z >= aabb2.min.z;
 }
-
-
 
 void split_tetra2tris(const Tetrahedron& tet, std::vector<Triangle>& out) {
   Triangle t0 { tet.a, tet.b, tet.c };
@@ -119,16 +111,16 @@ void subdivide_aabb(
 
   for (uint32_t z = 0; z < nslice.z; ++z) {
     float z_min = aabb.min.z + z * size.z;
-    float z_max = z + 1 == nslice.y ?
-      aabb.max.z : aabb.min.z + (z + 1) * size.z;
+    float z_max =
+      z + 1 == nslice.y ? aabb.max.z : aabb.min.z + (z + 1) * size.z;
     for (uint32_t y = 0; y < nslice.y; ++y) {
       float y_min = aabb.min.y + y * size.y;
-      float y_max = y + 1 == nslice.y ?
-        aabb.max.y : aabb.min.y + (y + 1) * size.y;
+      float y_max =
+        y + 1 == nslice.y ? aabb.max.y : aabb.min.y + (y + 1) * size.y;
       for (uint32_t x = 0; x < nslice.x; ++x) {
         float x_min = aabb.min.x + x * size.x;
-        float x_max = x + 1 == nslice.x ?
-          aabb.max.x : aabb.min.x + (x + 1) * size.x;
+        float x_max =
+          x + 1 == nslice.x ? aabb.max.x : aabb.min.x + (x + 1) * size.x;
 
         Aabb aabb2 {};
         aabb2.min = glm::vec3(x_min, y_min, z_min);

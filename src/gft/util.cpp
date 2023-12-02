@@ -45,21 +45,20 @@ void save_text(const char* path, const std::string& txt) {
 
 // Save an array of 8-bit unsigned int colors with RGBA channels packed from LSB
 // to MSB in a 32-bit unsigned int into a bitmap file.
-void save_bmp(
-  const uint32_t* pxs,
-  uint32_t w,
-  uint32_t h,
-  const char* path
-) {
+void save_bmp(const uint32_t* pxs, uint32_t w, uint32_t h, const char* path) {
   std::fstream f(path, std::ios::out | std::ios::binary | std::ios::trunc);
   f.write("BM", 2);
   uint32_t img_size = w * h * sizeof(uint32_t);
   uint32_t bmfile_hdr[] = { 14 + 108 + img_size, 0, 14 + 108 };
   f.write((const char*)bmfile_hdr, sizeof(bmfile_hdr));
   uint32_t bmcore_hdr[] = {
-    108, w, h, 1 | (32 << 16), 3, img_size, 2835, 2835, 0, 0,
-    0x000000FF, 0x0000FF00, 0x00FF0000, 0xFF000000, 0x57696E20,
-    0,0,0,0,0,0,0,0,0,0,0,0,
+    108,        w,          h,          1 | (32 << 16),
+    3,          img_size,   2835,       2835,
+    0,          0,          0x000000FF, 0x0000FF00,
+    0x00FF0000, 0xFF000000, 0x57696E20, 0,
+    0,          0,          0,          0,
+    0,          0,          0,          0,
+    0,          0,          0,
   };
   f.write((const char*)bmcore_hdr, sizeof(bmcore_hdr));
   uint32_t buf;
@@ -74,12 +73,7 @@ void save_bmp(
 }
 // Save an array of 32-bit floating point colors with RGBA channels into a
 // bitmap file.
-void save_bmp(
-  const float* pxs,
-  uint32_t w,
-  uint32_t h,
-  const char* path
-) {
+void save_bmp(const float* pxs, uint32_t w, uint32_t h, const char* path) {
   std::vector<uint32_t> packed_pxs;
   packed_pxs.resize(w * h * 4);
   size_t npx = (size_t)w * (size_t)h;
@@ -98,7 +92,9 @@ void sleep_for_us(uint64_t t) {
 }
 
 bool starts_with(const std::string& start, const std::string& str) {
-  if (str.size() < start.size()) { return false; }
+  if (str.size() < start.size()) {
+    return false;
+  }
   for (size_t i = 0; i < start.size(); ++i) {
     if (str[i] != start[i]) {
       return false;
@@ -107,7 +103,9 @@ bool starts_with(const std::string& start, const std::string& str) {
   return true;
 }
 bool ends_with(const std::string& end, const std::string& str) {
-  if (str.size() < end.size()) { return false; }
+  if (str.size() < end.size()) {
+    return false;
+  }
   size_t offset = str.size() - end.size();
   for (size_t i = 0; i < end.size(); ++i) {
     if (str[offset + i] != end[i]) {
@@ -166,7 +164,8 @@ std::string trim(const std::string& str) {
 }
 
 /*
-** The crc32 is licensed under the Apache License, Version 2.0, and a copy of the license is included in this file.
+** The crc32 is licensed under the Apache License, Version 2.0, and a copy of
+** the license is included in this file.
 **
 ** Author:Wang Yaofu voipman@qq.com
 ** Description: The source file of class crc32.
@@ -235,7 +234,7 @@ uint32_t crc32(const void* data, size_t size) {
   uint32_t crc32val = 0;
   crc32val ^= 0xFFFFFFFF;
 
-  for (size_t i = 0;  i < size;  i++) {
+  for (size_t i = 0; i < size; i++) {
     uint32_t x = ((const uint8_t*)data)[i];
     crc32val = LUT[(crc32val ^ x) & 0xFF] ^ ((crc32val >> 8) & 0x00FFFFFF);
   }

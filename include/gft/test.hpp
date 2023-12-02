@@ -32,7 +32,8 @@ struct TestRegistry {
 
 } // namespace liong
 
-#define L_TEST(name) \
-  extern void l_test_##name();\
-  int L_TEST_MARKER_##name = ::liong::test::TestRegistry::get_inst().reg(#name, l_test_##name); \
+#define L_TEST(name)                                                   \
+  extern void l_test_##name();                                         \
+  int L_TEST_MARKER_##name =                                           \
+    ::liong::test::TestRegistry::get_inst().reg(#name, l_test_##name); \
   void l_test_##name()

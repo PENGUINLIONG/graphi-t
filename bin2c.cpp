@@ -12,10 +12,12 @@ int main(int argc, const char** argv) {
   std::vector<uint8_t> buf;
   auto bin = util::load_file(src_path);
 
-  std::stringstream ss {};
+  std::stringstream ss{};
   ss << "// This is a generated file; changes may be overwritten.\n"
-    "const uint8_t data[] = {";
-  for (auto x : buf) { ss << x << ","; }
+        "const uint8_t data[] = {";
+  for (auto x : buf) {
+    ss << x << ",";
+  }
   ss << "};";
 
   auto dst_path = argv[2];

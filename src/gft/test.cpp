@@ -19,10 +19,7 @@ TestRegistry& TestRegistry::get_inst() {
   return *inner;
 }
 
-int TestRegistry::reg(
-  const std::string& name,
-  std::function<void()>&& func
-) {
+int TestRegistry::reg(const std::string& name, std::function<void()>&& func) {
   tests.emplace(name, Entry { func });
   return 0;
 }

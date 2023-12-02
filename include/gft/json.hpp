@@ -11,9 +11,10 @@ namespace json {
 
 // Any error occured during JSON serialization/deserialization.
 class JsonException : public std::exception {
-private:
+ private:
   std::string msg;
-public:
+
+ public:
   JsonException(const char* msg);
   const char* what() const noexcept override;
 };
@@ -33,7 +34,8 @@ struct JsonValue;
 
 class JsonElementEnumerator {
   std::vector<JsonValue>::const_iterator beg_, end_;
-public:
+
+ public:
   JsonElementEnumerator(const std::vector<JsonValue>& arr) :
     beg_(arr.cbegin()), end_(arr.cend()) {}
 
@@ -47,7 +49,8 @@ public:
 
 class JsonFieldEnumerator {
   std::map<std::string, JsonValue>::const_iterator beg_, end_;
-public:
+
+ public:
   JsonFieldEnumerator(const std::map<std::string, JsonValue>& obj) :
     beg_(obj.cbegin()), end_(obj.cend()) {}
 
@@ -107,110 +110,167 @@ struct JsonValue {
   inline JsonValue(const char* str) : ty(L_JSON_STRING), str(str) {}
   inline JsonValue(const std::string& str) : ty(L_JSON_STRING), str(str) {}
   inline JsonValue(std::string&& str) :
-    ty(L_JSON_STRING),
-    str(std::forward<std::string>(str)) {}
+    ty(L_JSON_STRING), str(std::forward<std::string>(str)) {}
   JsonValue(JsonObject&& obj);
   JsonValue(JsonArray&& arr);
 
   inline JsonValue& operator[](const char* key) {
-    if (!is_obj()) { throw JsonException("value is not an object"); }
+    if (!is_obj()) {
+      throw JsonException("value is not an object");
+    }
     return obj.inner.at(key);
   }
   inline const JsonValue& operator[](const char* key) const {
-    if (!is_obj()) { throw JsonException("value is not an object"); }
+    if (!is_obj()) {
+      throw JsonException("value is not an object");
+    }
     return obj.inner.at(key);
   }
   inline JsonValue& operator[](const std::string& key) {
-    if (!is_obj()) { throw JsonException("value is not an object"); }
+    if (!is_obj()) {
+      throw JsonException("value is not an object");
+    }
     return obj.inner.at(key);
   }
   inline const JsonValue& operator[](const std::string& key) const {
-    if (!is_obj()) { throw JsonException("value is not an object"); }
+    if (!is_obj()) {
+      throw JsonException("value is not an object");
+    }
     return obj.inner.at(key);
   }
   inline JsonValue& operator[](size_t i) {
-    if (!is_arr()) { throw JsonException("value is not an array"); }
+    if (!is_arr()) {
+      throw JsonException("value is not an array");
+    }
     return arr.inner.at(i);
   }
   inline const JsonValue& operator[](size_t i) const {
-    if (!is_arr()) { throw JsonException("value is not an array"); }
+    if (!is_arr()) {
+      throw JsonException("value is not an array");
+    }
     return arr.inner.at(i);
   }
   inline operator bool() const {
-    if (!is_bool()) { throw JsonException("value is not a bool"); }
+    if (!is_bool()) {
+      throw JsonException("value is not a bool");
+    }
     return b;
   }
   inline operator double() const {
-    if (!is_num()) { throw JsonException("value is not a number"); }
+    if (!is_num()) {
+      throw JsonException("value is not a number");
+    }
     return num_float;
   }
   inline operator float() const {
-    if (!is_num()) { throw JsonException("value is not a number"); }
+    if (!is_num()) {
+      throw JsonException("value is not a number");
+    }
     return (float)num_float;
   }
   inline operator char() const {
-    if (!is_num()) { throw JsonException("value is not a number"); }
+    if (!is_num()) {
+      throw JsonException("value is not a number");
+    }
     return (char)num_int;
   }
   inline operator signed char() const {
-    if (!is_num()) { throw JsonException("value is not a number"); }
+    if (!is_num()) {
+      throw JsonException("value is not a number");
+    }
     return (signed char)num_int;
   }
   inline operator unsigned char() const {
-    if (!is_num()) { throw JsonException("value is not a number"); }
+    if (!is_num()) {
+      throw JsonException("value is not a number");
+    }
     return (unsigned char)num_int;
   }
   inline operator short() const {
-    if (!is_num()) { throw JsonException("value is not a number"); }
+    if (!is_num()) {
+      throw JsonException("value is not a number");
+    }
     return (short)num_int;
   }
   inline operator unsigned short() const {
-    if (!is_num()) { throw JsonException("value is not a number"); }
+    if (!is_num()) {
+      throw JsonException("value is not a number");
+    }
     return (unsigned short)num_int;
   }
   inline operator int() const {
-    if (!is_num()) { throw JsonException("value is not a number"); }
+    if (!is_num()) {
+      throw JsonException("value is not a number");
+    }
     return (int)num_int;
   }
   inline operator unsigned int() const {
-    if (!is_num()) { throw JsonException("value is not a number"); }
+    if (!is_num()) {
+      throw JsonException("value is not a number");
+    }
     return (unsigned int)num_int;
   }
   inline operator long() const {
-    if (!is_num()) { throw JsonException("value is not a number"); }
+    if (!is_num()) {
+      throw JsonException("value is not a number");
+    }
     return (long)num_int;
   }
   inline operator unsigned long() const {
-    if (!is_num()) { throw JsonException("value is not a number"); }
+    if (!is_num()) {
+      throw JsonException("value is not a number");
+    }
     return (unsigned long)num_int;
   }
   inline operator long long() const {
-    if (!is_num()) { throw JsonException("value is not a number"); }
+    if (!is_num()) {
+      throw JsonException("value is not a number");
+    }
     return (long long)num_int;
   }
   inline operator unsigned long long() const {
-    if (!is_num()) { throw JsonException("value is not a number"); }
+    if (!is_num()) {
+      throw JsonException("value is not a number");
+    }
     return (unsigned long long)num_int;
   }
-  inline operator const std::string& () const {
-    if (!is_str()) { throw JsonException("value is not a string"); }
+  inline operator const std::string&() const {
+    if (!is_str()) {
+      throw JsonException("value is not a string");
+    }
     return str;
   }
-  inline operator const JsonArray& () const {
-    if (!is_arr()) { throw JsonException("value is not an array"); }
+  inline operator const JsonArray&() const {
+    if (!is_arr()) {
+      throw JsonException("value is not an array");
+    }
     return arr;
   }
-  inline operator const JsonObject& () const {
-    if (!is_obj()) { throw JsonException("value is not an object"); }
+  inline operator const JsonObject&() const {
+    if (!is_obj()) {
+      throw JsonException("value is not an object");
+    }
     return obj;
   }
 
-  inline bool is_null() const { return ty == L_JSON_NULL; }
-  inline bool is_bool() const { return ty == L_JSON_BOOLEAN; }
-  inline bool is_num() const { return ty == L_JSON_FLOAT || ty == L_JSON_INT; }
-  inline bool is_str() const { return ty == L_JSON_STRING; }
-  inline bool is_obj() const { return ty == L_JSON_OBJECT; }
-  inline bool is_arr() const { return ty == L_JSON_ARRAY; }
+  inline bool is_null() const {
+    return ty == L_JSON_NULL;
+  }
+  inline bool is_bool() const {
+    return ty == L_JSON_BOOLEAN;
+  }
+  inline bool is_num() const {
+    return ty == L_JSON_FLOAT || ty == L_JSON_INT;
+  }
+  inline bool is_str() const {
+    return ty == L_JSON_STRING;
+  }
+  inline bool is_obj() const {
+    return ty == L_JSON_OBJECT;
+  }
+  inline bool is_arr() const {
+    return ty == L_JSON_ARRAY;
+  }
 
   inline size_t size() const {
     if (is_obj()) {

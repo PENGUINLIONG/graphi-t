@@ -60,15 +60,14 @@ inline void reg_arg(
 // registered before.
 extern void parse_args(int argc, const char** argv);
 
-
 //
 // Parsers.
 //
 
-
 template<typename T>
 struct TypedArgumentParser {
-  typedef struct {} arg_ty;
+  typedef struct {
+  } arg_ty;
   // Number of argument entries needed for this argument.
   static const uint32_t narg = -1;
   // Parser function. Convert the literal in the first parameter into structured
@@ -165,7 +164,6 @@ struct SwitchArgumentParser {
     return {};
   }
 };
-
 
 using IntParser = TypedArgumentParser<int32_t>;
 using UintParser = TypedArgumentParser<uint32_t>;

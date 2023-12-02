@@ -13,7 +13,8 @@ namespace stats {
 template<typename T>
 class MinStats {
   T mn_ = std::numeric_limits<T>::max();
-public:
+
+ public:
   typedef T value_t;
 
   // Returns true if the value has been updated.
@@ -34,7 +35,7 @@ public:
     }
     return mn_;
   }
-  friend std::ostream& operator <<(std::ostream& out, const MinStats<T>& x) {
+  friend std::ostream& operator<<(std::ostream& out, const MinStats<T>& x) {
     out << (T)(x);
     return out;
   }
@@ -42,7 +43,8 @@ public:
 template<typename T>
 class MaxStats {
   T mx_ = -std::numeric_limits<T>::max();
-public:
+
+ public:
   typedef T value_t;
 
   // Returns true if the value has been updated.
@@ -63,7 +65,7 @@ public:
     }
     return mx_;
   }
-  friend std::ostream& operator <<(std::ostream& out, const MaxStats<T>& x) {
+  friend std::ostream& operator<<(std::ostream& out, const MaxStats<T>& x) {
     out << (T)(x);
     return out;
   }
@@ -72,7 +74,8 @@ template<typename T>
 class AvgStats {
   T sum_ = 0;
   uint64_t n_ = 0;
-public:
+
+ public:
   typedef T value_t;
 
   void push(T value) {
@@ -88,7 +91,7 @@ public:
     }
     return sum_ / n_;
   }
-  friend std::ostream& operator <<(std::ostream& out, const AvgStats<T>& x) {
+  friend std::ostream& operator<<(std::ostream& out, const AvgStats<T>& x) {
     out << (T)(x);
     return out;
   }
@@ -97,7 +100,8 @@ template<typename T>
 class StdStats {
   AvgStats<T> avg_ {};
   std::vector<T> values_ {};
-public:
+
+ public:
   typedef T value_t;
 
   void push(T value) {
@@ -119,7 +123,7 @@ public:
     }
     return std::sqrt(sqr_sum / values_.size());
   }
-  friend std::ostream& operator <<(std::ostream& out, const StdStats<T>& x) {
+  friend std::ostream& operator<<(std::ostream& out, const StdStats<T>& x) {
     out << (T)(x);
     return out;
   }
@@ -133,7 +137,8 @@ public:
 template<typename T>
 class MedianStats {
   std::vector<T> values_ {};
-public:
+
+ public:
   typedef T value_t;
 
   void push(T value) {
@@ -154,19 +159,19 @@ public:
       return (values_[imid] + values_[imid + 1]) / 2;
     }
   }
-  friend std::ostream& operator <<(std::ostream& out, const MedianStats<T>& x) {
+  friend std::ostream& operator<<(std::ostream& out, const MedianStats<T>& x) {
     out << (T)(x);
     return out;
   }
 };
-
 
 template<typename TStats>
 class GeomDeltaStats {
   TStats stats_ {};
   bool has_ratio_ = false;
   typename TStats::value_t ratio_ {};
-public:
+
+ public:
   typedef typename TStats::value_t value_t;
 
   void push(value_t value) {
@@ -185,7 +190,7 @@ public:
     }
     return ratio_;
   }
-  friend std::ostream& operator <<(
+  friend std::ostream& operator<<(
     std::ostream& out,
     const GeomDeltaStats<TStats>& x
   ) {
@@ -200,7 +205,8 @@ class ArithDeltaStats {
   TStats stats_ {};
   bool has_delta_ = false;
   typename TStats::value_t delta_ {};
-public:
+
+ public:
   typedef typename TStats::value_t value_t;
 
   void push(value_t value) {
@@ -219,7 +225,7 @@ public:
     }
     return delta_;
   }
-  friend std::ostream& operator <<(
+  friend std::ostream& operator<<(
     std::ostream& out,
     const ArithDeltaStats<TStats>& x
   ) {
