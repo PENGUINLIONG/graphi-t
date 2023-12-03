@@ -9,6 +9,7 @@
 #include "gft/vk/vk-buffer.hpp"
 #include "gft/vk/vk-image.hpp"
 #include "gft/vk/vk-depth-image.hpp"
+#include "gft/vk/vk-invocation.hpp"
 
 namespace liong {
 namespace vk {
@@ -639,6 +640,21 @@ SwapchainRef VulkanContext::create_swapchain(const SwapchainConfig& cfg) {
 RenderPassRef VulkanContext::create_render_pass(const RenderPassConfig& cfg) {
   return VulkanRenderPass::create(shared_from_this(), cfg);
 }
+
+TaskRef VulkanContext::create_compute_task(const ComputeTaskConfig& cfg) {
+  return VulkanTask::create(shared_from_this(), cfg);
+}
+
+InvocationRef VulkanContext::create_transfer_invocation(
+  const TransferInvocationConfig& cfg
+) {
+  return VulkanInvocation::create(shared_from_this(), cfg);
+}
+
+InvocationRef VulkanContext::create_composite_invocation(const CompositeInvocationConfig& cfg) {
+  return VulkanInvocation::create(shared_from_this(), cfg);
+}
+
 
 }  // namespace vk
 }  // namespace liong

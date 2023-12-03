@@ -105,6 +105,14 @@ struct VulkanContext : public Context {
   ) override final;
   virtual RenderPassRef create_render_pass(const RenderPassConfig& cfg
   ) override final;
+
+  virtual TaskRef create_compute_task(const ComputeTaskConfig& cfg) override final;
+
+  virtual InvocationRef create_transfer_invocation(
+    const TransferInvocationConfig& cfg
+  ) override final;
+
+  virtual InvocationRef create_composite_invocation(const CompositeInvocationConfig& cfg) override final;
 };
 
 } // namespace vk

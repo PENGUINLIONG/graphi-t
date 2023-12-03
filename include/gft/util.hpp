@@ -22,6 +22,10 @@ bool starts_with(const std::string& start, const std::string& str);
 bool ends_with(const std::string& end, const std::string& str);
 std::vector<std::string> split(char sep, const std::string& str);
 std::string trim(const std::string& str);
+std::string replace_all(const std::string& str, const std::string& from, const std::string& to);
+// Fill the template by replacing the placeholders with the given arguments.
+// The placeholder is in the form of "${name}".
+std::string fill_template(const std::string& templ, const std::map<std::string, std::string>& args);
 
 namespace {
 

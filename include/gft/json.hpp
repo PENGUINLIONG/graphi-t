@@ -69,6 +69,46 @@ struct JsonArray {
   inline JsonArray() : inner() {}
   JsonArray(std::vector<JsonValue>&& b) : inner(std::move(b)) {}
   JsonArray(std::initializer_list<JsonValue>&& elems);
+
+  inline JsonValue& operator[](size_t i) {
+    return inner[i];
+  }
+  inline const JsonValue& operator[](size_t i) const {
+    return inner[i];
+  }
+
+  inline JsonElementEnumerator elems() const {
+    return JsonElementEnumerator(inner);
+  }
+
+  inline size_t size() const {
+    return inner.size();
+  }
+
+  inline operator const std::vector<JsonValue>&() const {
+    return inner;
+  }
+
+  inline std::vector<JsonValue>::iterator begin() {
+    return inner.begin();
+  }
+  inline std::vector<JsonValue>::iterator end() {
+    return inner.end();
+  }
+
+  inline std::vector<JsonValue>::const_iterator begin() const {
+    return inner.cbegin();
+  }
+  inline std::vector<JsonValue>::const_iterator end() const {
+    return inner.cend();
+  }
+
+  inline const JsonValue& at(size_t i) const {
+    return inner.at(i);
+  }
+  inline JsonValue& at(size_t i) {
+    return inner.at(i);
+  }
 };
 // JSON object builder.
 struct JsonObject {
@@ -79,6 +119,91 @@ struct JsonObject {
   JsonObject(
     std::initializer_list<std::pair<const std::string, JsonValue>>&& entries
   );
+
+  inline JsonValue& operator[](const char* key) {
+    return inner[key];
+  }
+  inline JsonValue& operator[](const std::string& key) {
+    return inner[key];
+  }
+  inline JsonValue& operator[](std::string&& key) {
+    return inner[std::move(key)];
+  }
+  inline const JsonValue& operator[](const char* key) const {
+    return inner.at(key);
+  }
+  inline const JsonValue& operator[](const std::string& key) const {
+    return inner.at(key);
+  }
+  inline const JsonValue& operator[](std::string&& key) const {
+    return inner.at(std::move(key));
+  }
+
+  inline JsonFieldEnumerator fields() const {
+    return JsonFieldEnumerator(inner);
+  }
+
+  inline size_t size() const {
+    return inner.size();
+  }
+
+  inline operator const std::map<std::string, JsonValue>&() const {
+    return inner;
+  }
+
+  inline const JsonValue& at(const std::string& key) const {
+    return inner.at(key);
+  }
+  inline const JsonValue& at(std::string&& key) const {
+    return inner.at(std::move(key));
+  }
+  inline const JsonValue& at(const char* key) const {
+    return inner.at(key);
+  }
+  inline JsonValue& at(const std::string& key) {
+    return inner.at(key);
+  }
+  inline JsonValue& at(std::string&& key) {
+    return inner.at(std::move(key));
+  }
+  inline JsonValue& at(const char* key) {
+    return inner.at(key);
+  }
+
+  inline std::map<std::string, JsonValue>::iterator begin() {
+    return inner.begin();
+  }
+  inline std::map<std::string, JsonValue>::iterator end() {
+    return inner.end();
+  }
+
+  inline std::map<std::string, JsonValue>::const_iterator begin() const {
+    return inner.cbegin();
+  }
+  inline std::map<std::string, JsonValue>::const_iterator end() const {
+    return inner.cend();
+  }
+
+  inline std::map<std::string, JsonValue>::iterator find(const std::string& key) {
+    return inner.find(key);
+  }
+  inline std::map<std::string, JsonValue>::iterator find(std::string&& key) {
+    return inner.find(std::move(key));
+  }
+  inline std::map<std::string, JsonValue>::iterator find(const char* key) {
+    return inner.find(key);
+  }
+  inline std::map<std::string, JsonValue>::const_iterator find(const std::string& key) const {
+    return inner.find(key);
+  }
+  inline std::map<std::string, JsonValue>::const_iterator find(std::string&& key) const {
+    return inner.find(std::move(key));
+  }
+  inline std::map<std::string, JsonValue>::const_iterator find(const char* key) const {
+    return inner.find(key);
+  }
+
+  bool contains(const std::string& key) const;
 };
 
 // Represent a abstract value in JSON representation.
@@ -272,6 +397,13 @@ struct JsonValue {
     return ty == L_JSON_ARRAY;
   }
 
+  inline bool is_true() const {
+    return is_bool() && b;
+  }
+  inline bool is_false() const {
+    return is_bool() && !b;
+  }
+
   inline size_t size() const {
     if (is_obj()) {
       return obj.inner.size();
@@ -288,6 +420,10 @@ struct JsonValue {
     return JsonFieldEnumerator(obj.inner);
   }
 };
+
+inline bool JsonObject::contains(const std::string& key) const {
+  return inner.find(key) != inner.end();
+}
 
 // Parse JSON literal into and `JsonValue` object. If the JSON is invalid or
 // unsupported, `JsonException` will be raised.

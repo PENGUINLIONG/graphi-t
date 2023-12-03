@@ -163,6 +163,50 @@ std::string trim(const std::string& str) {
   return std::string(beg, end);
 }
 
+std::string replace_all(const std::string& str, const std::string& from, const std::string& to) {
+  std::string out;
+  out.reserve(str.size());
+  size_t pos = 0;
+  size_t next_pos = 0;
+  while (true) {
+    next_pos = str.find(from, pos);
+    if (next_pos == std::string::npos) {
+      out.append(str, pos, str.size() - pos);
+      break;
+    } else {
+      out.append(str, pos, next_pos - pos);
+      out.append(to);
+      pos = next_pos + from.size();
+    }
+  }
+  return out;
+}
+
+std::string fill_template(const std::string& templ, const std::map<std::string, std::string>& args) {
+  std::string out;
+  out.reserve(templ.size());
+  size_t pos = 0;
+  size_t next_pos = 0;
+  while (true) {
+    next_pos = templ.find("${", pos);
+    if (next_pos == std::string::npos) {
+      out.append(templ, pos, templ.size() - pos);
+      break;
+    } else {
+      out.append(templ, pos, next_pos - pos);
+      pos = next_pos + 2;
+      next_pos = templ.find("}", pos);
+      L_ASSERT(next_pos != std::string::npos, "invalid template: ", templ);
+      std::string arg_name = std::string(templ, pos, next_pos - pos);
+      auto arg_it = args.find(arg_name);
+      L_ASSERT(arg_it != args.end(), "missing argument: ", arg_name);
+      out.append(arg_it->second);
+      pos = next_pos + 1;
+    }
+  }
+  return out;
+}
+
 /*
 ** The crc32 is licensed under the Apache License, Version 2.0, and a copy of
 ** the license is included in this file.

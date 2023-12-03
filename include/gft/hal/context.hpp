@@ -20,6 +20,11 @@ struct Context : public std::enable_shared_from_this<Context> {
 
   virtual SwapchainRef create_swapchain(const SwapchainConfig& cfg) = 0;
   virtual RenderPassRef create_render_pass(const RenderPassConfig& cfg) = 0;
+
+  virtual TaskRef create_compute_task(const ComputeTaskConfig& cfg) = 0;
+
+  virtual InvocationRef create_transfer_invocation(const TransferInvocationConfig& cfg) = 0;
+  virtual InvocationRef create_composite_invocation(const CompositeInvocationConfig& cfg) = 0;
 };
 
 } // namespace hal

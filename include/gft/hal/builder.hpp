@@ -804,6 +804,13 @@ struct CompositeInvocationConfigBuilder {
     inner.invokes.push_back(invocation);
     return *this;
   }
+  CompositeInvocationConfigBuilder& invocations(const std::vector<InvocationRef>& invocations
+  ) {
+    inner.invokes.insert(
+      inner.invokes.end(), invocations.begin(), invocations.end()
+    );
+    return *this;
+  }
   CompositeInvocationConfigBuilder& is_timed(bool timed) {
     inner.is_timed = timed;
     return *this;
