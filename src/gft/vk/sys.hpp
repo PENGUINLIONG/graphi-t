@@ -26,8 +26,12 @@ namespace liong {
 namespace vk {
 namespace sys {
 
+// VkDebugUtilsMessengerEXT
+extern sys::DebugUtilsMessengerRef create_debug_utils_messenger(VkInstance inst
+);
+
 // VkInstance
-extern sys::InstanceRef create_inst(uint32_t api_ver);
+extern sys::InstanceRef create_inst(uint32_t api_ver, bool debug);
 
 // VkPhysicalDevice
 extern std::vector<VkPhysicalDevice> collect_physdevs(VkInstance inst);

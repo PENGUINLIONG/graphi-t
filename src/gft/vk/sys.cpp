@@ -6,8 +6,48 @@ namespace liong {
 namespace vk {
 namespace sys {
 
+static VKAPI_ATTR VkBool32 VKAPI_CALL debug_callback(
+  VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+  VkDebugUtilsMessageTypeFlagsEXT messageType,
+  const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+  void* pUserData
+) {
+  switch (messageSeverity) {
+  // case VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT:
+  //   L_DEBUG("validation layer: ", pCallbackData->pMessage);
+  //   break;
+  // case VK_DEBUG_UTILS_MESSAGE_SEVERITY_INFO_BIT_EXT:
+  //   L_INFO("validation layer: ", pCallbackData->pMessage);
+  //   break;
+  case VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT:
+    L_WARN("validation layer: ", pCallbackData->pMessage);
+    break;
+  case VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT:
+    L_ERROR("validation layer: ", pCallbackData->pMessage);
+    break;
+  default:
+    // L_ERROR("validation layer: ", pCallbackData->pMessage);
+    break;
+  }
+
+  return VK_FALSE;
+}
+
+// VkDebugUtilsMessengerEXT
+sys::DebugUtilsMessengerRef create_debug_utils_messenger(VkInstance inst) {
+  VkDebugUtilsMessengerCreateInfoEXT dumci {};
+  dumci.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
+  dumci.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT |
+                          VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+  dumci.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
+                      VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT |
+                      VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
+  dumci.pfnUserCallback = debug_callback;
+  return sys::DebugUtilsMessenger::create(inst, &dumci);
+}
+
 // VkInstance
-sys::InstanceRef create_inst(uint32_t api_ver) {
+sys::InstanceRef create_inst(uint32_t api_ver, bool debug) {
   VkApplicationInfo app_info{};
   app_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
   app_info.apiVersion = api_ver;
@@ -60,23 +100,29 @@ sys::InstanceRef create_inst(uint32_t api_ver) {
     request_instance_extension(
       VK_EXT_METAL_SURFACE_EXTENSION_NAME, inst_ext.extensionName, inst_ext_names
     );
-#if !defined(NDEBUG)
-    request_instance_extension(
-      VK_EXT_DEBUG_UTILS_EXTENSION_NAME, inst_ext.extensionName, inst_ext_names
-    );
-    request_instance_extension(VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
-      inst_ext.extensionName, inst_ext_names);
-#endif  // !defined(NDEBUG)
+    if (debug) {
+      request_instance_extension(
+        VK_EXT_DEBUG_UTILS_EXTENSION_NAME,
+        inst_ext.extensionName,
+        inst_ext_names
+      );
+      request_instance_extension(
+        VK_EXT_DEBUG_REPORT_EXTENSION_NAME,
+        inst_ext.extensionName,
+        inst_ext_names
+      );
+    }
   }
 
   static std::vector<const char*> layers;
   for (const auto& inst_layer : inst_layers) {
     L_DEBUG("found layer ", inst_layer.layerName);
-#if !defined(NDEBUG)
-    request_instance_layer(
-      "VK_LAYER_KHRONOS_validation", inst_layer.layerName, layers
-    );
-#endif  // !defined(NDEBUG)
+    if (debug) {
+      request_instance_layer(
+        "VK_LAYER_KHRONOS_validation", inst_layer.layerName, layers
+      );
+      L_INFO("enabled validation layer");
+    }
   }
 
   VkInstanceCreateInfo ici{};

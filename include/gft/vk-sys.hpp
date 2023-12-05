@@ -72,6 +72,54 @@ struct VkAssert {
 
 namespace sys {
 
+struct DebugUtilsMessenger {
+  typedef DebugUtilsMessenger Self;
+  VkInstance inst;
+  VkDebugUtilsMessengerEXT debug_messenger_ext;
+  bool should_destroy;
+
+  DebugUtilsMessenger(
+    VkInstance inst,
+    VkDebugUtilsMessengerEXT debug_messenger_ext,
+    bool should_destroy
+  ) :
+    inst(inst),
+    debug_messenger_ext(debug_messenger_ext),
+    should_destroy(should_destroy) {}
+  ~DebugUtilsMessenger() {
+    destroy();
+  }
+
+  operator VkDebugUtilsMessengerEXT() const {
+    return debug_messenger_ext;
+  }
+
+  static std::shared_ptr<DebugUtilsMessenger> create(
+    VkInstance inst,
+    const VkDebugUtilsMessengerCreateInfoEXT* dumi
+  ) {
+    auto vkCreateDebugUtilsMessengerEXT = (PFN_vkCreateDebugUtilsMessengerEXT
+    )vkGetInstanceProcAddr(inst, "vkCreateDebugUtilsMessengerEXT");
+
+    VkDebugUtilsMessengerEXT debug_messenger_ext = VK_NULL_HANDLE;
+    VK_ASSERT << vkCreateDebugUtilsMessengerEXT(
+      inst, dumi, nullptr, &debug_messenger_ext
+    );
+    return std::make_shared<DebugUtilsMessenger>(
+      inst, debug_messenger_ext, true
+    );
+  }
+  void destroy() {
+    if (should_destroy) {
+      auto vkDestroyDebugUtilsMessengerEXT =
+        (PFN_vkDestroyDebugUtilsMessengerEXT
+        )vkGetInstanceProcAddr(inst, "vkDestroyDebugUtilsMessengerEXT");
+      vkDestroyDebugUtilsMessengerEXT(inst, debug_messenger_ext, nullptr);
+    }
+  }
+};
+typedef std::shared_ptr<DebugUtilsMessenger> DebugUtilsMessengerRef;
+
 struct Instance {
   typedef Instance Self;
   VkInstance inst;

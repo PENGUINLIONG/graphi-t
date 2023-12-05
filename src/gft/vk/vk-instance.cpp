@@ -1,5 +1,4 @@
 #include "sys.hpp"
-#include "gft/assert.hpp"
 #include "gft/util.hpp"
 #include "gft/log.hpp"
 #include "gft/vk/vk-instance.hpp"
@@ -139,16 +138,21 @@ VulkanInstanceRef VulkanInstance::create(
 
   return out;
 }
-VulkanInstanceRef VulkanInstance::create() {
+VulkanInstanceRef VulkanInstance::create(bool debug) {
   const uint32_t api_ver = VK_API_VERSION_1_1;
 
-  sys::InstanceRef inst = sys::create_inst(api_ver);
+  sys::InstanceRef inst = sys::create_inst(api_ver, debug);
+  sys::DebugUtilsMessengerRef debug_utils_messenger = nullptr;
+  if (debug) {
+    debug_utils_messenger = sys::create_debug_utils_messenger(inst->inst);
+  }
   std::vector<InstancePhysicalDeviceDetail> physdev_details =
     collect_physdev_details(inst->inst);
 
   VulkanInstanceRef out = std::make_shared<VulkanInstance>();
   out->api_ver = api_ver;
   out->inst = std::move(inst);
+  out->debug_utils_messenger = std::move(debug_utils_messenger);
   out->physdev_details = std::move(physdev_details);
   out->is_imported = true;
 
@@ -156,7 +160,10 @@ VulkanInstanceRef VulkanInstance::create() {
 
   return out;
 }
-VulkanInstance::~VulkanInstance() {}
+VulkanInstance::~VulkanInstance() {
+  debug_utils_messenger.reset();
+  inst.reset();
+}
 
 void finalize() {
   L_INFO("vulkan backend finalized");

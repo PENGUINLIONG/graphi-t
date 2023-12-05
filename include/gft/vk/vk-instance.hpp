@@ -22,10 +22,11 @@ struct InstancePhysicalDeviceDetail {
 struct VulkanInstance : public Instance {
   uint32_t api_ver;
   sys::InstanceRef inst;
+  sys::DebugUtilsMessengerRef debug_utils_messenger;
   std::vector<InstancePhysicalDeviceDetail> physdev_details;
   bool is_imported;
 
-  static VulkanInstanceRef create();
+  static VulkanInstanceRef create(bool debug);
   static VulkanInstanceRef create(uint32_t api_ver, sys::InstanceRef&& inst);
   ~VulkanInstance();
 
