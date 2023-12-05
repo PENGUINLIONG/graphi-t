@@ -121,7 +121,6 @@ sys::InstanceRef create_inst(uint32_t api_ver, bool debug) {
       request_instance_layer(
         "VK_LAYER_KHRONOS_validation", inst_layer.layerName, layers
       );
-      L_INFO("enabled validation layer");
     }
   }
 
