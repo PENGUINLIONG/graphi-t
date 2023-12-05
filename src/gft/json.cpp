@@ -345,9 +345,9 @@ bool try_parse(const std::string& json_lit, JsonValue& out) {
     out = parse(json_lit);
   } catch (JsonException e) {
     L_ERROR("failed to parse json: ", e.what());
-    return true;
+    return false;
   }
-  return false;
+  return true;
 }
 
 void print_impl(const JsonValue& json, std::stringstream& out) {
