@@ -239,6 +239,116 @@ struct JsonValue {
   JsonValue(JsonObject&& obj);
   JsonValue(JsonArray&& arr);
 
+  inline JsonValue& operator=(std::nullptr_t) {
+    ty = L_JSON_NULL;
+    return *this;
+  }
+  inline JsonValue& operator=(bool b) {
+    ty = L_JSON_BOOLEAN;
+    this->b = b;
+    return *this;
+  }
+  inline JsonValue& operator=(double num) {
+    ty = L_JSON_FLOAT;
+    num_float = num;
+    return *this;
+  }
+  inline JsonValue& operator=(float num) {
+    ty = L_JSON_FLOAT;
+    num_float = num;
+    return *this;
+  }
+  inline JsonValue& operator=(char num) {
+    ty = L_JSON_INT;
+    num_int = num;
+    return *this;
+  }
+  inline JsonValue& operator=(signed char num) {
+    ty = L_JSON_INT;
+    num_int = num;
+    return *this;
+  }
+  inline JsonValue& operator=(unsigned char num) {
+    ty = L_JSON_INT;
+    num_int = num;
+    return *this;
+  }
+  inline JsonValue& operator=(short num) {
+    ty = L_JSON_INT;
+    num_int = num;
+    return *this;
+  }
+  inline JsonValue& operator=(unsigned short num) {
+    ty = L_JSON_INT;
+    num_int = num;
+    return *this;
+  }
+  inline JsonValue& operator=(int num) {
+    ty = L_JSON_INT;
+    num_int = num;
+    return *this;
+  }
+  inline JsonValue& operator=(unsigned int num) {
+    ty = L_JSON_INT;
+    num_int = num;
+    return *this;
+  }
+  inline JsonValue& operator=(long num) {
+    ty = L_JSON_INT;
+    num_int = num;
+    return *this;
+  }
+  inline JsonValue& operator=(unsigned long num) {
+    ty = L_JSON_INT;
+    num_int = num;
+    return *this;
+  }
+  inline JsonValue& operator=(long long num) {
+    ty = L_JSON_INT;
+    num_int = num;
+    return *this;
+  }
+  inline JsonValue& operator=(unsigned long long num) {
+    ty = L_JSON_INT;
+    num_int = num;
+    return *this;
+  }
+  inline JsonValue& operator=(const char* str) {
+    ty = L_JSON_STRING;
+    this->str = str;
+    return *this;
+  }
+  inline JsonValue& operator=(const std::string& str) {
+    ty = L_JSON_STRING;
+    this->str = str;
+    return *this;
+  }
+  inline JsonValue& operator=(std::string&& str) {
+    ty = L_JSON_STRING;
+    this->str = std::forward<std::string>(str);
+    return *this;
+  }
+  inline JsonValue& operator=(JsonObject&& obj) {
+    ty = L_JSON_OBJECT;
+    this->obj = std::move(obj);
+    return *this;
+  }
+  inline JsonValue& operator=(std::map<std::string, JsonValue>&& obj) {
+    ty = L_JSON_OBJECT;
+    this->obj = std::move(obj);
+    return *this;
+  }
+  inline JsonValue& operator=(JsonArray&& arr) {
+    ty = L_JSON_ARRAY;
+    this->arr = std::move(arr);
+    return *this;
+  }
+  inline JsonValue& operator=(std::vector<JsonValue>&& arr) {
+    ty = L_JSON_ARRAY;
+    this->arr = std::move(arr);
+    return *this;
+  }
+
   inline JsonValue& operator[](const char* key) {
     if (!is_obj()) {
       throw JsonException("value is not an object");
