@@ -252,7 +252,7 @@ bool try_parse_impl(Tokenizer& tokenizer, JsonValue& out) {
         return true;
       case L_JSON_TOKEN_FLOAT:
         out.ty = L_JSON_FLOAT;
-        out.num_int = token.num_float;
+        out.num_float = token.num_float;
         return true;
       case L_JSON_TOKEN_OPEN_BRACKET:
         out.ty = L_JSON_ARRAY;
