@@ -24,11 +24,15 @@ BufferRef VulkanBuffer::create(
 ) {
   VulkanContextRef ctxt_ = VulkanContext::from_hal(ctxt);
 
+  size_t min_alloc_size = 16;
   VkBufferCreateInfo bci{};
   bci.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
   bci.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
   if (cfg.usage & L_BUFFER_USAGE_TRANSFER_SRC_BIT) {
     bci.usage |= VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    min_alloc_size = std::max<size_t>(
+      min_alloc_size, ctxt_->physdev_prop().limits.minMemoryMapAlignment
+    );
   }
   if (cfg.usage & L_BUFFER_USAGE_TRANSFER_DST_BIT) {
     bci.usage |= VK_BUFFER_USAGE_TRANSFER_DST_BIT;
@@ -36,11 +40,19 @@ BufferRef VulkanBuffer::create(
   if (cfg.usage & L_BUFFER_USAGE_UNIFORM_BIT) {
     bci.usage |=
       VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    min_alloc_size = std::max<size_t>(
+      min_alloc_size,
+      ctxt_->physdev_prop().limits.minUniformBufferOffsetAlignment
+    );
   }
   if (cfg.usage & L_BUFFER_USAGE_STORAGE_BIT) {
     bci.usage |= VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                  VK_BUFFER_USAGE_TRANSFER_SRC_BIT |
                  VK_BUFFER_USAGE_TRANSFER_DST_BIT;
+    min_alloc_size = std::max<size_t>(
+      min_alloc_size,
+      ctxt_->physdev_prop().limits.minStorageBufferOffsetAlignment
+    );
   }
   if (cfg.usage & L_BUFFER_USAGE_VERTEX_BIT) {
     bci.usage |=
@@ -50,7 +62,7 @@ BufferRef VulkanBuffer::create(
     bci.usage |=
       VK_BUFFER_USAGE_INDEX_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
   }
-  bci.size = cfg.size;
+  bci.size = std::max<size_t>(cfg.size, min_alloc_size);
 
   VmaAllocationCreateInfo aci{};
   aci.usage = _host_access2vma_usage(cfg.host_access);
