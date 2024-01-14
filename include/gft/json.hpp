@@ -395,76 +395,84 @@ struct JsonValue {
     if (!is_num()) {
       throw JsonException("value is not a number");
     }
-    return num_float;
+    if (is_num_int()) {
+      return (double)num_int;
+    } else {
+      return num_float;
+    }
   }
   inline operator float() const {
     if (!is_num()) {
       throw JsonException("value is not a number");
     }
-    return (float)num_float;
+    if (is_num_int()) {
+      return (float)num_int;
+    } else {
+      return (float)num_float;
+    }
   }
   inline operator char() const {
-    if (!is_num()) {
+    if (!is_num_int()) {
       throw JsonException("value is not a number");
     }
     return (char)num_int;
   }
   inline operator signed char() const {
-    if (!is_num()) {
+    if (!is_num_int()) {
       throw JsonException("value is not a number");
     }
     return (signed char)num_int;
   }
   inline operator unsigned char() const {
-    if (!is_num()) {
+    if (!is_num_int()) {
       throw JsonException("value is not a number");
     }
     return (unsigned char)num_int;
   }
   inline operator short() const {
-    if (!is_num()) {
+    if (!is_num_int()) {
       throw JsonException("value is not a number");
     }
     return (short)num_int;
   }
   inline operator unsigned short() const {
-    if (!is_num()) {
+    if (!is_num_int()) {
       throw JsonException("value is not a number");
     }
     return (unsigned short)num_int;
   }
   inline operator int() const {
-    if (!is_num()) {
+    if (!is_num_int()) {
       throw JsonException("value is not a number");
     }
     return (int)num_int;
   }
   inline operator unsigned int() const {
-    if (!is_num()) {
+    if (!is_num_int()) {
       throw JsonException("value is not a number");
     }
     return (unsigned int)num_int;
   }
   inline operator long() const {
-    if (!is_num()) {
+    if (!is_num_int()) {
       throw JsonException("value is not a number");
     }
     return (long)num_int;
   }
   inline operator unsigned long() const {
-    if (!is_num()) {
+    if (!is_num_int()) {
       throw JsonException("value is not a number");
     }
     return (unsigned long)num_int;
   }
   inline operator long long() const {
-    if (!is_num()) {
+    if (!is_num_int()) {
       throw JsonException("value is not a number");
     }
     return (long long)num_int;
   }
   inline operator unsigned long long() const {
-    if (!is_num()) {
+    if (!is_num_int()) {
       throw JsonException("value is not a number");
     }
     return (unsigned long long)num_int;
@@ -493,6 +501,9 @@ struct JsonValue {
   }
   inline bool is_bool() const {
     return ty == L_JSON_BOOLEAN;
+  }
+  inline bool is_num_int() const {
+    return ty == L_JSON_INT;
   }
   inline bool is_num() const {
     return ty == L_JSON_FLOAT || ty == L_JSON_INT;
