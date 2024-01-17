@@ -233,7 +233,7 @@ VkBufferImageCopy _make_bic(const BufferView& buf, const ImageView& img) {
   VkBufferImageCopy bic{};
   bic.bufferOffset = buf.offset;
   bic.bufferRowLength = 0;
-  bic.bufferImageHeight = (uint32_t)img.img->info.height;
+  bic.bufferImageHeight = 0;
   bic.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
   bic.imageSubresource.mipLevel = 0;
   bic.imageSubresource.baseArrayLayer = 0;
